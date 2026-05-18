@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.wavix/wavix-mcp-server",
+  "title": "Wavix",
+  "description": "Hosted MCP server for the Wavix telecom platform: SMS, voice, 2FA, SIP, numbers, 10DLC, CDRs.",
+  "repository": {
+    "url": "https://github.com/Wavix/wavix-mcp-server",
+    "source": "github"
+  },
+  "websiteUrl": "https://wavix.com",
+  "version": "1.0.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.wavix.com/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer token containing the user's Wavix API key. Obtain one at https://wavix.com under Administration → API keys.",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+[project]
+name = "wavix-mcp-server"
+version = "1.0.0"
+description = "Hosted MCP server for the Wavix telecom platform, generated from the Wavix OpenAPI spec."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Wavix", email = "support@wavix.com" }]
+keywords = ["mcp", "model-context-protocol", "wavix", "telecom", "sms", "voice", "2fa", "openapi"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Communications :: Telephony",
+  "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+  "fastmcp>=2.0.0",
+  "httpx>=0.27.0",
+  "jsonref>=1.1.0",
+  "python-dotenv>=1.0.1",
+  "PyYAML>=6.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7",
+  "ruff>=0.6",
+  "mypy>=1.10",
+  "jsonschema>=4",
+  "types-PyYAML>=6",
+]
+
+[project.urls]
+Homepage = "https://wavix.com"
+Documentation = "https://github.com/Wavix/wavix-mcp-server"
+Repository = "https://github.com/Wavix/wavix-mcp-server"
+
+[project.scripts]
+wavix-mcp = "wavix_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.mypy]
+python_version = "3.10"
+strict_optional = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = ["jsonref", "fastmcp.*"]
+ignore_missing_imports = true

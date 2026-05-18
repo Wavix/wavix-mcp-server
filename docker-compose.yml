@@ -1,0 +1,9 @@
+services:
+  wavix-fastmcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: wavix-fastmcp:local
+    ports:
+      - "18090:8000"
+    restart: unless-stopped
