@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.wavix/mcp",
+  "name": "io.github.Wavix/mcp",
   "title": "Wavix",
   "description": "Hosted MCP server for the Wavix telecom platform: SMS, voice, 2FA, SIP, numbers, 10DLC, CDRs.",
   "repository": {
