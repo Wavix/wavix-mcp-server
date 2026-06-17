@@ -313,7 +313,7 @@ If your client follows a pre-signed download URL returned by `call_recording_get
 
 ## Changelog
 
-The hosted server is updated continuously as the Wavix OpenAPI spec evolves; new tools appear automatically and existing tool arguments may gain optional fields. Documentation changes for this repository are tracked under [Releases](https://github.com/Wavix/wavix-mcp-server/releases). For substantial behavior changes affecting tool inputs or auth, we will publish a notice both there and in the [Wavix changelog](https://docs.wavix.com/changelog).
+The hosted server is updated continuously as the Wavix OpenAPI spec evolves; new tools appear automatically and existing tool arguments may gain optional fields. Documentation changes for this repository are tracked under [Releases](https://github.com/Wavix/wavix-mcp-server/releases). For substantial behavior changes affecting tool inputs or auth, we will publish a notice both there and in the [Wavix release notes](https://docs.wavix.com/release-notes).
 
 ## Support
 
