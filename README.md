@@ -219,20 +219,20 @@ The agent calls `billing_transactions_list` filtered by type and date, then `bil
 | --- | ---: | --- |
 | [SMS and MMS](TOOLS.md#sms-and-mms) | 10 | Send, list, retrieve messages; sender IDs; opt-outs |
 | [Call control](TOOLS.md#call-control) | 9 | Start / answer / end calls; play audio; collect DTMF |
-| [Call recording](TOOLS.md#call-recording) | 3 | List, download (pre-signed URL), delete |
+| [Call recording](TOOLS.md#call-recording) | 4 | List, download (pre-signed URL), delete |
 | [Call streaming](TOOLS.md#call-streaming) | 2 | Start / stop media stream |
 | [Call webhooks](TOOLS.md#call-webhooks) | 3 | List, create, delete |
-| [CDRs](TOOLS.md#cdrs) | 6 | List, export, retrieve; transcription search and retranscribe |
+| [CDRs](TOOLS.md#cdrs) | 7 | List, export, retrieve; transcription search and retranscribe |
 | [Speech Analytics](TOOLS.md#speech-analytics) | 4 | Upload, transcribe, retrieve original file |
 | [2FA](TOOLS.md#2fa) | 6 | Create / check / cancel / resend verification; events |
-| [My numbers](TOOLS.md#my-numbers) | 7 | List, update, release; SMS / voice routing; document upload |
+| [My numbers](TOOLS.md#my-numbers) | 6 | List, update, release; SMS / voice routing; document upload |
 | [Buy](TOOLS.md#buy) | 5 | Countries, regions, cities; available number search |
 | [Cart](TOOLS.md#cart) | 4 | Add, remove, retrieve, checkout |
 | [Number validator](TOOLS.md#number-validator) | 3 | Single and bulk validation |
 | [SIP trunks](TOOLS.md#sip-trunks) | 5 | Full CRUD |
 | [10DLC](TOOLS.md#10dlc) | 30 | Brands, campaigns, vetting, evidence, event subscriptions |
 | [Profile](TOOLS.md#profile) | 3 | Get / update profile; account config |
-| [API Keys](TOOLS.md#api-keys) | 5 | List, create, activate / deactivate, delete |
+| [API Keys](TOOLS.md#api-keys) | 4 | List, create, activate / deactivate, delete |
 | [Sub-accounts](TOOLS.md#sub-accounts) | 5 | List, create, get, update; transactions |
 | [Billing](TOOLS.md#billing) | 3 | Transactions, invoices, statement download |
 | [Voice campaigns](TOOLS.md#voice-campaigns) | 2 | Trigger and retrieve |

@@ -15,9 +15,9 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 - `sms_and_mms_opt_outs_list` — List opted-out phone numbers
 - `sms_and_mms_opt_outs_create` — Create an opt-out
 - `sms_and_mms_messages_list` — List messages
-- `sms_and_mms_messages_send` — Send message
+- `sms_and_mms_messages_send` — Send a message
 - `sms_and_mms_messages_get` — Retrieve a message
-- `sms_and_mms_messages_list_all` — List all messages
+- `sms_and_mms_messages_list_all` — Export messages
 
 ## Call control
 
@@ -34,7 +34,8 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 ## Call recording
 
 - `call_recording_list` — List call recordings
-- `call_recording_get` — Retrieve a call recording (returns a pre-signed download URL)
+- `call_recording_get_by_call` — Retrieve a recording by call ID
+- `call_recording_get` — Retrieve a recording (returns a pre-signed download URL)
 - `call_recording_delete` — Delete a call recording
 
 ## Call streaming
@@ -52,9 +53,10 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 
 - `cdrs_list` — List CDRs
 - `cdrs_search` — Search transcriptions
-- `cdrs_retranscribe` — Transcribe call recording
-- `cdrs_transcription_get` — Retrieve transcription
-- `cdrs_get` — Retrieve CDR
+- `cdrs_retranscribe` — Transcribe a call recording
+- `cdrs_transcription_get` — Retrieve a transcription
+- `cdrs_transcriptions` — Retrieve a transcription
+- `cdrs_get` — Retrieve a CDR
 - `cdrs_list_all` — Export CDRs
 
 ## Speech Analytics
@@ -62,26 +64,25 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 - `speech_analytics_create` — Upload a file
 - `speech_analytics_get` — Retrieve a transcription
 - `speech_analytics_retranscribe` — Retranscribe a file
-- `speech_analytics_file_get` — Retrieve original file (returns a pre-signed download URL)
+- `speech_analytics_file_get` — Retrieve the original file (returns a pre-signed download URL)
 
 ## 2FA
 
 - `two_fa_verification_create` — Create a 2FA Verification
-- `two_fa_sessions_list` — List 2FA Verifications
+- `two_fa_sessions_list` — List 2FA verifications
 - `two_fa_verification_resend` — Resend a code
 - `two_fa_verification_check` — Validate a code
-- `two_fa_verification_cancel` — Cancel a 2FA Verification
-- `two_fa_events_list` — List 2FA Verification events
+- `two_fa_verification_cancel` — Cancel a 2FA verification
+- `two_fa_events_list` — List 2FA verification events
 
 ## My numbers
 
-- `my_numbers_list` — List numbers
-- `my_numbers_delete` — Release numbers
-- `my_numbers_get` — Retrieve number
-- `my_numbers_update` — Update number
-- `my_numbers_sms_update` — Update SMS status
-- `my_numbers_destinations_update` — Update destinations
-- `my_numbers_papers_upload` — Upload document
+- `my_numbers_list` — List phone numbers
+- `numbers_bulk_update` — Bulk update phone numbers
+- `my_numbers_delete` — Release phone numbers
+- `my_numbers_get` — Retrieve a phone number
+- `numbers_update` — Update a phone number
+- `my_numbers_papers_upload` — Upload a document
 
 ## Buy
 
@@ -89,14 +90,14 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 - `buy_regions_list` — List regions
 - `buy_cities_list` — List cities
 - `buy_region_cities_list` — List region cities
-- `buy_numbers_list` — List available numbers
+- `buy_numbers_list` — List available phone numbers
 
 ## Cart
 
-- `cart_get` — Retrieve cart
+- `cart_get` — Retrieve the cart
 - `cart_add` — Add to cart
 - `cart_remove` — Remove from cart
-- `cart_checkout` — Checkout
+- `cart_checkout` — Check out the cart
 
 ## Number validator
 
@@ -121,12 +122,12 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 - `ten_dlc_brands_get` — Retrieve a 10DLC Brand
 - `ten_dlc_brands_update` — Update a 10DLC Brand
 - `ten_dlc_brands_delete` — Delete a 10DLC Brand
-- `ten_dlc_brand_appeals_list` — List a 10DLC Brand Identity verification appeals
+- `ten_dlc_brand_appeals_list` — List Brand identity appeals
 - `ten_dlc_brand_appeals_create` — Appeal a 10DLC Brand identity verification
-- `ten_dlc_brand_evidence_list` — List a 10DLC Brand appeal evidence
-- `ten_dlc_brand_evidence_upload` — Upload a 10DLC Brand evidence
-- `ten_dlc_brand_evidence_get` — Download a 10DLC Brand evidence (returns a pre-signed download URL)
-- `ten_dlc_brand_evidence_delete` — Delete a 10DLC Brand evidence
+- `ten_dlc_brand_evidence_list` — List Brand evidence
+- `ten_dlc_brand_evidence_upload` — Upload Brand evidence
+- `ten_dlc_brand_evidence_get` — Download Brand evidence (returns a pre-signed download URL)
+- `ten_dlc_brand_evidence_delete` — Delete Brand evidence
 - `ten_dlc_brand_vettings_list` — List external vettings
 - `ten_dlc_brand_vettings_create` — Request external vetting
 - `ten_dlc_brand_vettings_import` — Import external vetting
@@ -137,7 +138,7 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 ### Campaigns
 
 - `ten_dlc_campaigns_list` — List 10DLC Campaigns
-- `ten_dlc_brand_campaigns_list` — List 10DLC Campaigns associated with a Brand
+- `ten_dlc_brand_campaigns_list` — List Brand Campaigns
 - `ten_dlc_brand_campaigns_create` — Register a 10DLC Campaign
 - `ten_dlc_brand_campaigns_get` — Retrieve a 10DLC Campaign
 - `ten_dlc_brand_campaigns_update` — Update a 10DLC Campaign
@@ -163,23 +164,22 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 
 - `api_keys_list` — List API keys
 - `api_keys_create` — Create an API key
+- `api_keys_update` — Update an API key
 - `api_keys_delete` — Delete an API key
-- `api_keys_activate` — Activate an API key
-- `api_keys_deactivate` — Deactivate an API key
 
 ## Sub-accounts
 
 - `sub_accounts_list` — List sub-accounts
 - `sub_accounts_create` — Create a sub-account
 - `sub_accounts_get` — Retrieve a sub-account
-- `sub_accounts_update` — Update sub-account
+- `sub_accounts_update` — Update a sub-account
 - `sub_accounts_transactions_list` — List sub-account transactions
 
 ## Billing
 
 - `billing_transactions_list` — List transactions
 - `billing_invoices_list` — List financial statements
-- `billing_invoices_download` — Download statement (returns a pre-signed download URL)
+- `billing_invoices_download` — Download statement PDF (returns a pre-signed download URL)
 
 ## Voice campaigns
 
