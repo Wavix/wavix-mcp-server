@@ -13,6 +13,7 @@ from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_http_headers
 from fastmcp.server.providers.openapi import MCPType, RouteMap
 
+from .auth import build_auth_provider, mcp_path
 from .docs import register_api_spec, register_docs
 
 logger = logging.getLogger(__name__)
@@ -319,6 +320,7 @@ def build_server() -> FastMCP:
         name=name,
         instructions=INSTRUCTIONS,
         lifespan=lifespan,
+        auth=build_auth_provider(),
         route_maps=_build_exclude_route_maps(BINARY_STREAM_ENDPOINTS),
     )
     _register_binary_redirect_tools(mcp, api_client, base_url)
@@ -329,7 +331,7 @@ def build_server() -> FastMCP:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
-    build_server().run(transport="http", host="0.0.0.0", port=8000, path="/mcp")
+    build_server().run(transport="http", host="0.0.0.0", port=8000, path=mcp_path())
 
 
 if __name__ == "__main__":

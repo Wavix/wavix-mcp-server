@@ -165,8 +165,34 @@ Requires Python 3.10+.
 | Env var | Default | Purpose |
 | --- | --- | --- |
 | `WAVIX_API_BASE_URL` | `https://api.wavix.com` | Override the upstream Wavix API endpoint (for internal deployments or staging) |
+| `OAUTH_ISSUER` | unset | Base URL of the OAuth 2.1 authorization server. Its JWKS is read from `<issuer>/.well-known/jwks.json` |
+| `OAUTH_RESOURCE` | unset | Public base URL this server is reached at, used as the resource identifier |
+| `MCP_PATH` | `/mcp` | Path the MCP endpoint is served on |
 
 No Wavix credentials are required to **run** the server — they are forwarded per-request from the MCP client's `Authorization: Bearer <api_key>` header. Self-hosters are responsible for terminating TLS in front of the server (nginx, Caddy, cloud load balancer) before exposing it publicly.
+
+### OAuth 2.1 (optional)
+
+Set `OAUTH_ISSUER` and `OAUTH_RESOURCE` together to turn the server into an
+OAuth 2.1 protected resource. It then publishes [RFC 9728][rfc9728] metadata at
+`/.well-known/oauth-protected-resource<MCP_PATH>`, validates incoming access
+tokens as JWTs against the issuer's JWKS, and answers unauthenticated requests
+with a `WWW-Authenticate` challenge pointing at that metadata. MCP clients that
+support OAuth use this to run the authorization flow themselves, so users no
+longer paste an API key into their client config.
+
+The audience each token must carry is `OAUTH_RESOURCE` + `MCP_PATH`, which is
+also the `resource` value published in the metadata. Authorization servers
+implementing [RFC 8707][rfc8707] compare the client's `resource` parameter
+against that string exactly, so the two must be configured to match — including
+the path.
+
+Leaving either variable unset keeps the previous behaviour: no metadata is
+published and whatever bearer token the client sends is forwarded upstream
+unverified.
+
+[rfc9728]: https://datatracker.ietf.org/doc/html/rfc9728
+[rfc8707]: https://datatracker.ietf.org/doc/html/rfc8707
 
 ## Examples
 
