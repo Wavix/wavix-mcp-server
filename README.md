@@ -239,19 +239,19 @@ The agent calls `billing_transactions_list` filtered by type and date, then `bil
 ## Tools
 
 <!-- tools:start -->
-122 tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi). Arguments mirror request parameters and body fields.
+118 tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi). Arguments mirror request parameters and body fields.
 
 | Group | # | Coverage |
 | --- | ---: | --- |
-| [SMS and MMS](TOOLS.md#sms-and-mms) | 10 | Send, list, retrieve messages; sender IDs; opt-outs |
+| [SMS and MMS](TOOLS.md#sms-and-mms) | 9 | Send, list, retrieve messages; sender IDs; opt-outs |
 | [Call control](TOOLS.md#call-control) | 9 | Start / answer / end calls; play audio; collect DTMF |
 | [Call recording](TOOLS.md#call-recording) | 4 | List, download (pre-signed URL), delete |
 | [Call streaming](TOOLS.md#call-streaming) | 2 | Start / stop media stream |
 | [Call webhooks](TOOLS.md#call-webhooks) | 3 | List, create, delete |
-| [CDRs](TOOLS.md#cdrs) | 7 | List, export, retrieve; transcription search and retranscribe |
-| [Speech Analytics](TOOLS.md#speech-analytics) | 4 | Upload, transcribe, retrieve original file |
+| [CDRs](TOOLS.md#cdrs) | 6 | List, retrieve; transcription search and retranscribe |
+| [Speech Analytics](TOOLS.md#speech-analytics) | 3 | Transcribe, retrieve original file |
 | [2FA](TOOLS.md#2fa) | 6 | Create / check / cancel / resend verification; events |
-| [My numbers](TOOLS.md#my-numbers) | 6 | List, update, release; SMS / voice routing; document upload |
+| [My numbers](TOOLS.md#my-numbers) | 5 | List, update, release; SMS / voice routing |
 | [Buy](TOOLS.md#buy) | 5 | Countries, regions, cities; available number search |
 | [Cart](TOOLS.md#cart) | 4 | Add, remove, retrieve, checkout |
 | [Number validator](TOOLS.md#number-validator) | 3 | Single and bulk validation |

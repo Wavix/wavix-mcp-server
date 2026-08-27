@@ -28,6 +28,14 @@ def test_resolve_returns_pre_signed_url_on_redirect():
     assert result["note"].startswith("Pre-signed URL")
 
 
+def test_resolve_prefers_location_header_on_200():
+    presigned = "https://s3.amazonaws.com/bucket/recording.mp3?X-Amz-Signature=abc"
+    result = _resolve(lambda _request: httpx.Response(200, headers={"Location": presigned}))
+    assert result["download_url"] == presigned
+    assert result["status_code"] == 200
+    assert result["note"].startswith("Pre-signed URL")
+
+
 def test_resolve_returns_synthetic_url_on_2xx_body():
     result = _resolve(
         lambda _request: httpx.Response(

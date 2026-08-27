@@ -27,10 +27,21 @@ _CC_TRANSLATE = dict.fromkeys(
 DEFAULT_API_BASE_URL = "https://api.wavix.com"
 
 BINARY_STREAM_ENDPOINTS: tuple[tuple[str, str], ...] = (
-    ("/v1/recordings/{call_uuid}", "get"),
+    ("/v1/recordings/{call_id}", "get"),
     ("/v1/billing/invoices/{id}", "get"),
-    ("/v1/speech-analytics/{uuid}/file", "get"),
-    ("/v3/10dlc/brands/{brand_id}/evidence/{uuid}", "get"),
+    ("/v1/speech-analytics/{request_id}/file", "get"),
+    ("/v3/10dlc/brands/{brand_id}/evidence/{id}", "get"),
+)
+
+# Operations dropped from the tool surface entirely, with no replacement tool.
+# NDJSON exports (`*_all`) would blow past Anthropic's max tool-response size —
+# their JSON-paginated siblings return the same data. Multipart file uploads
+# can't be driven through an MCP client.
+EXCLUDED_ENDPOINTS: tuple[tuple[str, str], ...] = (
+    ("/v1/cdrs/all", "get"),
+    ("/v3/messages/all", "get"),
+    ("/v1/speech-analytics", "post"),
+    ("/v1/numbers/papers", "post"),
 )
 
 INSTRUCTIONS = """\
@@ -142,6 +153,23 @@ def _strip_non_json_response_content(spec: dict[str, Any]) -> dict[str, Any]:
     return spec
 
 
+def _missing_targets(
+    spec: dict[str, Any],
+    targets: tuple[tuple[str, str], ...],
+) -> list[tuple[str, str]]:
+    """Configured (path, method) pairs absent from the spec.
+
+    A silent mismatch here means an EXCLUDE route map matches nothing and a
+    binary/NDJSON endpoint leaks back into the tool surface, so callers log it.
+    """
+    paths = spec.get("paths") or {}
+    return [
+        (path, method)
+        for path, method in targets
+        if not isinstance(paths.get(path), dict) or method not in paths[path]
+    ]
+
+
 def _build_exclude_route_maps(
     targets: tuple[tuple[str, str], ...],
 ) -> list[RouteMap]:
@@ -169,16 +197,18 @@ async def _resolve_to_download_url(
     path: str,
 ) -> dict[str, Any]:
     """Contract:
-    - **3xx** – ``Location`` header → ``download_url`` (pre-signed, no auth).
-    - **2xx** – synthetic ``{base_url}{path}`` → ``download_url`` (caller re-fetches with Bearer).
+    - **``Location`` present** – its value → ``download_url`` (pre-signed, no auth).
+      Sent on 3xx and also on the recording endpoint's 200, so it is checked
+      before the status branches.
+    - **other 2xx** – synthetic ``{base_url}{path}`` → ``download_url`` (caller re-fetches with Bearer).
     - **other** – ``{error, status_code, body}``; binary bodies become ``"<binary body omitted>"``.
     """
     request = api_client.build_request("GET", path)
     response = await api_client.send(request, follow_redirects=False)
     code = response.status_code
 
-    if code in (301, 302, 303, 307, 308):
-        location = response.headers.get("Location") or response.headers.get("location")
+    location = response.headers.get("Location") or response.headers.get("location")
+    if location:
         return {
             "download_url": location,
             "content_type": response.headers.get("Content-Type"),
@@ -211,14 +241,14 @@ def _register_binary_redirect_tools(
     api_client: httpx.AsyncClient,
     base_url: str,
 ) -> None:
-    @mcp.tool(name="call_recording_get")
-    async def call_recording_get(call_uuid: str) -> dict[str, Any]:
-        """Get a download URL for a call recording audio file.
+    @mcp.tool(name="call_recording_get_by_call")
+    async def call_recording_get_by_call(call_id: str) -> dict[str, Any]:
+        """Get a download URL for a call recording audio file by call ID.
 
         Returns ``{download_url, content_type, status_code, note}`` instead of the
         binary audio stream. Fetch ``download_url`` to obtain the MP3.
         """
-        return await _resolve_to_download_url(api_client, base_url, f"/v1/recordings/{call_uuid}")
+        return await _resolve_to_download_url(api_client, base_url, f"/v1/recordings/{call_id}")
 
     @mcp.tool(name="billing_invoices_download")
     async def billing_invoices_download(id: int) -> dict[str, Any]:
@@ -230,25 +260,25 @@ def _register_binary_redirect_tools(
         return await _resolve_to_download_url(api_client, base_url, f"/v1/billing/invoices/{id}")
 
     @mcp.tool(name="speech_analytics_file_get")
-    async def speech_analytics_file_get(uuid: str) -> dict[str, Any]:
+    async def speech_analytics_file_get(request_id: str) -> dict[str, Any]:
         """Get a download URL for a speech-analytics audio file.
 
         Returns ``{download_url, content_type, status_code, note}`` instead of the
         binary audio stream (WAV/MP3/MP4). Fetch ``download_url`` to obtain the file.
         """
         return await _resolve_to_download_url(
-            api_client, base_url, f"/v1/speech-analytics/{uuid}/file"
+            api_client, base_url, f"/v1/speech-analytics/{request_id}/file"
         )
 
     @mcp.tool(name="ten_dlc_brand_evidence_get")
-    async def ten_dlc_brand_evidence_get(brand_id: str, uuid: str) -> dict[str, Any]:
+    async def ten_dlc_brand_evidence_get(brand_id: str, id: str) -> dict[str, Any]:
         """Get a download URL for a 10DLC brand evidence file.
 
         Returns ``{download_url, content_type, status_code, note}`` instead of the
         binary file stream. Fetch ``download_url`` to obtain the file.
         """
         return await _resolve_to_download_url(
-            api_client, base_url, f"/v3/10dlc/brands/{brand_id}/evidence/{uuid}"
+            api_client, base_url, f"/v3/10dlc/brands/{brand_id}/evidence/{id}"
         )
 
 
@@ -298,6 +328,14 @@ def build_server() -> FastMCP:
 
     logger.info("Starting MCP with base_url=%s", base_url)
 
+    excluded = BINARY_STREAM_ENDPOINTS + EXCLUDED_ENDPOINTS
+    missing = _missing_targets(spec, excluded)
+    if missing:
+        logger.warning(
+            "Route-map exclude targets not found in spec (stale after a spec change?): %s",
+            ", ".join(f"{m.upper()} {p}" for p, m in missing),
+        )
+
     docs_client = httpx.AsyncClient(timeout=30, follow_redirects=True)
     api_client = httpx.AsyncClient(
         base_url=base_url,
@@ -321,7 +359,7 @@ def build_server() -> FastMCP:
         instructions=INSTRUCTIONS,
         lifespan=lifespan,
         auth=build_auth_provider(),
-        route_maps=_build_exclude_route_maps(BINARY_STREAM_ENDPOINTS),
+        route_maps=_build_exclude_route_maps(excluded),
     )
     _register_binary_redirect_tools(mcp, api_client, base_url)
     register_docs(mcp, docs_client)
