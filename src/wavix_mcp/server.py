@@ -28,7 +28,6 @@ DEFAULT_API_BASE_URL = "https://api.wavix.com"
 
 BINARY_STREAM_ENDPOINTS: tuple[tuple[str, str], ...] = (
     ("/v1/recordings/{call_id}", "get"),
-    ("/v1/billing/invoices/{id}", "get"),
     ("/v1/speech-analytics/{request_id}/file", "get"),
     ("/v3/10dlc/brands/{brand_id}/evidence/{id}", "get"),
 )
@@ -36,12 +35,15 @@ BINARY_STREAM_ENDPOINTS: tuple[tuple[str, str], ...] = (
 # Operations dropped from the tool surface entirely, with no replacement tool.
 # NDJSON exports (`*_all`) would blow past Anthropic's max tool-response size —
 # their JSON-paginated siblings return the same data. Multipart file uploads
-# can't be driven through an MCP client.
+# can't be driven through an MCP client. The invoice PDF download is excluded by
+# product decision (Anthropic listing prep) rather than surfaced as a URL.
 EXCLUDED_ENDPOINTS: tuple[tuple[str, str], ...] = (
     ("/v1/cdrs/all", "get"),
     ("/v3/messages/all", "get"),
     ("/v1/speech-analytics", "post"),
     ("/v1/numbers/papers", "post"),
+    ("/v3/10dlc/brands/{brand_id}/evidence", "post"),
+    ("/v1/billing/invoices/{id}", "get"),
 )
 
 INSTRUCTIONS = """\
@@ -249,15 +251,6 @@ def _register_binary_redirect_tools(
         binary audio stream. Fetch ``download_url`` to obtain the MP3.
         """
         return await _resolve_to_download_url(api_client, base_url, f"/v1/recordings/{call_id}")
-
-    @mcp.tool(name="billing_invoices_download")
-    async def billing_invoices_download(id: int) -> dict[str, Any]:
-        """Get a download URL for a billing invoice PDF.
-
-        Returns ``{download_url, content_type, status_code, note}`` instead of the
-        binary PDF stream. Fetch ``download_url`` to obtain the file.
-        """
-        return await _resolve_to_download_url(api_client, base_url, f"/v1/billing/invoices/{id}")
 
     @mcp.tool(name="speech_analytics_file_get")
     async def speech_analytics_file_get(request_id: str) -> dict[str, Any]:

@@ -32,7 +32,6 @@ from wavix_mcp.server import EXCLUDED_ENDPOINTS, load_spec  # noqa: E402
 # body. Mirrors BINARY_STREAM_ENDPOINTS in src/wavix_mcp/server.py.
 PRE_SIGNED = {
     "call_recording_get_by_call",
-    "billing_invoices_download",
     "speech_analytics_file_get",
     "ten_dlc_brand_evidence_get",
 }
@@ -63,7 +62,7 @@ COVERAGE: dict[str, str] = {
     "Profile": "Get / update profile; account config",
     "API Keys": "List, create, activate / deactivate, delete",
     "Sub-accounts": "List, create, get, update; transactions",
-    "Billing": "Transactions, invoices, statement download",
+    "Billing": "Transactions; list invoices / statements",
     "Voice campaigns": "Trigger and retrieve",
     "Wavix Embeddable": "Widget tokens CRUD",
     "Link shortener": "Create short links; metrics",

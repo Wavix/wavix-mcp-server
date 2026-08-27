@@ -1,6 +1,6 @@
 # Wavix MCP Tools — full catalogue
 
-118 tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi) via [`FastMCP.from_openapi()`](https://github.com/jlowin/fastmcp). Arguments mirror request path / query / body fields.
+116 tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi) via [`FastMCP.from_openapi()`](https://github.com/jlowin/fastmcp). Arguments mirror request path / query / body fields.
 
 If a tool listed here is missing from your client, refresh the connection: the live catalogue tracks the OpenAPI spec as it evolves.
 
@@ -121,7 +121,6 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 - `ten_dlc_brand_appeals_list` — List Brand identity appeals
 - `ten_dlc_brand_appeals_create` — Appeal a 10DLC Brand identity verification
 - `ten_dlc_brand_evidence_list` — List Brand evidence
-- `ten_dlc_brand_evidence_upload` — Upload Brand evidence
 - `ten_dlc_brand_evidence_get` — Download Brand evidence (returns a pre-signed download URL)
 - `ten_dlc_brand_evidence_delete` — Delete Brand evidence
 - `ten_dlc_brand_vettings_list` — List external vettings
@@ -175,7 +174,6 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 
 - `billing_transactions_list` — List transactions
 - `billing_invoices_list` — List financial statements
-- `billing_invoices_download` — Download statement PDF (returns a pre-signed download URL)
 
 ## Voice campaigns
 
