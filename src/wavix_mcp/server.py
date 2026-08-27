@@ -199,9 +199,9 @@ async def _resolve_to_download_url(
     path: str,
 ) -> dict[str, Any]:
     """Contract:
-    - **``Location`` present** – its value → ``download_url`` (pre-signed, no auth).
-      Sent on 3xx and also on the recording endpoint's 200, so it is checked
-      before the status branches.
+    - **``Location`` on a 2xx/3xx** – its value → ``download_url`` (pre-signed, no auth).
+      Checked before the 2xx branch because the recording endpoint sends it on a 200;
+      a ``Location`` on a 4xx/5xx is not a download and falls through to the error case.
     - **other 2xx** – synthetic ``{base_url}{path}`` → ``download_url`` (caller re-fetches with Bearer).
     - **other** – ``{error, status_code, body}``; binary bodies become ``"<binary body omitted>"``.
     """
@@ -210,7 +210,7 @@ async def _resolve_to_download_url(
     code = response.status_code
 
     location = response.headers.get("Location") or response.headers.get("location")
-    if location:
+    if location and 200 <= code < 400:
         return {
             "download_url": location,
             "content_type": response.headers.get("Content-Type"),

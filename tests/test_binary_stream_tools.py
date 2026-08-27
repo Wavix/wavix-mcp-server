@@ -63,6 +63,17 @@ def test_resolve_returns_error_envelope_on_4xx():
     assert "Recording not found" in result["body"]
 
 
+def test_resolve_ignores_location_on_error_status():
+    result = _resolve(
+        lambda _request: httpx.Response(
+            404,
+            headers={"Location": "https://s3.example/leaked", "Content-Type": "application/json"},
+        )
+    )
+    assert result["error"] == "HTTP 404"
+    assert "download_url" not in result
+
+
 def test_resolve_handles_binary_error_body():
     result = _resolve(
         lambda _request: httpx.Response(

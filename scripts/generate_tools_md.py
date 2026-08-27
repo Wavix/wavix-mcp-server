@@ -60,7 +60,7 @@ COVERAGE: dict[str, str] = {
     "SIP trunks": "Full CRUD",
     "10DLC": "Brands, campaigns, vetting, evidence, event subscriptions",
     "Profile": "Get / update profile; account config",
-    "API Keys": "List, create, activate / deactivate, delete",
+    "API Keys": "List, create, update, delete",
     "Sub-accounts": "List, create, get, update; transactions",
     "Billing": "Transactions; list invoices / statements",
     "Voice campaigns": "Trigger and retrieve",

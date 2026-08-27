@@ -258,7 +258,7 @@ The agent calls `billing_transactions_list` filtered by type and date, then `bil
 | [SIP trunks](TOOLS.md#sip-trunks) | 5 | Full CRUD |
 | [10DLC](TOOLS.md#10dlc) | 29 | Brands, campaigns, vetting, evidence, event subscriptions |
 | [Profile](TOOLS.md#profile) | 3 | Get / update profile; account config |
-| [API Keys](TOOLS.md#api-keys) | 4 | List, create, activate / deactivate, delete |
+| [API Keys](TOOLS.md#api-keys) | 4 | List, create, update, delete |
 | [Sub-accounts](TOOLS.md#sub-accounts) | 5 | List, create, get, update; transactions |
 | [Billing](TOOLS.md#billing) | 2 | Transactions; list invoices / statements |
 | [Voice campaigns](TOOLS.md#voice-campaigns) | 2 | Trigger and retrieve |
