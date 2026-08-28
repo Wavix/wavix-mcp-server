@@ -11,7 +11,15 @@ import yaml
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_http_headers
-from fastmcp.server.providers.openapi import MCPType, RouteMap
+from fastmcp.server.providers.openapi import (
+    MCPType,
+    OpenAPIResource,
+    OpenAPIResourceTemplate,
+    OpenAPITool,
+    RouteMap,
+)
+from fastmcp.utilities.openapi.models import HTTPRoute
+from mcp.types import ToolAnnotations
 
 from .docs import register_api_spec, register_docs
 
@@ -160,6 +168,56 @@ def _build_exclude_route_maps(
             )
         )
     return route_maps
+
+
+def _xmcp(route: HTTPRoute) -> dict[str, Any] | None:
+    """The operation's ``x-mcp`` vendor extension, or ``None`` when absent.
+
+    FastMCP does not interpret ``x-mcp`` — it only surfaces raw ``x-*`` keys on
+    ``route.extensions``. This is the single accessor the two hooks below share,
+    so a spec without ``x-mcp`` (the current published one) is a silent no-op.
+    """
+    ext = route.extensions.get("x-mcp")
+    return ext if isinstance(ext, dict) else None
+
+
+def _xmcp_route_map_fn(route: HTTPRoute, mcp_type: MCPType) -> MCPType | None:
+    """Exclude operations the spec marks ``x-mcp.expose: false`` from the tool
+    surface. Only an explicit ``false`` excludes — a missing ``expose`` stays
+    exposed. Returning ``None`` leaves FastMCP's default typing untouched.
+    """
+    xmcp = _xmcp(route)
+    if xmcp is not None and xmcp.get("expose") is False:
+        return MCPType.EXCLUDE
+    return None
+
+
+def _xmcp_component_fn(
+    route: HTTPRoute,
+    component: OpenAPITool | OpenAPIResource | OpenAPIResourceTemplate,
+) -> None:
+    """Map ``x-mcp`` onto the generated tool: risk annotations, an MCP-audience
+    description, and a human title.
+
+    Only the hints ``x-mcp`` actually declares are set; ``idempotentHint`` is
+    left unset because the spec does not carry it (deriving it from the HTTP
+    method would assert a contract the spec never made).
+    """
+    xmcp = _xmcp(route)
+    if xmcp is None or not isinstance(component, OpenAPITool):
+        return
+    component.annotations = ToolAnnotations(
+        title=xmcp.get("title"),
+        readOnlyHint=xmcp.get("readOnly"),
+        destructiveHint=xmcp.get("destructive"),
+        openWorldHint=xmcp.get("openWorld"),
+    )
+    title = xmcp.get("title")
+    if title:
+        component.title = title
+    description = xmcp.get("description")
+    if description:
+        component.description = description
 
 
 async def _resolve_to_download_url(
@@ -320,6 +378,8 @@ def build_server() -> FastMCP:
         instructions=INSTRUCTIONS,
         lifespan=lifespan,
         route_maps=_build_exclude_route_maps(BINARY_STREAM_ENDPOINTS),
+        route_map_fn=_xmcp_route_map_fn,
+        mcp_component_fn=_xmcp_component_fn,
     )
     _register_binary_redirect_tools(mcp, api_client, base_url)
     register_docs(mcp, docs_client)
