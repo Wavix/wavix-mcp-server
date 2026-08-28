@@ -297,6 +297,10 @@ def _xmcp_route_map_fn(route: HTTPRoute, mcp_type: MCPType) -> MCPType | None:
 
 _READ_ONLY_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
+# Operations the spec left unannotated, collected during generation so
+# build_server can report them once instead of 100+ lines at startup.
+_UNANNOTATED: list[str] = []
+
 
 def _hint(declared: object, derived: bool) -> bool:
     """The spec's own answer when it gives one, else the method-derived default."""
@@ -344,7 +348,10 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
     # POST /v1/cdrs is read-only because it is a search. So anything that is
     # not a safe method counts as destructive until the spec says otherwise —
     # over-warning is recoverable, under-warning is not.
-    xmcp = _xmcp(route) or {}
+    xmcp = _xmcp(route)
+    if xmcp is None:
+        _UNANNOTATED.append(f"{(route.method or '').upper()} {route.path}")
+        xmcp = {}
     method = (route.method or "").upper()
 
     component.annotations = ToolAnnotations(
@@ -532,6 +539,17 @@ def build_server() -> FastMCP:
         route_map_fn=_xmcp_route_map_fn,
         mcp_component_fn=_xmcp_component_fn,
     )
+    if _UNANNOTATED:
+        # Loud on purpose. The spec is meant to be the single source for these
+        # (DEV-11628 DD-003), so a fallback that fires silently would let the
+        # gap sit forever behind plausible-looking hints.
+        logger.warning(
+            "%d operation(s) carry no x-mcp; their tool hints were derived from the "
+            "HTTP method. Annotate them in services/wavix-openapi. First few: %s",
+            len(_UNANNOTATED),
+            ", ".join(sorted(_UNANNOTATED)[:5]),
+        )
+
     _register_binary_redirect_tools(mcp, api_client, base_url)
     register_docs(mcp, docs_client)
     register_api_spec(mcp, docs_client)
