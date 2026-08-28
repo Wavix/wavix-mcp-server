@@ -155,6 +155,84 @@ def _strip_non_json_response_content(spec: dict[str, Any]) -> dict[str, Any]:
     return spec
 
 
+_NULLABLE_SCALAR_TYPES = frozenset({"string", "integer", "number", "boolean", "array"})
+
+
+def _iter_subschemas(schema: dict[str, Any]) -> Any:
+    props = schema.get("properties")
+    if isinstance(props, dict):
+        yield from (v for v in props.values() if isinstance(v, dict))
+    items = schema.get("items")
+    if isinstance(items, dict):
+        yield items
+    elif isinstance(items, list):
+        yield from (v for v in items if isinstance(v, dict))
+    for keyword in ("allOf", "anyOf", "oneOf"):
+        members = schema.get(keyword)
+        if isinstance(members, list):
+            yield from (v for v in members if isinstance(v, dict))
+    extra = schema.get("additionalProperties")
+    if isinstance(extra, dict):
+        yield extra
+
+
+def _widen_scalar_to_nullable(schema: dict[str, Any]) -> None:
+    kind = schema.get("type")
+    if isinstance(kind, str):
+        if kind not in _NULLABLE_SCALAR_TYPES:
+            return
+        schema["type"] = [kind, "null"]
+    elif isinstance(kind, list):
+        if "null" in kind or not any(k in _NULLABLE_SCALAR_TYPES for k in kind):
+            return
+        schema["type"] = [*kind, "null"]
+    else:
+        return
+    enum = schema.get("enum")
+    if isinstance(enum, list) and None not in enum:
+        schema["enum"] = [*enum, None]
+
+
+def _widen_response_tree(schema: dict[str, Any], seen: set[int]) -> None:
+    marker = id(schema)
+    if marker in seen:
+        return
+    seen.add(marker)
+    _widen_scalar_to_nullable(schema)
+    for sub in _iter_subschemas(schema):
+        _widen_response_tree(sub, seen)
+
+
+def _relax_response_nullability(spec: dict[str, Any]) -> dict[str, Any]:
+    """Allow ``null`` in every scalar/array field of a JSON response schema.
+
+    The spec types many response fields as a bare ``string``/``integer``/… that the
+    live API can still return ``null`` for (e.g. an unset SIP-trunk ``label``). An
+    MCP client validates a tool's structured output against the advertised schema
+    and hard-fails the whole call on the first mismatch, so one stray null takes a
+    tool down entirely. ``object`` types are left strict so a top-level response
+    stays ``type: object`` and FastMCP does not wrap it in ``{"result": …}``.
+    """
+    for path_item in (spec.get("paths") or {}).values():
+        if not isinstance(path_item, dict):
+            continue
+        for method in _HTTP_METHODS:
+            op = path_item.get(method)
+            if not isinstance(op, dict):
+                continue
+            for response in (op.get("responses") or {}).values():
+                content = (response or {}).get("content")
+                if not isinstance(content, dict):
+                    continue
+                for ct, mt in content.items():
+                    if not _is_json_content_type(ct) or not isinstance(mt, dict):
+                        continue
+                    root = mt.get("schema")
+                    if isinstance(root, dict):
+                        _widen_response_tree(root, set())
+    return spec
+
+
 def _missing_targets(
     spec: dict[str, Any],
     targets: tuple[tuple[str, str], ...],
@@ -314,6 +392,7 @@ def build_server() -> FastMCP:
     spec = load_spec()
     spec = _ensure_request_body_type_object(spec)
     spec = _strip_non_json_response_content(spec)
+    spec = _relax_response_nullability(spec)
     base_url = os.getenv("WAVIX_API_BASE_URL", "").strip() or DEFAULT_API_BASE_URL
 
     info = spec.get("info", {})
