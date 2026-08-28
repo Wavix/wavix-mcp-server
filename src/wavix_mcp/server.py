@@ -295,6 +295,27 @@ def _xmcp_route_map_fn(route: HTTPRoute, mcp_type: MCPType) -> MCPType | None:
     return None
 
 
+_READ_ONLY_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+_DESTRUCTIVE_METHODS = frozenset({"PUT", "PATCH", "DELETE"})
+
+
+def _hint(declared: object, derived: bool) -> bool:
+    """The spec's own answer when it gives one, else the method-derived default."""
+    return declared if isinstance(declared, bool) else derived
+
+
+def _download_url_annotations(title: str) -> ToolAnnotations:
+    """For the hand-registered tools: they resolve a download URL and change
+    nothing. They have no OpenAPI route, so _xmcp_component_fn never sees them.
+    """
+    return ToolAnnotations(
+        title=title,
+        readOnlyHint=True,
+        destructiveHint=False,
+        openWorldHint=True,
+    )
+
+
 def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
     """Map the operation onto the generated tool: human title from the OpenAPI
     ``summary`` (FastMCP does not derive one), risk annotations from ``x-mcp``.
@@ -308,14 +329,26 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
         return
     if route.summary:
         component.title = route.summary
-    xmcp = _xmcp(route)
-    if xmcp is None:
-        return
+
+    # x-mcp is the explicit answer, the HTTP method the fallback. No operation
+    # in the published spec carries x-mcp yet (checked: 0 of 122), so without a
+    # fallback every hint would be None — and Anthropic's review rejects a tool
+    # that declares neither: "Every tool must include a `title` and the
+    # applicable hint — `readOnlyHint: true` for read-only tools,
+    # `destructiveHint: true` for tools that modify or delete data."
+    # https://claude.com/docs/connectors/building/review-criteria
+    #
+    # Derivation follows MCP's own definition of destructive — overwriting or
+    # removing existing state — so POST, which creates, is additive.
+    xmcp = _xmcp(route) or {}
+    method = (route.method or "").upper()
+
     component.annotations = ToolAnnotations(
         title=route.summary or None,
-        readOnlyHint=xmcp.get("readOnly"),
-        destructiveHint=xmcp.get("destructive"),
-        openWorldHint=xmcp.get("openWorld"),
+        readOnlyHint=_hint(xmcp.get("readOnly"), method in _READ_ONLY_METHODS),
+        destructiveHint=_hint(xmcp.get("destructive"), method in _DESTRUCTIVE_METHODS),
+        # Every tool reaches the live Wavix API, never a closed local set.
+        openWorldHint=_hint(xmcp.get("openWorld"), True),
     )
 
 
@@ -369,7 +402,11 @@ def _register_binary_redirect_tools(
     api_client: httpx.AsyncClient,
     base_url: str,
 ) -> None:
-    @mcp.tool(name="call_recording_get_by_call")
+    @mcp.tool(
+        name="call_recording_get_by_call",
+        title="Get call recording download URL",
+        annotations=_download_url_annotations("Get call recording download URL"),
+    )
     async def call_recording_get_by_call(call_id: str) -> dict[str, Any]:
         """Get a download URL for a call recording audio file by call ID.
 
@@ -378,7 +415,11 @@ def _register_binary_redirect_tools(
         """
         return await _resolve_to_download_url(api_client, base_url, f"/v1/recordings/{call_id}")
 
-    @mcp.tool(name="speech_analytics_file_get")
+    @mcp.tool(
+        name="speech_analytics_file_get",
+        title="Get speech analytics file URL",
+        annotations=_download_url_annotations("Get speech analytics file URL"),
+    )
     async def speech_analytics_file_get(request_id: str) -> dict[str, Any]:
         """Get a download URL for a speech-analytics audio file.
 
@@ -389,7 +430,11 @@ def _register_binary_redirect_tools(
             api_client, base_url, f"/v1/speech-analytics/{request_id}/file"
         )
 
-    @mcp.tool(name="ten_dlc_brand_evidence_get")
+    @mcp.tool(
+        name="ten_dlc_brand_evidence_get",
+        title="Get 10DLC brand evidence URL",
+        annotations=_download_url_annotations("Get 10DLC brand evidence URL"),
+    )
     async def ten_dlc_brand_evidence_get(brand_id: str, id: str) -> dict[str, Any]:
         """Get a download URL for a 10DLC brand evidence file.
 

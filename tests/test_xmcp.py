@@ -125,14 +125,20 @@ def test_expose_false_excludes_tool():
     assert "secret_get" not in tools
 
 
-def test_spec_without_xmcp_keeps_title_and_description_no_annotations():
+def test_spec_without_xmcp_derives_hints_from_the_http_method():
     tools = _tools_by_name(_spec(("/things", "things_list", "List things", None)))
     tool = tools["things_list"]
-    # Even without x-mcp, the title fallback from summary applies...
+    # Title and description still come from the operation...
     assert tool.title == "List things"
     assert tool.description == "List things endpoint description."
-    # ...but no risk annotations are asserted.
-    assert tool.annotations is None
+    # ...and the hints fall back to the method rather than staying unset.
+    # This assertion used to require annotations to be None. It changed because
+    # no operation in the published spec carries x-mcp (0 of 122), so leaving
+    # them unset shipped 116 tools with no hints at all — which Anthropic's
+    # connector review rejects outright.
+    assert tool.annotations is not None
+    assert tool.annotations.readOnlyHint is True
+    assert tool.annotations.destructiveHint is False
 
 
 def test_static_route_map_exclusion_takes_precedence():
