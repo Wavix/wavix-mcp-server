@@ -54,6 +54,7 @@ def test_trailing_slashes_do_not_double_up(monkeypatch):
     )
 
     assert body["resource"] == f"{RESOURCE}/mcp"
+    assert body["authorization_servers"] == [ISSUER]
 
 
 def test_prm_advertises_resource_and_authorization_server(oauth_env):
@@ -66,7 +67,9 @@ def test_prm_advertises_resource_and_authorization_server(oauth_env):
     # The `resource` value is the audience the AS must stamp into `aud`;
     # a mismatch makes every authorization request fail as invalid_target.
     assert body["resource"] == f"{RESOURCE}/mcp"
-    assert body["authorization_servers"] == [f"{ISSUER}/"]
+    # RFC 8414 §3.3: must byte-match the AS `issuer` (host-only, no trailing slash),
+    # which is also the `issuer` the JWTVerifier validates the token `iss` against.
+    assert body["authorization_servers"] == [ISSUER]
     assert "account:read" in body["scopes_supported"]
     assert "offline_access" in body["scopes_supported"]
 
