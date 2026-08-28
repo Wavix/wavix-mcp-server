@@ -5,7 +5,7 @@ import asyncio
 
 import httpx
 from fastmcp import FastMCP
-from fastmcp.server.providers.openapi import MCPType
+from fastmcp.server.providers.openapi import MCPType, RouteMap
 from fastmcp.utilities.openapi.models import HTTPRoute
 
 from wavix_mcp.server import _xmcp, _xmcp_component_fn, _xmcp_route_map_fn
@@ -98,6 +98,8 @@ def test_component_sets_annotations_and_description():
     assert tool.annotations.destructiveHint is False
     assert tool.annotations.openWorldHint is False
     assert tool.annotations.title == "List things"
+    # The x-mcp title lands on the tool itself, not only the annotations.
+    assert tool.title == "List things"
     # idempotentHint is intentionally not carried by x-mcp.
     assert tool.annotations.idempotentHint is None
 
@@ -130,5 +132,38 @@ def test_expose_false_excludes_tool():
 
 
 def test_spec_without_xmcp_is_noop():
-    tool = _tools_by_name(_spec(("/things", "things_list", None)))["things_list"]
-    assert tool.annotations is None or tool.annotations.readOnlyHint is None
+    spec = {
+        "openapi": "3.1.0",
+        "info": {"title": "t", "version": "1"},
+        "paths": {
+            "/things": {
+                "get": {
+                    "operationId": "things_list",
+                    "description": "Plain endpoint description.",
+                    "responses": {"200": {"description": "ok"}},
+                }
+            }
+        },
+    }
+    tools = _tools_by_name(spec)
+    assert "things_list" in tools
+    tool = tools["things_list"]
+    assert tool.annotations is None
+    assert tool.description == "Plain endpoint description."
+
+
+def test_static_route_map_exclusion_takes_precedence():
+    # An op x-mcp would keep (expose:true) but a static route_map excludes must
+    # stay excluded — route_map_fn returning None never un-excludes a static EXCLUDE.
+    spec = _spec(("/things", "things_list", XMCP_EXPOSED))
+    client = httpx.AsyncClient(base_url="http://api.test")
+    mcp = FastMCP.from_openapi(
+        openapi_spec=spec,
+        client=client,
+        name="t",
+        route_maps=[RouteMap(methods=["GET"], pattern=r"^/things$", mcp_type=MCPType.EXCLUDE)],
+        route_map_fn=_xmcp_route_map_fn,
+        mcp_component_fn=_xmcp_component_fn,
+    )
+    tools = {t.name for t in asyncio.run(mcp.list_tools())}
+    assert "things_list" not in tools
