@@ -296,7 +296,6 @@ def _xmcp_route_map_fn(route: HTTPRoute, mcp_type: MCPType) -> MCPType | None:
 
 
 _READ_ONLY_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
-_DESTRUCTIVE_METHODS = frozenset({"PUT", "PATCH", "DELETE"})
 
 
 def _hint(declared: object, derived: bool) -> bool:
@@ -338,15 +337,20 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
     # `destructiveHint: true` for tools that modify or delete data."
     # https://claude.com/docs/connectors/building/review-criteria
     #
-    # Derivation follows MCP's own definition of destructive — overwriting or
-    # removing existing state — so POST, which creates, is additive.
+    # The fallback errs toward warning. A method alone cannot tell a benign
+    # create from one that spends money or rings a phone, and the annotations
+    # DEV-11628 wrote by hand prove the distinction is real: POST /v1/calls and
+    # POST /v1/buy/cart/checkout are marked destructive there, while
+    # POST /v1/cdrs is read-only because it is a search. So anything that is
+    # not a safe method counts as destructive until the spec says otherwise —
+    # over-warning is recoverable, under-warning is not.
     xmcp = _xmcp(route) or {}
     method = (route.method or "").upper()
 
     component.annotations = ToolAnnotations(
         title=route.summary or None,
         readOnlyHint=_hint(xmcp.get("readOnly"), method in _READ_ONLY_METHODS),
-        destructiveHint=_hint(xmcp.get("destructive"), method in _DESTRUCTIVE_METHODS),
+        destructiveHint=_hint(xmcp.get("destructive"), method not in _READ_ONLY_METHODS),
         # Every tool reaches the live Wavix API, never a closed local set.
         openWorldHint=_hint(xmcp.get("openWorld"), True),
     )

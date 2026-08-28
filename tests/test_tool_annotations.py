@@ -43,6 +43,12 @@ def test_hints_are_not_a_blanket_constant(tools):
     assert {bool(t.annotations.destructiveHint) for t in tools} == {True, False}
 
 
+def test_the_fallback_treats_any_write_as_destructive():
+    # A method cannot distinguish a benign create from one that spends money,
+    # so when the spec is silent the fallback over-warns rather than under-warns.
+    assert _hint(None, True) is True
+
+
 def test_an_explicit_spec_value_wins_over_the_derived_one():
     assert _hint(True, False) is True
     assert _hint(False, True) is False
