@@ -285,9 +285,9 @@ def _xmcp(route: HTTPRoute) -> dict[str, Any] | None:
 
 
 def _xmcp_route_map_fn(route: HTTPRoute, mcp_type: MCPType) -> MCPType | None:
-    """Exclude operations the spec marks ``x-mcp.expose: false``. Only an
-    explicit ``false`` excludes; a missing ``expose`` stays exposed. Returning
-    ``None`` leaves FastMCP's default typing untouched.
+    """Exclude operations the spec marks ``x-mcp.expose: false`` from the tool
+    surface. Only an explicit ``false`` excludes — a missing ``expose`` stays
+    exposed. Returning ``None`` leaves FastMCP's default typing untouched.
     """
     xmcp = _xmcp(route)
     if xmcp is not None and xmcp.get("expose") is False:
@@ -320,33 +320,28 @@ def _download_url_annotations(title: str) -> ToolAnnotations:
 
 
 def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
-    """Map the operation onto the generated tool: human title from the OpenAPI
-    ``summary`` (FastMCP does not derive one), risk annotations from ``x-mcp``.
+    """Map the operation onto the generated tool: human title, risk annotations,
+    and an optional MCP-audience description.
 
-    The tool description is left as FastMCP set it — the operation's own
-    ``description`` — rather than duplicated into ``x-mcp``. ``idempotentHint``
-    is left unset: the spec does not carry it, and inferring it from the HTTP
-    method would assert a contract the spec never made.
+    Title prefers ``x-mcp.title``, else the OpenAPI ``summary`` (FastMCP derives
+    neither). ``x-mcp.description`` replaces the tool description for the MCP
+    audience when present; otherwise the operation's own ``description`` stands.
+    ``idempotentHint`` is left unset: the spec does not carry it, and inferring
+    it from the HTTP method would assert a contract the spec never made.
     """
     if not isinstance(component, OpenAPITool):
         return
-    if route.summary:
-        component.title = route.summary
 
-    # x-mcp is the explicit answer, the HTTP method the fallback. No operation
-    # in the published spec carries x-mcp yet (checked: 0 of 122), so without a
-    # fallback every hint would be None — and Anthropic's review rejects a tool
-    # that declares neither: "Every tool must include a `title` and the
-    # applicable hint — `readOnlyHint: true` for read-only tools,
-    # `destructiveHint: true` for tools that modify or delete data."
-    # https://claude.com/docs/connectors/building/review-criteria
+    # x-mcp is the explicit answer, the HTTP method the fallback. An operation
+    # that still carries no x-mcp would otherwise have every hint None — and
+    # Anthropic's review rejects a tool that declares neither: "Every tool must
+    # include a `title` and the applicable hint — `readOnlyHint: true` for
+    # read-only tools, `destructiveHint: true` for tools that modify or delete
+    # data." https://claude.com/docs/connectors/building/review-criteria
     #
     # The fallback errs toward warning. A method alone cannot tell a benign
-    # create from one that spends money or rings a phone, and the annotations
-    # DEV-11628 wrote by hand prove the distinction is real: POST /v1/calls and
-    # POST /v1/buy/cart/checkout are marked destructive there, while
-    # POST /v1/cdrs is read-only because it is a search. So anything that is
-    # not a safe method counts as destructive until the spec says otherwise —
+    # create from one that spends money or rings a phone — so anything that is
+    # not a safe method counts as destructive until the spec says otherwise;
     # over-warning is recoverable, under-warning is not.
     xmcp = _xmcp(route)
     if xmcp is None:
@@ -354,8 +349,16 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
         xmcp = {}
     method = (route.method or "").upper()
 
+    title = xmcp.get("title") or route.summary
+    if title:
+        component.title = title
+
+    description = xmcp.get("description")
+    if description:
+        component.description = description
+
     component.annotations = ToolAnnotations(
-        title=route.summary or None,
+        title=title or None,
         readOnlyHint=_hint(xmcp.get("readOnly"), method in _READ_ONLY_METHODS),
         destructiveHint=_hint(xmcp.get("destructive"), method not in _READ_ONLY_METHODS),
         # Every tool reaches the live Wavix API, never a closed local set.
