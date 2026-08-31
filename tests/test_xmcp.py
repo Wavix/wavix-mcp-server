@@ -1,5 +1,6 @@
-"""Tests for the x-mcp consumer: expose-based exclusion + risk annotations from
-x-mcp, tool title from the OpenAPI summary, description from the endpoint."""
+"""Tests for the x-mcp consumer: expose-based exclusion, risk annotations from
+x-mcp, tool title from x-mcp or the OpenAPI summary, description overridable via
+x-mcp."""
 
 import asyncio
 
@@ -91,9 +92,9 @@ def test_route_map_noop_without_xmcp():
 
 def test_component_title_from_summary_annotations_from_xmcp():
     tool = _tools_by_name(_spec(("/things", "things_list", "List things", XMCP)))["things_list"]
-    # Title falls back to the OpenAPI summary, not an x-mcp field.
+    # Title falls back to the OpenAPI summary when x-mcp carries no title.
     assert tool.title == "List things"
-    # Description stays the endpoint's own text (FastMCP default), not duplicated.
+    # Description stays the endpoint's own text when x-mcp carries no description.
     assert tool.description == "List things endpoint description."
     assert tool.annotations is not None
     assert tool.annotations.readOnlyHint is True
@@ -102,6 +103,18 @@ def test_component_title_from_summary_annotations_from_xmcp():
     assert tool.annotations.title == "List things"
     # idempotentHint is intentionally not carried by x-mcp.
     assert tool.annotations.idempotentHint is None
+
+
+def test_xmcp_title_and_description_override_the_openapi_text():
+    xmcp = {
+        **XMCP,
+        "title": "Browse things",
+        "description": "Lists things. Use to browse. No side effects. None.",
+    }
+    tool = _tools_by_name(_spec(("/things", "things_list", "List things", xmcp)))["things_list"]
+    assert tool.title == "Browse things"
+    assert tool.description == "Lists things. Use to browse. No side effects. None."
+    assert tool.annotations.title == "Browse things"
 
 
 def test_destructive_open_world_tool_annotated():
