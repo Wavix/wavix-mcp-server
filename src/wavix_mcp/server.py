@@ -159,6 +159,19 @@ def _strip_non_json_response_content(spec: dict[str, Any]) -> dict[str, Any]:
 
 _NULLABLE_SCALAR_TYPES = frozenset({"string", "integer", "number", "boolean", "array"})
 
+_ANNOTATION_KEYWORDS = frozenset(
+    {
+        "description",
+        "title",
+        "example",
+        "examples",
+        "default",
+        "deprecated",
+        "readOnly",
+        "writeOnly",
+    }
+)
+
 
 def _iter_subschemas(schema: dict[str, Any]) -> Any:
     props = schema.get("properties")
@@ -203,6 +216,84 @@ def _widen_response_tree(schema: dict[str, Any], seen: set[int]) -> None:
     _widen_scalar_to_nullable(schema)
     for sub in _iter_subschemas(schema):
         _widen_response_tree(sub, seen)
+
+
+def _nullable_type_to_anyof(schema: dict[str, Any]) -> None:
+    kind = schema.get("type")
+    if not isinstance(kind, list) or "null" not in kind or "anyOf" in schema:
+        return
+    concrete = [k for k in kind if k != "null"]
+    del schema["type"]
+    schema["anyOf"] = [*({"type": k} for k in concrete), {"type": "null"}]
+
+
+def _flatten_annotation_allof(schema: dict[str, Any]) -> None:
+    members = schema.get("allOf")
+    if not isinstance(members, list) or not members:
+        return
+    is_annotation_only = [
+        isinstance(m, dict) and not (set(m) - _ANNOTATION_KEYWORDS) for m in members
+    ]
+    if is_annotation_only.count(False) > 1:
+        return
+    merged: dict[str, Any] = {}
+    for annotated in (True, False):
+        for member, annotation_only in zip(members, is_annotation_only, strict=True):
+            if isinstance(member, dict) and annotation_only is annotated:
+                merged.update(member)
+    if (set(schema) - {"allOf"}) & merged.keys():
+        return
+    del schema["allOf"]
+    schema.update(merged)
+
+
+def _normalize_schema_tree(schema: dict[str, Any], seen: set[int]) -> None:
+    marker = id(schema)
+    if marker in seen:
+        return
+    seen.add(marker)
+    _flatten_annotation_allof(schema)
+    _nullable_type_to_anyof(schema)
+    for sub in _iter_subschemas(schema):
+        _normalize_schema_tree(sub, seen)
+
+
+def _iter_operation_schemas(op: dict[str, Any]) -> Any:
+    for param in op.get("parameters") or []:
+        if isinstance(param, dict) and isinstance(param.get("schema"), dict):
+            yield param["schema"]
+    for container in (op.get("requestBody"), *(op.get("responses") or {}).values()):
+        if not isinstance(container, dict):
+            continue
+        for mt in (container.get("content") or {}).values():
+            if isinstance(mt, dict) and isinstance(mt.get("schema"), dict):
+                yield mt["schema"]
+
+
+def _normalize_tool_schemas(spec: dict[str, Any]) -> dict[str, Any]:
+    """Make request/response schemas portable across strict MCP clients.
+
+    Two rewrites that preserve meaning but drop spellings some clients choke on:
+    ``type: [X, "null"]`` unions become ``anyOf: [{type: X}, {type: "null"}]`` (several
+    clients read ``type`` as a single string and reject the tool or drop the
+    constraint), and a single-constraint ``allOf`` whose other members are the
+    annotation-only ``{}``/``{description: …}`` leftovers of ``$ref``+sibling bundling
+    is flattened into one schema (those members carry no validation keyword, so a
+    strict client sees a bare ``true`` and warns).
+    """
+    seen: set[int] = set()
+    for path_item in (spec.get("paths") or {}).values():
+        if not isinstance(path_item, dict):
+            continue
+        for param in path_item.get("parameters") or []:
+            if isinstance(param, dict) and isinstance(param.get("schema"), dict):
+                _normalize_schema_tree(param["schema"], seen)
+        for method in _HTTP_METHODS:
+            op = path_item.get(method)
+            if isinstance(op, dict):
+                for root in _iter_operation_schemas(op):
+                    _normalize_schema_tree(root, seen)
+    return spec
 
 
 def _relax_response_nullability(spec: dict[str, Any]) -> dict[str, Any]:
@@ -500,6 +591,7 @@ def build_server() -> FastMCP:
     spec = _ensure_request_body_type_object(spec)
     spec = _strip_non_json_response_content(spec)
     spec = _relax_response_nullability(spec)
+    spec = _normalize_tool_schemas(spec)
     base_url = os.getenv("WAVIX_API_BASE_URL", "").strip() or DEFAULT_API_BASE_URL
 
     info = spec.get("info", {})
