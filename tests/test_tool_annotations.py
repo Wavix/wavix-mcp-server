@@ -24,6 +24,11 @@ def test_no_tool_ships_without_a_title(tools):
     assert [t.name for t in tools if not t.title] == []
 
 
+def test_no_tool_name_exceeds_64_chars(tools):
+    # Anthropic's review criteria: "Tool names must be 64 characters or fewer."
+    assert [t.name for t in tools if len(t.name) > 64] == []
+
+
 def test_no_tool_ships_without_hints(tools):
     # The published spec carries no x-mcp today, so this is what proves the
     # method-derived fallback is doing its job rather than leaving hints null.
