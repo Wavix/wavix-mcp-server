@@ -1,0 +1,75 @@
+# MCP-audience tool descriptions, keyed by OpenAPI operationId.
+#
+# These are written for an AI agent choosing and sequencing tools — a different
+# reader from the public API reference. They are kept HERE, in the MCP server,
+# rather than in the Wavix OpenAPI spec, so the spec stays purely user/SDK-facing
+# and the agent copy is owned by the connector.
+#
+# _xmcp_component_fn applies an entry as the tool's description (it takes
+# precedence over any x-mcp.description still in the spec). An entry whose
+# operationId is absent from the loaded spec is reported at startup.
+#
+# Format per entry: {What it does}. {When to use it}. {Side effects, cost,
+# irreversibility}. {Preconditions}. See the mcp-tool-descriptions skill.
+
+sms_and_mms_messages_send: >-
+  Sends an SMS or MMS message to a single recipient. Use when the user asks to
+  send a text or multimedia message and has confirmed the recipient number and
+  message content. Billable to the account balance; delivery is irreversible
+  once the message is accepted. Requires the `messages:write` scope and a `from`
+  value that is a registered Sender ID; MMS is supported for US recipients only;
+  the recipient must not be on the account's opt-out list.
+
+sms_and_mms_messages_list: >-
+  Lists the account's SMS and MMS messages, filterable by direction, date,
+  Sender ID, recipient number, delivery status, tag, and message type. Use to
+  review message history or find messages matching criteria. Read-only; no side
+  effects. Requires the `messages:read` scope and the `type` filter (`inbound`
+  or `outbound`); results are paginated with `per_page` from 1 to 100 (default
+  25) and `page` starting at 1.
+
+sms_and_mms_messages_get: >-
+  Retrieves a single SMS or MMS message by its ID, including its delivery
+  status, charge, and content. Use to check the status or content of one known
+  message. Read-only; no side effects. Requires the `messages:read` scope and
+  the message `id`.
+
+sms_and_mms_sender_ids_list: >-
+  Lists the Sender IDs registered on the account, each with its Sender ID name,
+  type, use case, and allowlisted countries. Use to discover which `from` values
+  are available before sending a message, or to audit registered senders.
+  Read-only; no side effects. Requires the `messages:read` scope.
+
+sms_and_mms_sender_ids_create: >-
+  Registers a new Sender ID for the account so it can be used as a message
+  `from` value. Use when the user wants to add an alphanumeric or numeric sender
+  and has confirmed its details. Registering a Sender ID incurs a recurring
+  monthly fee billed to the account balance. Requires the `messages:write`
+  scope; US Sender IDs must be registered through the 10DLC tools instead.
+
+sms_and_mms_sender_ids_get: >-
+  Retrieves a single registered Sender ID by its ID, including its type, use
+  case, and allowlisted countries. Use to inspect one Sender ID the account
+  already has. Read-only; no side effects. Requires the `messages:read` scope
+  and the Sender ID's `id`.
+
+sms_and_mms_sender_ids_delete: >-
+  Deletes a registered Sender ID by its ID. Use when the user wants to remove a
+  Sender ID they no longer need and has confirmed which one. Permanent and
+  irreversible; once deleted the Sender ID can no longer be used to send
+  messages. Requires the `messages:write` scope and the Sender ID's `id`.
+
+sms_and_mms_opt_outs_list: >-
+  Lists the phone numbers that have opted out of receiving messages from the
+  account, filterable by Sender ID, 10DLC campaign, and creation date. Use to
+  check whether a recipient has opted out before sending, or to review the
+  opt-out list. Read-only; no side effects. Requires the `messages:read` scope;
+  results are paginated with `per_page` from 1 to 100 (default 25) and `page`
+  starting at 1.
+
+sms_and_mms_opt_outs_create: >-
+  Adds a phone number to the account's opt-out list, either for a specific
+  Sender ID or for all outbound messages when no Sender ID is given. Use when a
+  recipient asks to stop receiving messages or to honor a suppression request.
+  Once created, outbound messages to that number within the chosen scope are
+  blocked. Requires the `messages:write` scope and the recipient phone number.
