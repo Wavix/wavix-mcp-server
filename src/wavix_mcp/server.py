@@ -15,8 +15,10 @@ from fastmcp.server.providers.openapi import MCPType, OpenAPITool, RouteMap
 from fastmcp.utilities.openapi.models import HTTPRoute
 from mcp.types import ToolAnnotations
 
+from . import scopes
 from .auth import build_auth_provider, mcp_path
 from .docs import register_api_spec, register_docs
+from .scope_filter import ScopeFilterMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -392,6 +394,19 @@ _READ_ONLY_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 # build_server can report them once instead of 100+ lines at startup.
 _UNANNOTATED: list[str] = []
 
+# Generated tool name -> (HTTP method, path template), collected during
+# generation so the scope filter can map a tool back to the API route whose
+# permission gates it. Hand-registered tools are added separately in build_server.
+_TOOL_ROUTES: dict[str, tuple[str, str]] = {}
+
+# Hand-registered download tools resolve a URL from a scoped API endpoint, so
+# they carry the same permission as the endpoint they reach.
+_HAND_TOOL_ROUTES: dict[str, tuple[str, str]] = {
+    "call_recording_get_by_call": ("GET", "/v1/recordings/{call_id}"),
+    "speech_analytics_file_get": ("GET", "/v1/speech-analytics/{request_id}/file"),
+    "ten_dlc_brand_evidence_get": ("GET", "/v3/10dlc/brands/{brand_id}/evidence/{id}"),
+}
+
 
 def _hint(declared: object, derived: bool) -> bool:
     """The spec's own answer when it gives one, else the method-derived default."""
@@ -422,6 +437,8 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
     """
     if not isinstance(component, OpenAPITool):
         return
+
+    _TOOL_ROUTES[component.name] = ((route.method or "").upper(), route.path)
 
     # x-mcp is the explicit answer, the HTTP method the fallback. An operation
     # that still carries no x-mcp would otherwise have every hint None — and
@@ -587,6 +604,7 @@ def build_server() -> FastMCP:
         load_dotenv(container_env)
     else:
         load_dotenv()
+    _TOOL_ROUTES.clear()
     spec = load_spec()
     spec = _ensure_request_body_type_object(spec)
     spec = _strip_non_json_response_content(spec)
@@ -648,7 +666,38 @@ def build_server() -> FastMCP:
     _register_binary_redirect_tools(mcp, api_client, base_url)
     register_docs(mcp, docs_client)
     register_api_spec(mcp, docs_client)
+
+    tool_routes = {**_TOOL_ROUTES, **_HAND_TOOL_ROUTES}
+    _warn_on_never_gated_tools(tool_routes)
+    mcp.add_middleware(ScopeFilterMiddleware(tool_routes))
     return mcp
+
+
+# API-key management is deliberately outside the OAuth scope model: a delegated
+# OAuth grant must never mint or manage the account's API keys, so the gateway
+# denies these to every OAuth token. Their tools are correctly hidden from OAuth
+# connections, so they are not drift and must not raise the reconcile warning.
+_EXPECTED_UNSCOPED_PREFIXES = ("/v1/api-keys",)
+
+
+def _warn_on_never_gated_tools(tool_routes: dict[str, tuple[str, str]]) -> None:
+    """A tool whose route matches no scope rule is denied to every OAuth token,
+    so it is hidden from all of them. Outside the known-unscoped set that means
+    the scope table here has drifted from the spec — log it loudly.
+    """
+    orphaned = sorted(
+        name
+        for name, (method, path) in tool_routes.items()
+        if scopes.requirement_for(method, path).kind == "never"
+        and not path.startswith(_EXPECTED_UNSCOPED_PREFIXES)
+    )
+    if orphaned:
+        logger.warning(
+            "%d tool(s) match no OAuth scope rule and are hidden from every OAuth "
+            "connection. Reconcile wavix_mcp/scopes.py with the API gateway. First few: %s",
+            len(orphaned),
+            ", ".join(orphaned[:5]),
+        )
 
 
 def main() -> None:
