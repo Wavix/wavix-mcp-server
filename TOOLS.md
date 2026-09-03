@@ -1,6 +1,6 @@
 # Wavix MCP Tools — full catalogue
 
-122 tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi) via [`FastMCP.from_openapi()`](https://github.com/jlowin/fastmcp). Arguments mirror request path / query / body fields.
+116 tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi) via [`FastMCP.from_openapi()`](https://github.com/jlowin/fastmcp). Arguments mirror request path / query / body fields.
 
 If a tool listed here is missing from your client, refresh the connection: the live catalogue tracks the OpenAPI spec as it evolves.
 
@@ -17,7 +17,6 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 - `sms_and_mms_messages_list` — List messages
 - `sms_and_mms_messages_send` — Send a message
 - `sms_and_mms_messages_get` — Retrieve a message
-- `sms_and_mms_messages_list_all` — Export messages
 
 ## Call control
 
@@ -34,8 +33,8 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 ## Call recording
 
 - `call_recording_list` — List call recordings
-- `call_recording_get_by_call` — Retrieve a recording by call ID
-- `call_recording_get` — Retrieve a recording (returns a pre-signed download URL)
+- `call_recording_get_by_call` — Retrieve a recording by call ID (returns a pre-signed download URL)
+- `call_recording_get` — Retrieve a recording
 - `call_recording_delete` — Delete a call recording
 
 ## Call streaming
@@ -57,11 +56,9 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 - `cdrs_transcription_get` — Retrieve a transcription
 - `cdrs_transcriptions` — Retrieve a transcription
 - `cdrs_get` — Retrieve a CDR
-- `cdrs_list_all` — Export CDRs
 
 ## Speech Analytics
 
-- `speech_analytics_create` — Upload a file
 - `speech_analytics_get` — Retrieve a transcription
 - `speech_analytics_retranscribe` — Retranscribe a file
 - `speech_analytics_file_get` — Retrieve the original file (returns a pre-signed download URL)
@@ -82,7 +79,6 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 - `my_numbers_delete` — Release phone numbers
 - `my_numbers_get` — Retrieve a phone number
 - `numbers_update` — Update a phone number
-- `my_numbers_papers_upload` — Upload a document
 
 ## Buy
 
@@ -125,7 +121,6 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 - `ten_dlc_brand_appeals_list` — List Brand identity appeals
 - `ten_dlc_brand_appeals_create` — Appeal a 10DLC Brand identity verification
 - `ten_dlc_brand_evidence_list` — List Brand evidence
-- `ten_dlc_brand_evidence_upload` — Upload Brand evidence
 - `ten_dlc_brand_evidence_get` — Download Brand evidence (returns a pre-signed download URL)
 - `ten_dlc_brand_evidence_delete` — Delete Brand evidence
 - `ten_dlc_brand_vettings_list` — List external vettings
@@ -179,7 +174,6 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 
 - `billing_transactions_list` — List transactions
 - `billing_invoices_list` — List financial statements
-- `billing_invoices_download` — Download statement PDF (returns a pre-signed download URL)
 
 ## Voice campaigns
 

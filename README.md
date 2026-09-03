@@ -165,8 +165,34 @@ Requires Python 3.10+.
 | Env var | Default | Purpose |
 | --- | --- | --- |
 | `WAVIX_API_BASE_URL` | `https://api.wavix.com` | Override the upstream Wavix API endpoint (for internal deployments or staging) |
+| `OAUTH_ISSUER` | unset | Base URL of the OAuth 2.1 authorization server. Its JWKS is read from `<issuer>/.well-known/jwks.json` |
+| `OAUTH_RESOURCE` | unset | Public base URL this server is reached at, used as the resource identifier |
+| `MCP_PATH` | `/mcp` | Path the MCP endpoint is served on |
 
 No Wavix credentials are required to **run** the server — they are forwarded per-request from the MCP client's `Authorization: Bearer <api_key>` header. Self-hosters are responsible for terminating TLS in front of the server (nginx, Caddy, cloud load balancer) before exposing it publicly.
+
+### OAuth 2.1 (optional)
+
+Set `OAUTH_ISSUER` and `OAUTH_RESOURCE` together to turn the server into an
+OAuth 2.1 protected resource. It then publishes [RFC 9728][rfc9728] metadata at
+`/.well-known/oauth-protected-resource<MCP_PATH>`, validates incoming access
+tokens as JWTs against the issuer's JWKS, and answers unauthenticated requests
+with a `WWW-Authenticate` challenge pointing at that metadata. MCP clients that
+support OAuth use this to run the authorization flow themselves, so users no
+longer paste an API key into their client config.
+
+The audience each token must carry is `OAUTH_RESOURCE` + `MCP_PATH`, which is
+also the `resource` value published in the metadata. Authorization servers
+implementing [RFC 8707][rfc8707] compare the client's `resource` parameter
+against that string exactly, so the two must be configured to match — including
+the path.
+
+Leaving either variable unset keeps the previous behaviour: no metadata is
+published and whatever bearer token the client sends is forwarded upstream
+unverified.
+
+[rfc9728]: https://datatracker.ietf.org/doc/html/rfc9728
+[rfc8707]: https://datatracker.ietf.org/doc/html/rfc8707
 
 ## Examples
 
@@ -202,39 +228,39 @@ The agent uses `cdrs_search` against transcriptions, then enriches each result v
 
 > *Prompt:* "Get the recording for call abc-123, ask Wavix to transcribe it, and return the transcription."
 
-The agent calls `call_recording_get` (returns a pre-signed download URL), `cdrs_retranscribe`, then polls `cdrs_transcription_get`.
+The agent calls `call_recording_get_by_call` (returns a pre-signed download URL), `cdrs_retranscribe`, then polls `cdrs_transcription_get`.
 
 ### Audit billing
 
-> *Prompt:* "How much did we spend on SMS last month? Give me a download link for the most recent invoice PDF."
+> *Prompt:* "How much did we spend on SMS last month, and what invoices were issued?"
 
-The agent calls `billing_transactions_list` filtered by type and date, then `billing_invoices_list` + `billing_invoices_download`. The download tool returns a **pre-signed URL** to the PDF, not the file itself — open the URL in a browser or pass it to your client to fetch the actual document.
+The agent calls `billing_transactions_list` filtered by type and date, then `billing_invoices_list`. Downloading the invoice PDF itself is not exposed over MCP — fetch it from the Wavix API or dashboard.
 
 ## Tools
 
 <!-- tools:start -->
-122 tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi). Arguments mirror request parameters and body fields.
+116 tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi). Arguments mirror request parameters and body fields.
 
 | Group | # | Coverage |
 | --- | ---: | --- |
-| [SMS and MMS](TOOLS.md#sms-and-mms) | 10 | Send, list, retrieve messages; sender IDs; opt-outs |
+| [SMS and MMS](TOOLS.md#sms-and-mms) | 9 | Send, list, retrieve messages; sender IDs; opt-outs |
 | [Call control](TOOLS.md#call-control) | 9 | Start / answer / end calls; play audio; collect DTMF |
 | [Call recording](TOOLS.md#call-recording) | 4 | List, download (pre-signed URL), delete |
 | [Call streaming](TOOLS.md#call-streaming) | 2 | Start / stop media stream |
 | [Call webhooks](TOOLS.md#call-webhooks) | 3 | List, create, delete |
-| [CDRs](TOOLS.md#cdrs) | 7 | List, export, retrieve; transcription search and retranscribe |
-| [Speech Analytics](TOOLS.md#speech-analytics) | 4 | Upload, transcribe, retrieve original file |
+| [CDRs](TOOLS.md#cdrs) | 6 | List, retrieve; transcription search and retranscribe |
+| [Speech Analytics](TOOLS.md#speech-analytics) | 3 | Transcribe, retrieve original file |
 | [2FA](TOOLS.md#2fa) | 6 | Create / check / cancel / resend verification; events |
-| [My numbers](TOOLS.md#my-numbers) | 6 | List, update, release; SMS / voice routing; document upload |
+| [My numbers](TOOLS.md#my-numbers) | 5 | List, update, release; SMS / voice routing |
 | [Buy](TOOLS.md#buy) | 5 | Countries, regions, cities; available number search |
 | [Cart](TOOLS.md#cart) | 4 | Add, remove, retrieve, checkout |
 | [Number validator](TOOLS.md#number-validator) | 3 | Single and bulk validation |
 | [SIP trunks](TOOLS.md#sip-trunks) | 5 | Full CRUD |
-| [10DLC](TOOLS.md#10dlc) | 30 | Brands, campaigns, vetting, evidence, event subscriptions |
+| [10DLC](TOOLS.md#10dlc) | 29 | Brands, campaigns, vetting, evidence, event subscriptions |
 | [Profile](TOOLS.md#profile) | 3 | Get / update profile; account config |
-| [API Keys](TOOLS.md#api-keys) | 4 | List, create, activate / deactivate, delete |
+| [API Keys](TOOLS.md#api-keys) | 4 | List, create, update, delete |
 | [Sub-accounts](TOOLS.md#sub-accounts) | 5 | List, create, get, update; transactions |
-| [Billing](TOOLS.md#billing) | 3 | Transactions, invoices, statement download |
+| [Billing](TOOLS.md#billing) | 2 | Transactions; list invoices / statements |
 | [Voice campaigns](TOOLS.md#voice-campaigns) | 2 | Trigger and retrieve |
 | [Wavix Embeddable (WebRTC)](TOOLS.md#wavix-embeddable-webrtc) | 5 | Widget tokens CRUD |
 | [Link shortener](TOOLS.md#link-shortener) | 2 | Create short links; metrics |
@@ -270,7 +296,7 @@ The server forwards this header to `api.wavix.com` per-request. The token:
 - is **never** forwarded on cross-host redirects (e.g. pre-signed S3 download URLs),
 - is **never** sent to documentation hosts.
 
-If your client follows a pre-signed download URL returned by `call_recording_get`, `billing_invoices_download`, `speech_analytics_file_get`, or `ten_dlc_brand_evidence_get`, fetch it directly without the `Authorization` header.
+If your client follows a pre-signed download URL returned by `call_recording_get_by_call`, `speech_analytics_file_get`, or `ten_dlc_brand_evidence_get`, fetch it directly without the `Authorization` header.
 
 ### Best practices
 
@@ -298,7 +324,7 @@ If your client follows a pre-signed download URL returned by `call_recording_get
 | Symptom | Likely cause / fix |
 | --- | --- |
 | `401 Unauthorized` from any tool | Missing or invalid `Authorization: Bearer …` header. Verify the API key is active in the Wavix Console. |
-| Tool returns a `download_url`, not the file itself | Expected. Recording, invoice, speech-analytics, and 10DLC evidence endpoints return pre-signed URLs (see [Authentication](#authentication)). Fetch the URL directly without the `Authorization` header. |
+| Tool returns a `download_url`, not the file itself | Expected. Recording, speech-analytics, and 10DLC evidence endpoints return pre-signed URLs (see [Authentication](#authentication)). Fetch the URL directly without the `Authorization` header. |
 | Client only shows ~40 tools, not the full catalogue | Older clients enforce a per-server tool cap. Upgrade (Cursor 2.4+, latest VS Code, latest Claude). |
 | `Tool not found` for a tool listed in this README | The local client may be caching an old tool list. Restart the client, or remove and re-add the server. |
 | 4xx with an `errors` array | Validation error from Wavix API. Inspect `errors`; cross-reference the relevant `wavix://docs/*` page or the OpenAPI spec. |

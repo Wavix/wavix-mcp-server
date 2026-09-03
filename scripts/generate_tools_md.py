@@ -26,13 +26,12 @@ from pathlib import Path
 # resolve $ref / allOf identically, and pick up any preprocessing tweaks.
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "src"))
-from wavix_mcp.server import load_spec  # noqa: E402
+from wavix_mcp.server import EXCLUDED_ENDPOINTS, load_spec  # noqa: E402
 
 # Operations whose response is a pre-signed download URL rather than the JSON
 # body. Mirrors BINARY_STREAM_ENDPOINTS in src/wavix_mcp/server.py.
 PRE_SIGNED = {
-    "call_recording_get",
-    "billing_invoices_download",
+    "call_recording_get_by_call",
     "speech_analytics_file_get",
     "ten_dlc_brand_evidence_get",
 }
@@ -51,19 +50,19 @@ COVERAGE: dict[str, str] = {
     "Call recording": "List, download (pre-signed URL), delete",
     "Call streaming": "Start / stop media stream",
     "Call webhooks": "List, create, delete",
-    "CDRs": "List, export, retrieve; transcription search and retranscribe",
-    "Speech Analytics": "Upload, transcribe, retrieve original file",
+    "CDRs": "List, retrieve; transcription search and retranscribe",
+    "Speech Analytics": "Transcribe, retrieve original file",
     "2FA": "Create / check / cancel / resend verification; events",
-    "My numbers": "List, update, release; SMS / voice routing; document upload",
+    "My numbers": "List, update, release; SMS / voice routing",
     "Buy": "Countries, regions, cities; available number search",
     "Cart": "Add, remove, retrieve, checkout",
     "Number validator": "Single and bulk validation",
     "SIP trunks": "Full CRUD",
     "10DLC": "Brands, campaigns, vetting, evidence, event subscriptions",
     "Profile": "Get / update profile; account config",
-    "API Keys": "List, create, activate / deactivate, delete",
+    "API Keys": "List, create, update, delete",
     "Sub-accounts": "List, create, get, update; transactions",
-    "Billing": "Transactions, invoices, statement download",
+    "Billing": "Transactions; list invoices / statements",
     "Voice campaigns": "Trigger and retrieve",
     "Wavix Embeddable": "Widget tokens CRUD",
     "Link shortener": "Create short links; metrics",
@@ -145,10 +144,12 @@ def _format_tool_line(opid: str, summary: str) -> str:
 
 def _collect_groups(spec: dict) -> dict[str, list[tuple[str, str]]]:
     groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
-    for path_item in (spec.get("paths") or {}).values():
+    for path, path_item in (spec.get("paths") or {}).items():
         if not isinstance(path_item, dict):
             continue
         for method in HTTP_METHODS:
+            if (path, method) in EXCLUDED_ENDPOINTS:
+                continue
             op = path_item.get(method)
             if not isinstance(op, dict):
                 continue
