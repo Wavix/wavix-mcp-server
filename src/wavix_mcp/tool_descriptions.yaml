@@ -225,7 +225,8 @@ number_validator_create_bulk: >-
   validation details for many numbers at once rather than checking them one at a
   time. Submits the batch for validation; when `async` is `true` it returns a
   `request_id` to poll for the results instead of returning the validation details
-  directly. Requires the `validator:write` scope.
+  directly. Requires the `validator:write` scope, the `phone_numbers` to validate,
+  and the validation `type`.
 
 number_validator_get: >-
   Validates a single phone number and returns its line type, carrier, portability,
@@ -248,7 +249,9 @@ link_shortener_create: >-
   Creates a short link that redirects to a target URL and tracks click metrics. Use
   when the user wants a trackable shortened URL, typically for a campaign message.
   Creates a new, publicly reachable short link pointing at the given target URL.
-  Requires the `campaigns:write` scope.
+  Requires the `campaigns:write` scope and the destination URL (`link`); an
+  optional `phone`, `fallback_url`, `expiration_time`, and `utm_campaign` refine
+  it.
 
 link_shortener_metrics_list: >-
   Lists per-click metrics for short links within a date range, including device,
@@ -350,7 +353,8 @@ cdrs_retranscribe: >-
   user wants a transcript of a recorded call that has not been transcribed yet.
   Billed per minute at the account's call-transcription rate; fails with an
   insufficient-funds error when the balance cannot cover it. Requires the
-  `calls:write` scope and the call's `call_id`.
+  `calls:write` scope and the call's `call_id`; optionally set the transcription
+  `language` and a `webhook_url` to receive the result.
 
 cdrs_search: >-
   Searches the account's call transcriptions for the given keywords or phrases
@@ -585,12 +589,15 @@ webrtc_tokens_update: >-
   `payload`.
 
 voice_campaigns_create: >-
-  Launches a voice campaign that places a real outbound call using a
-  pre-configured scenario, returning a voice campaign `id` to track progress.
-  Use when the user asks to trigger a voice scenario and has confirmed it should
-  run. Billable and irreversible: a real outbound call is placed once the
-  campaign launches, and it fails with `422` when the account has insufficient
-  funds. Requires the `campaigns:write` scope and a pre-configured scenario.
+  Launches a voice campaign that places a real outbound call running a
+  pre-approved call flow, returning a voice campaign `id` to track progress. Use
+  when the user asks to trigger a voice scenario and has confirmed the exact
+  destination number (`contact`), the account Caller ID (`caller_id`), and which
+  call flow (`callflow_id`) to run. Billable and irreversible: a real outbound
+  call is placed once the campaign launches, and it fails with `422` when the
+  account has insufficient funds. Requires the `campaigns:write` scope and a
+  `voice_campaign` with `callflow_id` (a pre-approved call flow), plus
+  `caller_id` and `contact` in E.164 format.
 
 voice_campaigns_get: >-
   Returns the voice campaign identified by `id`, including its current status.
@@ -601,12 +608,13 @@ voice_campaigns_get: >-
 # --- 10DLC — brands, vettings, evidence ---
 
 ten_dlc_brand_appeals_create: >-
-  Submits an appeal of a 10DLC Brand's identity verification, with an `appeal_category`
-  of `VERIFY_TAX_ID`, `VERIFY_NON_PROFIT`, or `VERIFY_GOVERNMENT` plus any supporting
-  documentation. Use when a Brand is UNVERIFIED (or verified but missing tax-exempt or
-  government-entity status) and the user wants to contest the identity result. Creates
-  and submits an appeal for review. Requires the `campaigns:write` scope and the Brand's
-  `brand_id`.
+  Submits an appeal of a 10DLC Brand's identity verification, with one or more
+  `appeal_categories` (`VERIFY_TAX_ID`, `VERIFY_NON_PROFIT`, or `VERIFY_GOVERNMENT`)
+  plus supporting `evidence`. Use when a Brand is UNVERIFIED (or verified but missing
+  tax-exempt or government-entity status) and the user wants to contest the identity
+  result. Creates and submits an appeal for review. Requires the `campaigns:write`
+  scope, the Brand's `brand_id`, one or more `appeal_categories`, and `evidence`
+  supporting the appeal.
 
 ten_dlc_brand_appeals_list: >-
   Lists the identity verification appeals submitted for the 10DLC Brand identified by
@@ -786,7 +794,8 @@ ten_dlc_campaigns_nudge: >-
   rejected one. Use when a Campaign is stuck pending or was rejected and the user
   wants to prompt another review. Submits the review or appeal request; no
   Campaign data is changed. Requires the `campaigns:write` scope, the 10DLC
-  feature enabled for the account, and the `brand_id` and `campaign_id`; the
+  feature enabled for the account, the `brand_id` and `campaign_id`, and a
+  `description` of the request; the
   Campaign must be at least 72 hours old, and only one nudge is allowed per
   Campaign every 24 hours.
 
