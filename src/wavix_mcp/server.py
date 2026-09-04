@@ -2,6 +2,7 @@ import logging
 import os
 import re
 from contextlib import asynccontextmanager
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +71,43 @@ Context management:
 Authentication:
   1. The MCP client forwards the user's Wavix API key as a Bearer token. Do not ask the user for credentials - tools authenticate automatically.
 """
+
+
+def _parse_tool_descriptions(raw: str, source: str) -> dict[str, str]:
+    """Validate the overlay: a mapping of operationId to non-empty text. A bad
+    entry raises here (naming ``source`` and the offender) instead of silently
+    stringifying ``None``/nested values and shipping a broken tool description.
+    """
+    loaded = yaml.safe_load(raw)
+    if not isinstance(loaded, dict):
+        raise RuntimeError(
+            f"tool description overlay {source} must be a mapping of operationId to text"
+        )
+    result: dict[str, str] = {}
+    for op_id, text in loaded.items():
+        if not isinstance(op_id, str) or not isinstance(text, str) or not text.strip():
+            raise RuntimeError(
+                f"tool description overlay {source}: entry {op_id!r} must map a string "
+                "operationId to non-empty text"
+            )
+        result[op_id] = text
+    return result
+
+
+def _load_tool_descriptions() -> dict[str, str]:
+    """MCP-audience tool descriptions keyed by operationId, shipped as package
+    data (``tool_descriptions.yaml``) rather than carried in the OpenAPI spec —
+    the spec stays user/SDK-facing, the agent copy is owned here.
+    """
+    resource = resources.files("wavix_mcp").joinpath("tool_descriptions.yaml")
+    try:
+        raw = resource.read_text("utf-8")
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"tool description overlay missing: {resource}") from exc
+    return _parse_tool_descriptions(raw, str(resource))
+
+
+TOOL_DESCRIPTIONS: dict[str, str] = _load_tool_descriptions()
 
 
 def _clean_yaml_text(text: str) -> str:
@@ -345,6 +383,18 @@ def _missing_targets(
     ]
 
 
+def _spec_operation_ids(spec: dict[str, Any]) -> set[str]:
+    """Every ``operationId`` declared in the spec."""
+    ids: set[str] = set()
+    for path_item in (spec.get("paths") or {}).values():
+        if not isinstance(path_item, dict):
+            continue
+        for op in path_item.values():
+            if isinstance(op, dict) and isinstance(op.get("operationId"), str):
+                ids.add(op["operationId"])
+    return ids
+
+
 def _build_exclude_route_maps(
     targets: tuple[tuple[str, str], ...],
 ) -> list[RouteMap]:
@@ -461,7 +511,7 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
     if title:
         component.title = title
 
-    description = xmcp.get("description")
+    description = TOOL_DESCRIPTIONS.get(route.operation_id or "") or xmcp.get("description")
     if description:
         component.description = description
 
@@ -623,6 +673,15 @@ def build_server() -> FastMCP:
         logger.warning(
             "Route-map exclude targets not found in spec (stale after a spec change?): %s",
             ", ".join(f"{m.upper()} {p}" for p, m in missing),
+        )
+
+    unknown_overlay = sorted(TOOL_DESCRIPTIONS.keys() - _spec_operation_ids(spec))
+    if unknown_overlay:
+        logger.warning(
+            "tool_descriptions.yaml has %d entr(ies) with no matching operationId in the "
+            "spec (stale after a rename/removal?): %s",
+            len(unknown_overlay),
+            ", ".join(unknown_overlay[:5]),
         )
 
     docs_client = httpx.AsyncClient(timeout=30, follow_redirects=True)
