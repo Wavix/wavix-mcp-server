@@ -55,6 +55,9 @@ package-dir = { "" = "src" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+wavix_mcp = ["tool_descriptions.yaml"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"

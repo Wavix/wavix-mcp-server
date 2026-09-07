@@ -5,6 +5,7 @@ x-mcp."""
 import asyncio
 
 import httpx
+import pytest
 from fastmcp import FastMCP
 from fastmcp.server.providers.openapi import MCPType, RouteMap
 from fastmcp.utilities.openapi.models import HTTPRoute
@@ -152,6 +153,75 @@ def test_spec_without_xmcp_derives_hints_from_the_http_method():
     assert tool.annotations is not None
     assert tool.annotations.readOnlyHint is True
     assert tool.annotations.destructiveHint is False
+
+
+def test_overlay_description_overrides_spec_and_xmcp(monkeypatch):
+    from wavix_mcp import server
+
+    overlay = "Overlay text. Use to browse. Read-only; no side effects. Requires read scope."
+    monkeypatch.setattr(server, "TOOL_DESCRIPTIONS", {"things_list": overlay})
+    xmcp = {**XMCP, "description": "Spec x-mcp text that must lose to the overlay."}
+    tool = _tools_by_name(_spec(("/things", "things_list", "List things", xmcp)))["things_list"]
+    assert tool.description == overlay
+
+
+def test_missing_overlay_entry_falls_back_to_xmcp_description(monkeypatch):
+    from wavix_mcp import server
+
+    monkeypatch.setattr(server, "TOOL_DESCRIPTIONS", {})
+    xmcp = {**XMCP, "description": "Spec x-mcp fallback."}
+    tool = _tools_by_name(_spec(("/things", "things_list", "List things", xmcp)))["things_list"]
+    assert tool.description == "Spec x-mcp fallback."
+
+
+def test_shipped_overlay_covers_sms_tools_with_nonempty_strings():
+    from wavix_mcp.server import TOOL_DESCRIPTIONS
+
+    expected = {
+        "sms_and_mms_messages_send",
+        "sms_and_mms_messages_list",
+        "sms_and_mms_messages_get",
+        "sms_and_mms_sender_ids_list",
+        "sms_and_mms_sender_ids_create",
+        "sms_and_mms_sender_ids_get",
+        "sms_and_mms_sender_ids_delete",
+        "sms_and_mms_opt_outs_list",
+        "sms_and_mms_opt_outs_create",
+    }
+    assert expected <= set(TOOL_DESCRIPTIONS)
+    assert all(isinstance(v, str) and v.strip() for v in TOOL_DESCRIPTIONS.values())
+
+
+def test_parse_tool_descriptions_accepts_a_mapping():
+    from wavix_mcp.server import _parse_tool_descriptions
+
+    assert _parse_tool_descriptions("foo: bar", "x") == {"foo": "bar"}
+
+
+def test_parse_tool_descriptions_rejects_non_mapping():
+    from wavix_mcp.server import _parse_tool_descriptions
+
+    with pytest.raises(RuntimeError):
+        _parse_tool_descriptions("- a\n- b", "x")
+
+
+def test_parse_tool_descriptions_rejects_empty_or_non_string_value():
+    from wavix_mcp.server import _parse_tool_descriptions
+
+    with pytest.raises(RuntimeError):
+        _parse_tool_descriptions("foo: ''", "x")
+    with pytest.raises(RuntimeError):
+        _parse_tool_descriptions("foo:\n  nested: 1", "x")
+
+
+def test_spec_operation_ids_collects_declared_ids():
+    from wavix_mcp.server import _spec_operation_ids
+
+    spec = _spec(
+        ("/things", "things_list", "List things", XMCP),
+        ("/others", "others_get", "Get other", XMCP),
+    )
+    assert _spec_operation_ids(spec) == {"things_list", "others_get"}
 
 
 def test_static_route_map_exclusion_takes_precedence():
