@@ -75,10 +75,10 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 ## My numbers
 
 - `my_numbers_list` — List phone numbers
-- `numbers_bulk_update` — Bulk update phone numbers
+- `my_numbers_bulk_update` — Bulk update phone numbers
 - `my_numbers_delete` — Release phone numbers
 - `my_numbers_get` — Retrieve a phone number
-- `numbers_update` — Update a phone number
+- `my_numbers_update` — Update a phone number
 
 ## Buy
 
