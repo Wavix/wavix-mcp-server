@@ -1,9 +1,10 @@
 """Hide tools the connecting token's OAuth scopes don't cover, and reject a call
 to one that slips through (e.g. from a client's stale tool list).
 
-Only OAuth-authenticated connections are filtered. When no access token is
-present — the API-key passthrough deployment, where OAuth is disabled — every
-tool is listed and the upstream API stays the sole authority, unchanged.
+Only OAuth-authenticated connections are filtered. A connection with no access
+token — the deployment where OAuth is disabled — and one authenticated with an
+API key under the passthrough fallback both list every tool, leaving the
+upstream API the sole authority, unchanged.
 """
 
 import logging
@@ -15,10 +16,25 @@ from fastmcp.server.middleware import Middleware, MiddlewareContext
 from fastmcp.tools.tool import Tool
 
 from . import scopes
+from .auth import PASSTHROUGH_CLIENT_ID
 
 logger = logging.getLogger(__name__)
 
 ToolRoutes = dict[str, tuple[str, str]]
+
+
+def _oauth_token():
+    """The connection's OAuth token, or None when there is no OAuth identity.
+
+    An API-key connection under the passthrough fallback (`auth`) carries a
+    marker token so `MCPHeaderAuth` can forward the header, but it holds no
+    granted scopes — gating on it would hide every scoped tool from a client
+    that worked fine before OAuth was enabled.
+    """
+    token = get_access_token()
+    if token is None or getattr(token, "client_id", None) == PASSTHROUGH_CLIENT_ID:
+        return None
+    return token
 
 
 def _granted_scopes(token) -> set[str]:
@@ -43,14 +59,14 @@ class ScopeFilterMiddleware(Middleware):
 
     async def on_list_tools(self, context: MiddlewareContext, call_next) -> Sequence[Tool]:
         tools = await call_next(context)
-        token = get_access_token()
+        token = _oauth_token()
         if token is None:
             return tools
         granted = _granted_scopes(token)
         return [t for t in tools if scopes.is_allowed(granted, self._requirement(t.name))]
 
     async def on_call_tool(self, context: MiddlewareContext, call_next):
-        token = get_access_token()
+        token = _oauth_token()
         if token is not None:
             requirement = self._requirement(context.message.name)
             if not scopes.is_allowed(_granted_scopes(token), requirement):

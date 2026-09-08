@@ -3,13 +3,20 @@ import logging
 import os
 from urllib.parse import urlparse
 
-from fastmcp.server.auth.auth import RemoteAuthProvider
+from fastmcp.server.auth.auth import AccessToken, RemoteAuthProvider, TokenVerifier
 from fastmcp.server.auth.providers.jwt import JWTVerifier
 from pydantic import AnyHttpUrl
 from starlette.routing import Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
+
+# Marks an access token that was not verified as an OAuth JWT but let through
+# for the upstream API to judge. `scope_filter` keys off this to keep such a
+# connection out of OAuth scope gating.
+PASSTHROUGH_CLIENT_ID = "wavix-api-key-passthrough"
+
+_FALSEY = frozenset({"0", "false", "no", "off"})
 
 SCOPE_GROUPS = (
     "account",
@@ -109,6 +116,41 @@ def _strip_issuer_slash_middleware(app: ASGIApp) -> ASGIApp:
     return wrapped
 
 
+def api_key_passthrough_enabled() -> bool:
+    return os.getenv("OAUTH_API_KEY_PASSTHROUGH", "true").strip().lower() not in _FALSEY
+
+
+class _ApiKeyPassthroughVerifier(TokenVerifier):
+    """Verify OAuth JWTs; hand any other bearer to the upstream API unchanged.
+
+    Turning OAuth on for a deployment whose clients authenticate with a Wavix
+    API key would otherwise reject every one of them: ``JWTVerifier`` cannot
+    validate an opaque key, and FastMCP turns that ``None`` verdict into a 401.
+    This wrapper keeps the OAuth path strict — a JWT is still checked against
+    the issuer's JWKS, ``iss`` and ``aud`` — while a token that is not an OAuth
+    JWT proceeds unverified here so ``MCPHeaderAuth`` forwards it upstream,
+    leaving the Wavix API the sole authority on it, exactly as before OAuth
+    existed.
+
+    A request carrying **no** token still gets the RFC 9728 challenge, which is
+    what lets a new client discover the authorization server. Set
+    ``OAUTH_API_KEY_PASSTHROUGH=false`` to drop the fallback once API-key access
+    to MCP is retired.
+    """
+
+    def __init__(self, jwt_verifier: TokenVerifier) -> None:
+        super().__init__(required_scopes=jwt_verifier.required_scopes)
+        self._jwt_verifier = jwt_verifier
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        verified = await self._jwt_verifier.verify_token(token)
+        if verified is not None:
+            return verified
+
+        logger.debug("Bearer token is not a valid OAuth JWT; forwarding it upstream")
+        return AccessToken(token=token, client_id=PASSTHROUGH_CLIENT_ID, scopes=[])
+
+
 class _RFC8414RemoteAuthProvider(RemoteAuthProvider):
     def get_routes(self, mcp_path: str | None = None) -> list[Route]:
         routes = super().get_routes(mcp_path)
@@ -135,14 +177,24 @@ def build_auth_provider() -> RemoteAuthProvider | None:
     # or the authorization request is rejected as invalid_target.
     audience = f"{resource}{mcp_path()}"
 
-    logger.info("OAuth enabled: issuer=%s audience=%s", issuer, audience)
+    passthrough = api_key_passthrough_enabled()
+    logger.info(
+        "OAuth enabled: issuer=%s audience=%s api_key_passthrough=%s",
+        issuer,
+        audience,
+        passthrough,
+    )
+
+    verifier: TokenVerifier = JWTVerifier(
+        jwks_uri=f"{issuer}/.well-known/jwks.json",
+        issuer=issuer,
+        audience=audience,
+    )
+    if passthrough:
+        verifier = _ApiKeyPassthroughVerifier(verifier)
 
     return _RFC8414RemoteAuthProvider(
-        token_verifier=JWTVerifier(
-            jwks_uri=f"{issuer}/.well-known/jwks.json",
-            issuer=issuer,
-            audience=audience,
-        ),
+        token_verifier=verifier,
         authorization_servers=[AnyHttpUrl(issuer)],
         base_url=resource,
         scopes_supported=SCOPES_SUPPORTED,
