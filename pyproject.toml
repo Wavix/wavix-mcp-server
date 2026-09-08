@@ -21,7 +21,7 @@ classifiers = [
   "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-  "fastmcp>=2.0.0",
+  "fastmcp>=3.3.1,<4",
   "httpx>=0.27.0",
   "jsonref>=1.1.0",
   "python-dotenv>=1.0.1",
@@ -54,6 +54,9 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+wavix_mcp = ["tool_descriptions.yaml"]
 
 [tool.ruff]
 line-length = 100

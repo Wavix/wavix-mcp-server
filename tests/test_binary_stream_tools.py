@@ -28,6 +28,14 @@ def test_resolve_returns_pre_signed_url_on_redirect():
     assert result["note"].startswith("Pre-signed URL")
 
 
+def test_resolve_prefers_location_header_on_200():
+    presigned = "https://s3.amazonaws.com/bucket/recording.mp3?X-Amz-Signature=abc"
+    result = _resolve(lambda _request: httpx.Response(200, headers={"Location": presigned}))
+    assert result["download_url"] == presigned
+    assert result["status_code"] == 200
+    assert result["note"].startswith("Pre-signed URL")
+
+
 def test_resolve_returns_synthetic_url_on_2xx_body():
     result = _resolve(
         lambda _request: httpx.Response(
@@ -53,6 +61,17 @@ def test_resolve_returns_error_envelope_on_4xx():
     assert result["error"] == "HTTP 404"
     assert result["status_code"] == 404
     assert "Recording not found" in result["body"]
+
+
+def test_resolve_ignores_location_on_error_status():
+    result = _resolve(
+        lambda _request: httpx.Response(
+            404,
+            headers={"Location": "https://s3.example/leaked", "Content-Type": "application/json"},
+        )
+    )
+    assert result["error"] == "HTTP 404"
+    assert "download_url" not in result
 
 
 def test_resolve_handles_binary_error_body():
