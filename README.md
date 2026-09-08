@@ -167,6 +167,7 @@ Requires Python 3.10+.
 | `WAVIX_API_BASE_URL` | `https://api.wavix.com` | Override the upstream Wavix API endpoint (for internal deployments or staging) |
 | `OAUTH_ISSUER` | unset | Base URL of the OAuth 2.1 authorization server. Its JWKS is read from `<issuer>/.well-known/jwks.json` |
 | `OAUTH_RESOURCE` | unset | Public base URL this server is reached at, used as the resource identifier |
+| `OAUTH_API_KEY_PASSTHROUGH` | `true` | With OAuth on, still accept a bearer that is not an OAuth JWT and forward it upstream (API keys keep working). Set `false` to require a JWT |
 | `MCP_PATH` | `/mcp` | Path the MCP endpoint is served on |
 
 No Wavix credentials are required to **run** the server — they are forwarded per-request from the MCP client's `Authorization: Bearer <api_key>` header. Self-hosters are responsible for terminating TLS in front of the server (nginx, Caddy, cloud load balancer) before exposing it publicly.
@@ -187,9 +188,21 @@ implementing [RFC 8707][rfc8707] compare the client's `resource` parameter
 against that string exactly, so the two must be configured to match — including
 the path.
 
-Leaving either variable unset keeps the previous behaviour: no metadata is
-published and whatever bearer token the client sends is forwarded upstream
-unverified.
+Enabling OAuth does **not** cut off clients that authenticate with a Wavix API
+key. A bearer token that is not a valid OAuth JWT is forwarded upstream
+unverified, exactly as before, leaving the Wavix API the sole authority on it —
+so an existing deployment can turn OAuth on for new clients without breaking
+the ones already connected. A request carrying no token at all still gets the
+`WWW-Authenticate` challenge, which is what lets an OAuth-capable client
+discover the authorization server. Only OAuth-authenticated connections are
+scope-filtered; an API-key connection sees the full tool surface.
+
+Set `OAUTH_API_KEY_PASSTHROUGH=false` to drop that fallback and require a valid
+JWT — the strict mode to switch to once API-key access is retired.
+
+Leaving either of `OAUTH_ISSUER` / `OAUTH_RESOURCE` unset keeps the previous
+behaviour: no metadata is published and whatever bearer token the client sends
+is forwarded upstream unverified.
 
 [rfc9728]: https://datatracker.ietf.org/doc/html/rfc9728
 [rfc8707]: https://datatracker.ietf.org/doc/html/rfc8707

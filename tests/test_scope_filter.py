@@ -137,3 +137,22 @@ def test_end_to_end_filters_through_generated_server(monkeypatch):
             return {t.name for t in await client.list_tools()}
 
     assert asyncio.run(visible()) == {"my_numbers_list"}
+
+
+def test_passthrough_connection_sees_every_tool(monkeypatch):
+    # An API-key connection under the passthrough fallback carries a marker
+    # token with no scopes; gating on it would hide every scoped tool from a
+    # client that worked before OAuth was enabled.
+    from wavix_mcp.auth import PASSTHROUGH_CLIENT_ID
+
+    token = SimpleNamespace(scopes=[], claims={}, client_id=PASSTHROUGH_CLIENT_ID)
+
+    assert _list_tools(monkeypatch, token) == set(ALL_TOOLS)
+
+
+def test_passthrough_connection_may_call_a_scoped_tool(monkeypatch):
+    from wavix_mcp.auth import PASSTHROUGH_CLIENT_ID
+
+    token = SimpleNamespace(scopes=[], claims={}, client_id=PASSTHROUGH_CLIENT_ID)
+
+    assert _call_tool(monkeypatch, token, "buy_number") == "called"
