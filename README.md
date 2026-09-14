@@ -7,12 +7,12 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that gives LL
 
 [Wavix](https://wavix.com) is a global communications platform for sending SMS, placing voice calls, and running 2FA flows over a single API. A [free trial](https://wavix.com) is available; paid usage follows the Wavix [pricing](https://wavix.com/pricing) plan attached to your account.
 
-The fastest way to use this MCP server is the **hosted endpoint** at `https://mcp.wavix.com/mcp` — point any MCP-compatible client at it and authenticate with your Wavix API key. If you need to self-host (custom Wavix deployment, behind a firewall, dedicated instance), see [Run your own](#run-your-own).
+The fastest way to use this MCP server is the **hosted endpoint** at `https://mcp.wavix.com/mcp` — point any MCP-compatible client at it and connect by signing in with your Wavix account or with a Wavix API key. If you need to self-host (custom Wavix deployment, behind a firewall, dedicated instance), see [Run your own](#run-your-own).
 
 ## Table of contents
 
 - [Endpoint](#endpoint)
-- [Install](#install) — [one-click](#one-click-install), [Claude Code](#claude-code), [Claude Desktop / Web](#claude-desktop--claude-web), [Cursor](#cursor-manual), [VS Code](#vs-code-manual-github-copilot-chat), [Codex CLI](#codex-cli), [Windsurf](#windsurf--other-clients)
+- [Install](#install) — [sign in with an account](#sign-in-with-a-wavix-account), [API key](#connect-with-an-api-key), [one-click](#one-click-install), [Claude Code](#claude-code), [Claude Desktop / Web](#claude-desktop--claude-web), [Cursor](#cursor-manual), [VS Code](#vs-code-manual-github-copilot-chat), [Codex CLI](#codex-cli), [Windsurf](#windsurf--other-clients)
 - [Run your own](#run-your-own) (self-host)
 - [Examples](#examples)
 - [Tools](#tools) → [full catalogue in TOOLS.md](TOOLS.md)
@@ -28,13 +28,21 @@ The fastest way to use this MCP server is the **hosted endpoint** at `https://mc
 | --- | --- |
 | URL | `https://mcp.wavix.com/mcp` |
 | Transport | Streamable HTTP |
-| Auth | `Authorization: Bearer <api_key>` |
+| Auth | Sign in with a Wavix account (OAuth 2.1), **or** `Authorization: Bearer <api_key>` |
 | Tools | see [TOOLS.md](TOOLS.md) |
 | Resources | Wavix docs + OpenAPI spec (auto-discovered) |
 
 Get a Wavix API key from the [Wavix Console](https://wavix.com) → **Administration → API keys → Create new**.
 
 ## Install
+
+Two ways to connect — pick whichever your client supports; neither is required over the other.
+
+### Sign in with a Wavix account
+
+If your MCP client supports OAuth (Claude Desktop / Web, and other OAuth-capable clients), connect **without an API key**: add the connector for `https://mcp.wavix.com/mcp` and, when the client prompts, sign in with your Wavix account and approve access. The client runs the OAuth 2.1 flow and stores the token itself — nothing to paste. The tools you get are scoped to what you approve and your account role permits (see [Troubleshooting](#troubleshooting)).
+
+### Connect with an API key
 
 **Before you start:** grab your Wavix API key.
 
@@ -68,6 +76,8 @@ Settings → **Connectors** → **Add custom connector**:
 - URL: `https://mcp.wavix.com/mcp`
 - Transport: `Streamable HTTP`
 - Authentication header: `Authorization: Bearer <api_key>`
+
+To connect by **signing in** instead, add the connector without an authentication header and sign in with your Wavix account when the client prompts.
 
 ### Cursor (manual)
 
@@ -297,7 +307,10 @@ Resources are fetched lazily on `resources/read` and cached server-side with a 1
 
 ## Authentication
 
-Every request from the client must include:
+The hosted server accepts two connection methods — neither is preferred:
+
+- **Sign in with a Wavix account (OAuth 2.1).** For OAuth-capable clients. The client runs the authorization flow and the user signs in; no API key is stored. Access is scope-limited to what the user approves and their account role permits. See [Sign in with a Wavix account](#sign-in-with-a-wavix-account).
+- **Wavix API key (Bearer).** For any Streamable-HTTP client. Every request must include:
 
 ```
 Authorization: Bearer <api_key>
@@ -325,12 +338,20 @@ If your client follows a pre-signed download URL returned by `call_recording_get
   .codex/config.toml
   ```
 
-### If a token is compromised
+### If a credential is compromised
 
-1. In the Wavix Console, deactivate the key immediately (or call `api_keys_deactivate`).
+**If you connected with an API key:**
+
+1. In the Wavix Console, deactivate or delete that key immediately (or call `api_keys_delete`).
 2. Create a replacement via `api_keys_create` or the Console.
 3. Update the client's config and reconnect.
-4. Review `billing_transactions_list` and `cdrs_list` for unexpected activity.
+
+**If you connected by signing in with your Wavix account:**
+
+1. Revoke the connection from the Wavix portal's connected-apps page — this invalidates that connection's tokens. No API key is involved.
+2. Reconnect and sign in again.
+
+In either case, review `billing_transactions_list` and `cdrs_list` for unexpected activity.
 
 ## Troubleshooting
 
@@ -339,6 +360,7 @@ If your client follows a pre-signed download URL returned by `call_recording_get
 | `401 Unauthorized` from any tool | Missing or invalid `Authorization: Bearer …` header. Verify the API key is active in the Wavix Console. |
 | Tool returns a `download_url`, not the file itself | Expected. Recording, speech-analytics, and 10DLC evidence endpoints return pre-signed URLs (see [Authentication](#authentication)). Fetch the URL directly without the `Authorization` header. |
 | Client only shows ~40 tools, not the full catalogue | Older clients enforce a per-server tool cap. Upgrade (Cursor 2.4+, latest VS Code, latest Claude). |
+| Fewer tools available after signing in with a Wavix account | Expected. Account sign-in is scope-filtered — you get the tools your approved scopes and account role allow, not the full catalogue. An API-key connection sees the full tool surface. To widen the set, approve more scopes at sign-in (subject to your role) or connect with an API key that carries them. |
 | `Tool not found` for a tool listed in this README | The local client may be caching an old tool list. Restart the client, or remove and re-add the server. |
 | 4xx with an `errors` array | Validation error from Wavix API. Inspect `errors`; cross-reference the relevant `wavix://docs/*` page or the OpenAPI spec. |
 | Cannot reach the server | Confirm DNS and outbound HTTPS to `mcp.wavix.com:443`. |
