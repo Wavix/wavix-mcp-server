@@ -348,7 +348,7 @@ If your client follows a pre-signed download URL returned by `call_recording_get
 
 **If you connected by signing in with your Wavix account:**
 
-1. Revoke the connection from the Wavix portal's connected-apps page — this invalidates that connection's tokens. No API key is involved.
+1. Revoke the connection from the Wavix portal's grant-management page, which lists the connections you authorized and revokes the one you choose — this invalidates that connection's tokens. No API key is involved.
 2. Reconnect and sign in again.
 
 In either case, review `billing_transactions_list` and `cdrs_list` for unexpected activity.
@@ -357,7 +357,7 @@ In either case, review `billing_transactions_list` and `cdrs_list` for unexpecte
 
 | Symptom | Likely cause / fix |
 | --- | --- |
-| `401 Unauthorized` from any tool | Missing or invalid `Authorization: Bearer …` header. Verify the API key is active in the Wavix Console. |
+| `401 Unauthorized` from any tool | Authentication failed. With an API key: the `Authorization: Bearer …` header is missing or the key is inactive — verify it in the Wavix Console. With account sign-in: your session/token expired or was revoked — reconnect and sign in again. |
 | Tool returns a `download_url`, not the file itself | Expected. Recording, speech-analytics, and 10DLC evidence endpoints return pre-signed URLs (see [Authentication](#authentication)). Fetch the URL directly without the `Authorization` header. |
 | Client only shows ~40 tools, not the full catalogue | Older clients enforce a per-server tool cap. Upgrade (Cursor 2.4+, latest VS Code, latest Claude). |
 | Fewer tools available after signing in with a Wavix account | Expected. Account sign-in is scope-filtered — you get the tools your approved scopes and account role allow, not the full catalogue. An API-key connection sees the full tool surface. To widen the set, approve more scopes at sign-in (subject to your role) or connect with an API key that carries them. |

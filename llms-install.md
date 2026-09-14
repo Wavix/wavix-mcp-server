@@ -128,7 +128,7 @@ If the client supports custom HTTP headers, use the URL and `Authorization` head
 
 ## Verification
 
-After configuration, ask the model to call `profile_get`. A successful response (an object with `id`, `email`, `first_name`, `timezone`, etc.) confirms both connectivity and authentication. A 401 means the API key is missing or invalid.
+After configuration, ask the model to call `profile_get`. A successful response (an object with `id`, `email`, `first_name`, `timezone`, etc.) confirms both connectivity and authentication. A 401 means authentication failed: for method B the API key is missing or invalid; for method A the account session/token expired or was not completed — reconnect and sign in again.
 
 ## Documentation resources
 
@@ -150,7 +150,7 @@ List available resources via `resources/list` and read on demand. Resources are 
 
 | Symptom | Likely cause |
 | --- | --- |
-| 401 Unauthorized | Missing or invalid `Authorization` header. Check the API key is active in the Wavix Console. |
+| 401 Unauthorized | Authentication failed. Method B: missing/invalid `Authorization` header — check the API key is active in the Wavix Console. Method A: expired or incomplete sign-in — reconnect and sign in again. |
 | Tool not found | Client tool-count limit hit (Cursor < 2.4). Upgrade the client. |
 | Fewer tools available after account sign-in | Expected — account sign-in (method A) is scope-filtered: the user gets the tools their approved scopes and account role allow. An API key (method B) sees the full tool surface. Approve more scopes at sign-in, or use an API key with the needed scope groups. |
 | 4xx with `errors` array | Validation error from Wavix API — read the `errors` array and the relevant `wavix://docs/*` page. |
