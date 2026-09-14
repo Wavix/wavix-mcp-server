@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Wavix/mcp",
   "title": "Wavix",
-  "description": "Hosted MCP server for the Wavix telecom platform: SMS, voice, 2FA, SIP, numbers, 10DLC, CDRs.",
+  "description": "Wavix telecom MCP: SMS, voice, 2FA, SIP, numbers, 10DLC, CDRs. Account sign-in or API key.",
   "repository": {
     "url": "https://github.com/Wavix/wavix-mcp-server",
     "source": "github"
@@ -16,8 +16,8 @@
       "headers": [
         {
           "name": "Authorization",
-          "description": "Bearer token containing the user's Wavix API key. Obtain one at https://wavix.com under Administration → API keys.",
-          "isRequired": true,
+          "description": "Optional. Bearer token containing the user's Wavix API key, for clients that connect with a key instead of signing in with a Wavix account (OAuth 2.1). Obtain one at https://wavix.com under Administration → API keys.",
+          "isRequired": false,
           "isSecret": true
         }
       ]
