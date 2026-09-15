@@ -13,15 +13,19 @@ Provides the full Wavix tool catalogue plus Wavix documentation as MCP resources
 - **Transport:** `streamable-http` (a.k.a. Streamable HTTP, "HTTP Stream")
 - **Hosted by Wavix.** No local install, no container, no package.
 
-## Required credentials
+## Connecting
 
-The user must provide a **Wavix API key**. To obtain one:
+The hosted server supports two connection methods — pick whichever the client supports; neither is preferred:
+
+**A. Sign in with a Wavix account (OAuth 2.1).** For OAuth-capable clients (Claude Desktop / Web). Add the connector for the endpoint URL below with **no** `Authorization` header; the client runs the OAuth 2.1 flow and the user signs in when prompted. No API key is stored. The available tools are scope-filtered to what the user approves and their account role permits.
+
+**B. Wavix API key (Bearer).** For any Streamable-HTTP client. Obtain a key:
 
 1. **Sign in** at <https://wavix.com>.
 2. Open **Administration → API keys**.
 3. Click **Create new** (or copy an existing key).
 
-The API key is passed to the server as a Bearer token in the `Authorization` HTTP header:
+Pass it to the server as a Bearer token in the `Authorization` HTTP header:
 
 ```
 Authorization: Bearer <api_key>
@@ -30,6 +34,8 @@ Authorization: Bearer <api_key>
 The server forwards this header per-request to `api.wavix.com`. Do not store the API key in the client repository or commit it to version control.
 
 ## Client configuration
+
+The per-client examples below show **method B** (API key), which works in every Streamable-HTTP client. For **method A** (account sign-in), use the same URL but omit the `Authorization` header — the client obtains the token via OAuth when the user signs in.
 
 ### Claude Code
 
@@ -122,7 +128,7 @@ If the client supports custom HTTP headers, use the URL and `Authorization` head
 
 ## Verification
 
-After configuration, ask the model to call `profile_get`. A successful response (an object with `id`, `email`, `first_name`, `timezone`, etc.) confirms both connectivity and authentication. A 401 means the API key is missing or invalid.
+After configuration, ask the model to call `profile_get`. A successful response (an object with `id`, `email`, `first_name`, `timezone`, etc.) confirms both connectivity and authentication. A 401 means authentication failed: for method B the API key is missing or invalid; for method A the account session/token expired or was not completed — reconnect and sign in again.
 
 ## Documentation resources
 
@@ -144,8 +150,9 @@ List available resources via `resources/list` and read on demand. Resources are 
 
 | Symptom | Likely cause |
 | --- | --- |
-| 401 Unauthorized | Missing or invalid `Authorization` header. Check the API key is active in the Wavix Console. |
+| 401 Unauthorized | Authentication failed. Method B: missing/invalid `Authorization` header — check the API key is active in the Wavix Console. Method A: expired or incomplete sign-in — reconnect and sign in again. |
 | Tool not found | Client tool-count limit hit (Cursor < 2.4). Upgrade the client. |
+| Fewer tools available after account sign-in | Expected — account sign-in (method A) is scope-filtered: the user gets the tools their approved scopes and account role allow. An API key (method B) sees the full tool surface. Approve more scopes at sign-in, or use an API key with the needed scope groups. |
 | 4xx with `errors` array | Validation error from Wavix API — read the `errors` array and the relevant `wavix://docs/*` page. |
 | Cannot reach endpoint | Confirm DNS / network access to `mcp.wavix.com` on HTTPS (443). |
 
