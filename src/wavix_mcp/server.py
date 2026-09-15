@@ -366,6 +366,60 @@ def _relax_response_nullability(spec: dict[str, Any]) -> dict[str, Any]:
     return spec
 
 
+def _widen_items_to_string(items: dict[str, Any]) -> None:
+    kind = items.get("type")
+    if isinstance(kind, str) and kind != "string":
+        items["type"] = [kind, "string"]
+    elif isinstance(kind, list) and "string" not in kind:
+        items["type"] = [*kind, "string"]
+    # Untyped items ($ref, anyOf, missing type) already admit strings; forcing
+    # them to string would narrow, not widen.
+
+
+def _accept_string_require_docs(schema: dict[str, Any], seen: set[int]) -> None:
+    marker = id(schema)
+    if marker in seen:
+        return
+    seen.add(marker)
+    props = schema.get("properties")
+    if isinstance(props, dict):
+        field = props.get("require_docs")
+        if isinstance(field, dict) and isinstance(field.get("items"), dict):
+            _widen_items_to_string(field["items"])
+    for sub in _iter_subschemas(schema):
+        _accept_string_require_docs(sub, seen)
+
+
+def _relax_require_docs_items(spec: dict[str, Any]) -> dict[str, Any]:
+    """Accept string members in the ``require_docs`` response array.
+
+    The available-numbers response declares ``require_docs`` items as ``integer``,
+    but the live API returns document-name strings; an MCP client validates a
+    tool's structured output against the advertised schema and hard-fails the whole
+    ``buy_numbers_list`` call on the first mismatch, so every city with a document
+    requirement returns an error instead of its inventory. Widening the item type
+    keeps the tool callable.
+    """
+    for path_item in (spec.get("paths") or {}).values():
+        if not isinstance(path_item, dict):
+            continue
+        for method in _HTTP_METHODS:
+            op = path_item.get(method)
+            if not isinstance(op, dict):
+                continue
+            for response in (op.get("responses") or {}).values():
+                content = (response or {}).get("content")
+                if not isinstance(content, dict):
+                    continue
+                for ct, mt in content.items():
+                    if not _is_json_content_type(ct) or not isinstance(mt, dict):
+                        continue
+                    root = mt.get("schema")
+                    if isinstance(root, dict):
+                        _accept_string_require_docs(root, set())
+    return spec
+
+
 def _missing_targets(
     spec: dict[str, Any],
     targets: tuple[tuple[str, str], ...],
@@ -659,6 +713,7 @@ def build_server() -> FastMCP:
     spec = _ensure_request_body_type_object(spec)
     spec = _strip_non_json_response_content(spec)
     spec = _relax_response_nullability(spec)
+    spec = _relax_require_docs_items(spec)
     spec = _normalize_tool_schemas(spec)
     base_url = os.getenv("WAVIX_API_BASE_URL", "").strip() or DEFAULT_API_BASE_URL
 
