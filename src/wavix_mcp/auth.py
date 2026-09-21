@@ -32,6 +32,7 @@ SCOPE_GROUPS = (
     "two_fa",
     "validator",
     "webhooks",
+    "whatsapp",
 )
 
 SCOPES_SUPPORTED = [

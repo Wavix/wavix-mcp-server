@@ -67,6 +67,7 @@ _SCOPE_BY_PATH_RULES: tuple[_ScopeRule, ...] = (
     _ScopeRule("validator", ("/v1/validation",)),
     _ScopeRule("webhooks", ("/v1/calls/webhooks",)),
     _ScopeRule("embeddable", ("/v2/webrtc/tokens",)),
+    _ScopeRule("whatsapp", ("/v1/whatsapp/",)),
 )
 
 _SCOPE_EXEMPT_PATH_PREFIXES = ("/public/v1/support-portal", "/site/v1.1/support-portal")
