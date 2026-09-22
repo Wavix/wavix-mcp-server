@@ -870,9 +870,8 @@ whatsapp_senders_get: >-
   caller's account.
 
 whatsapp_templates_list: >-
-  Lists the WhatsApp message templates belonging to a given sender, newest
-  first, with each template's name, language, category, approval status, and
-  components. Use to discover which templates exist and which are approved for
+  Lists the WhatsApp message templates belonging to a given sender, with each
+  template's name, language, category, approval status, and components. Use to discover which templates exist and which are approved for
   sending before calling whatsapp_messages_send. Read-only, no side effects.
   Requires the `whatsapp:read` scope, the WhatsApp channel enabled, and a sender
   number on the caller's account.
@@ -898,9 +897,10 @@ whatsapp_messages_send: >-
 
 whatsapp_messages_list: >-
   Lists the account's WhatsApp messages, filterable by direction, delivery
-  status, and date range, newest first. Use to review sent and received WhatsApp
-  messages or check delivery outcomes. Read-only, no side effects. Requires the
-  `whatsapp:read` scope and the WhatsApp channel enabled.
+  status, and date range. Use to review sent and received WhatsApp messages or
+  check delivery outcomes. Read-only, no side effects. Requires the
+  `whatsapp:read` scope and the WhatsApp channel enabled; results are paginated
+  with `per_page` from 1 to 100 (default 25) and `page` starting at 1.
 
 whatsapp_messages_get: >-
   Retrieves a single WhatsApp message by its UUID, including its direction,
