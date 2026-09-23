@@ -19,11 +19,17 @@ from wavix_mcp import scopes
         ("POST", "/v2/messages", "messages", "write"),
         ("GET", "/v1/calls/webhooks/{id}", "webhooks", "read"),  # exclusion beats calls
         ("GET", "/v2/webrtc/tokens", "embeddable", "read"),
+        ("GET", "/v1/whatsapp/senders/{number}", "whatsapp", "read"),
+        ("POST", "/v1/whatsapp/messages", "whatsapp", "write"),
     ],
 )
 def test_requirement_maps_route_to_scope(method, path, group, level):
     req = scopes.requirement_for(method, path)
     assert (req.kind, req.group, req.level) == ("needs", group, level)
+
+
+def test_whatsapp_scope_does_not_reach_sibling_prefixed_path():
+    assert scopes.requirement_for("GET", "/v1/whatsapp-admin").kind == "never"
 
 
 def test_unmatched_path_is_never_available_over_oauth():
