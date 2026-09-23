@@ -262,11 +262,12 @@ The agent calls `billing_transactions_list` filtered by type and date, then `bil
 ## Tools
 
 <!-- tools:start -->
-116 tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi). Arguments mirror request parameters and body fields.
+122 tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi). Arguments mirror request parameters and body fields.
 
 | Group | # | Coverage |
 | --- | ---: | --- |
 | [SMS and MMS](TOOLS.md#sms-and-mms) | 9 | Send, list, retrieve messages; sender IDs; opt-outs |
+| [WhatsApp](TOOLS.md#whatsapp) | 6 | Senders; templates; send / list / retrieve messages |
 | [Call control](TOOLS.md#call-control) | 9 | Start / answer / end calls; play audio; collect DTMF |
 | [Call recording](TOOLS.md#call-recording) | 4 | List, download (pre-signed URL), delete |
 | [Call streaming](TOOLS.md#call-streaming) | 2 | Start / stop media stream |
