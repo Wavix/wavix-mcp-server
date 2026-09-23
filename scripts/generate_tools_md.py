@@ -46,6 +46,7 @@ TAG_DISPLAY = {
 # here. Tags without an entry fall back to a placeholder that fails CI.
 COVERAGE: dict[str, str] = {
     "SMS and MMS": "Send, list, retrieve messages; sender IDs; opt-outs",
+    "WhatsApp": "Senders; templates; send / list / retrieve messages",
     "Call control": "Start / answer / end calls; play audio; collect DTMF",
     "Call recording": "List, download (pre-signed URL), delete",
     "Call streaming": "Start / stop media stream",
@@ -73,6 +74,7 @@ COVERAGE: dict[str, str] = {
 # alphabetically — update this tuple when adding a new domain.
 TAG_ORDER: tuple[str, ...] = (
     "SMS and MMS",
+    "WhatsApp",
     "Call control",
     "Call recording",
     "Call streaming",

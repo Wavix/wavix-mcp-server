@@ -1,6 +1,6 @@
 # Wavix MCP Tools — full catalogue
 
-116 tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi) via [`FastMCP.from_openapi()`](https://github.com/jlowin/fastmcp). Arguments mirror request path / query / body fields.
+122 tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi) via [`FastMCP.from_openapi()`](https://github.com/jlowin/fastmcp). Arguments mirror request path / query / body fields.
 
 If a tool listed here is missing from your client, refresh the connection: the live catalogue tracks the OpenAPI spec as it evolves.
 
@@ -17,6 +17,15 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 - `sms_and_mms_messages_list` — List messages
 - `sms_and_mms_messages_send` — Send a message
 - `sms_and_mms_messages_get` — Retrieve a message
+
+## WhatsApp
+
+- `whatsapp_senders_get` — Retrieve a WhatsApp sender
+- `whatsapp_templates_list` — List WhatsApp templates
+- `whatsapp_templates_create` — Create a WhatsApp template
+- `whatsapp_messages_list` — List WhatsApp messages
+- `whatsapp_messages_send` — Send a WhatsApp message
+- `whatsapp_messages_get` — Retrieve a WhatsApp message
 
 ## Call control
 
