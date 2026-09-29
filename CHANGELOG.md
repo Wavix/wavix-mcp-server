@@ -9,6 +9,12 @@ Entries are derived from the commit history, which follows
 
 ## [Unreleased]
 
+### Changed
+
+- Server instructions rewritten as descriptive text (resources, tool naming,
+  pagination, billing, authentication) with no directives to the assistant;
+  a regression test guards against imperatives returning.
+
 ## [1.1.0] - 2026-09-23
 
 ### Added
