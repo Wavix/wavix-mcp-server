@@ -22,6 +22,7 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 
 - `whatsapp_senders_get` — Retrieve a WhatsApp sender
 - `whatsapp_templates_list` — List WhatsApp templates
+- `whatsapp_templates_get` — Retrieve a WhatsApp template
 - `whatsapp_templates_create` — Create a WhatsApp template
 - `whatsapp_messages_list` — List WhatsApp messages
 - `whatsapp_messages_send` — Send a WhatsApp message

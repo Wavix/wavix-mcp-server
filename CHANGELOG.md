@@ -9,6 +9,17 @@ Entries are derived from the commit history, which follows
 
 ## [Unreleased]
 
+### Added
+
+- `whatsapp_templates_get` tool for one template by UUID.
+
+### Changed
+
+- WhatsApp template tools are WABA-scoped: `whatsapp_templates_list` and
+  `whatsapp_templates_create` now call `/v1/whatsapp/templates`, which takes
+  `waba_id` or `sender`. The sender-scoped endpoints are deprecated and hidden
+  from the MCP.
+
 ## [1.1.0] - 2026-09-23
 
 ### Added
