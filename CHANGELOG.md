@@ -12,9 +12,14 @@ Entries are derived from the commit history, which follows
 ### Added
 
 - `whatsapp_templates_get` tool for one template by UUID.
+- `whatsapp_senders_list` tool: lists the account's WhatsApp senders with their
+  WhatsApp Business Account, filterable by `status` and `waba_id`, paginated.
 
 ### Changed
 
+- `whatsapp_messages_list` accepts `from` and `to` phone-number filters, and
+  `whatsapp_senders_get` returns the sender's `waba`; both are picked up from
+  the OpenAPI spec.
 - WhatsApp template tools are WABA-scoped: `whatsapp_templates_list` and
   `whatsapp_templates_create` now call `/v1/whatsapp/templates`, which takes
   `waba_id` or `sender`. The sender-scoped endpoints are deprecated and hidden

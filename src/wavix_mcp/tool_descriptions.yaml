@@ -860,10 +860,21 @@ sub_accounts_update: >-
   sub-organization's `id`; `status` accepts `enabled` or `disabled`, and `name`
   may be up to 255 characters.
 
+whatsapp_senders_list: >-
+  Lists the WhatsApp senders of the account's WhatsApp Business Accounts
+  (WABAs), newest first, each with its phone number, display name, provider
+  registration status, quality rating, messaging limit tier, and WABA `id` and
+  `name`, filterable by `status` and `waba_id`. Use to discover which WABAs and
+  senders the account has, or to find the `waba_id` or sender number for
+  whatsapp_templates_list and whatsapp_templates_create and the `from` value for
+  whatsapp_messages_send. Read-only; no side effects. Requires the
+  `whatsapp:read` scope and the WhatsApp channel enabled; results are paginated
+  with `per_page` from 1 to 100 (default 25) and `page` starting at 1.
+
 whatsapp_senders_get: >-
   Retrieves a single WhatsApp sender registered to the account, resolved by its
   phone number, returning its display name, provider registration status,
-  quality rating, and messaging limit tier. Use to check whether a number is a
+  quality rating, messaging limit tier, and WABA `id` and `name`. Use to check whether a number is a
   usable WhatsApp sender and what state it is in before listing templates or
   sending. Read-only, no side effects. Requires the `whatsapp:read` scope, the
   WhatsApp channel enabled on the account, and a number that is a sender on the
@@ -908,7 +919,7 @@ whatsapp_messages_send: >-
 
 whatsapp_messages_list: >-
   Lists the account's WhatsApp messages, filterable by direction, delivery
-  status, and date range. Use to review sent and received WhatsApp messages or
+  status, `from` and `to` phone numbers, and date range. Use to review sent and received WhatsApp messages or
   check delivery outcomes. Read-only, no side effects. Requires the
   `whatsapp:read` scope and the WhatsApp channel enabled; results are paginated
   with `per_page` from 1 to 100 (default 25) and `page` starting at 1.
