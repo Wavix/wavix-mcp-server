@@ -52,24 +52,23 @@ EXCLUDED_ENDPOINTS: tuple[tuple[str, str], ...] = (
 )
 
 INSTRUCTIONS = """\
-The Wavix MCP Server provides tools and documentation for the Wavix telecom platform (SMS/MMS, voice calls, 2FA, SIP trunking, phone numbers, speech analytics).
+The Wavix MCP server exposes the Wavix telecom platform: SMS and MMS, WhatsApp, voice calls, 2FA, SIP trunking, phone numbers, 10DLC registration, call detail records, and speech analytics.
 
-Documentation guidance:
-  1. Before answering conceptual questions about Wavix features (how a feature works, what parameters mean, billing, limits, integration patterns), read the relevant documentation resource under wavix://docs/* first. Do not rely on prior assumptions about telecom APIs - Wavix-specific behavior may differ.
-  2. To discover available documentation, list MCP resources and match by URI/title (e.g. wavix://docs/numbers/number-validator, wavix://docs/messaging/send-sms). The full OpenAPI specification is available at wavix://api/openapi.yaml.
-  3. Quote behavior from documentation rather than inferring it.
+Documentation resources:
+- Wavix product documentation is available as MCP resources under wavix://docs/*, one resource per topic (for example, wavix://docs/numbers/number-validator and wavix://docs/messaging/send-sms). It covers Wavix-specific feature behavior, parameter meanings, billing, and limits, which can differ from other telecom APIs.
+- The full Wavix OpenAPI specification is available as the resource wavix://api/openapi.yaml.
 
-Tool selection guidance:
-  1. Use '*_list' tools for paginated retrieval with basic filters (e.g. my_numbers_list, sms_and_mms_messages_list).
-  2. Use '*_get' tools for fetching a single entity by ID.
-  3. Use '*_create' / '*_update' / '*_delete' tools for mutations - confirm with the user before destructive actions (delete, return-to-stock, cancel).
+Tool naming conventions:
+- *_list tools return a collection with basic filters. Paginated collections accept per_page (1 to 100, default 25) and page (starting at 1); each tool's input schema shows whether it is paginated.
+- *_get tools return a single entity, identified by the key named in the tool's input schema (usually an ID).
+- *_create, *_update, and *_delete tools change account state. Each tool carries MCP annotations (readOnlyHint, destructiveHint, openWorldHint), and its description states any cost and whether the change can be reversed.
+- Some bulk operations run asynchronously. For example, number_validator_create_bulk with async set to true returns a request ID, and number_validator_results_get returns the results for that ID.
 
-Context management:
-  1. Default to small page sizes (per_page=10-25) unless the user asks for more.
-  2. For bulk validation or large lists, prefer asynchronous operations where available (e.g. number_validator_create_bulk with async=true) and poll for results.
+Billing:
+- Number purchases, calls, messages, and one-time passwords are charged to the account's prepaid Wavix balance.
 
 Authentication:
-  1. The MCP client forwards the user's Wavix API key as a Bearer token. Do not ask the user for credentials - tools authenticate automatically.
+- Tools authenticate with the credential the MCP client supplies: an OAuth access token from Wavix account sign-in, or a Wavix API key sent as a Bearer token. With account sign-in, the available tools are limited to the scopes granted at consent.
 """
 
 
