@@ -860,6 +860,15 @@ sub_accounts_update: >-
   sub-organization's `id`; `status` accepts `enabled` or `disabled`, and `name`
   may be up to 255 characters.
 
+whatsapp_senders_list: >-
+  Lists the WhatsApp senders on the account's WhatsApp Business Accounts, newest
+  first, each with its registration status and its WhatsApp Business Account.
+  Use to discover which WhatsApp sender numbers the account has and what state
+  they are in before listing templates or sending. Read-only, no side effects.
+  Requires the `whatsapp:read` scope and the WhatsApp channel enabled;
+  filterable by `status` and `waba_id`; results are paginated with `per_page`
+  from 1 to 100 (default 25) and `page` starting at 1.
+
 whatsapp_senders_get: >-
   Retrieves a single WhatsApp sender registered to the account, resolved by its
   phone number, returning its display name, provider registration status,
@@ -875,6 +884,14 @@ whatsapp_templates_list: >-
   sending before calling whatsapp_messages_send. Read-only, no side effects.
   Requires the `whatsapp:read` scope, the WhatsApp channel enabled, and a sender
   number on the caller's account.
+
+whatsapp_templates_get: >-
+  Retrieves a single WhatsApp message template by its template ID, returning its
+  name, language, category, review status, quality rating, and components. Use to
+  inspect one template's current state after listing or creating it, for example
+  to check whether it is approved for sending. Read-only, no side effects.
+  Requires the `whatsapp:read` scope, the WhatsApp channel enabled, and a
+  template ID that belongs to one of the account's WhatsApp Business Accounts.
 
 whatsapp_templates_create: >-
   Creates a WhatsApp message template for a sender and submits it to the
