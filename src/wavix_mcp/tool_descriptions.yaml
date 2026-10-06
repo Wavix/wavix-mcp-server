@@ -917,7 +917,8 @@ whatsapp_messages_send: >-
   enabled, the account's `sending` capability, a registered sender as `from`,
   and a template that is approved for that sender. Pass `idempotency_key` (up to
   128 characters, unique per account) to make retries safe: a repeated send with
-  the same key returns the original message and sends nothing.
+  the same key returns the original message and sends nothing, and the rest of
+  the request is not compared, so reuse a key only for the same send.
 
 whatsapp_messages_list: >-
   Lists the account's WhatsApp messages, filterable by direction, delivery
