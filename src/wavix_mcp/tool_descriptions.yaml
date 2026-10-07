@@ -901,8 +901,9 @@ whatsapp_templates_create: >-
   it to the provider for review. Use when the user wants to register new
   template content; the template is not usable for sending until the provider
   approves it. Submission is irreversible — a submitted template cannot be
-  un-submitted, and a template with the same name and language is rejected.
-  Requires the `whatsapp:write` scope, the WhatsApp channel enabled, the
+  un-submitted, and a template with the same name and language cannot be
+  created twice for the same sender. Requires the `whatsapp:write` scope, the
+  WhatsApp channel enabled, the
   account's `templates` capability, `name`, `language`, `category`, and
   `components` with exactly one `body`, and `waba_id` or `sender`, either of
   which may be omitted when the account has a single WhatsApp Business Account.
@@ -914,18 +915,19 @@ whatsapp_messages_send: >-
   the sender, recipient, template, and its variable values. Billable to the
   account balance and irreversible once accepted; the provider may still reject
   or defer delivery. Requires the `whatsapp:write` scope, the WhatsApp channel
-  enabled, the account's `sending` capability, a registered sender as `from`,
-  and a template that is approved for that sender. Pass `idempotency_key` (up to
+  enabled, the account's `sending` capability, and a registered sender as
+  `from`. Use a template that is approved for that sender. Pass `idempotency_key` (up to
   128 characters, unique per account) to make retries safe: a repeated send with
   the same key returns the original message and sends nothing, and the rest of
   the request is not compared, so reuse a key only for the same send.
 
 whatsapp_messages_list: >-
   Lists the account's WhatsApp messages, filterable by direction, delivery
-  status, sender or recipient number, and date range. Use to review sent and received WhatsApp messages or
-  check delivery outcomes. Read-only, no side effects. Requires the
-  `whatsapp:read` scope and the WhatsApp channel enabled; results are paginated
-  with `per_page` from 1 to 100 (default 25) and `page` starting at 1.
+  status, sender or recipient number, and date range. Use to review sent and
+  received WhatsApp messages or check delivery outcomes. Read-only, no side
+  effects. Requires the `whatsapp:read` scope and the WhatsApp channel enabled;
+  results are paginated with `per_page` from 1 to 100 (default 25) and `page`
+  starting at 1.
 
 whatsapp_messages_get: >-
   Retrieves a single WhatsApp message by its UUID, including its direction,
