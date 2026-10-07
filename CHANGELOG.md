@@ -13,7 +13,7 @@ Entries are derived from the commit history, which follows
 
 ### Added
 
-- Descriptions for `whatsapp_senders_list` and `whatsapp_templates_get`.
+- `whatsapp_senders_list` and `whatsapp_templates_get` tools.
 
 ### Changed
 
