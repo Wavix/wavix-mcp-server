@@ -9,11 +9,16 @@ Entries are derived from the commit history, which follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-07
+
+### Added
+
+- `whatsapp_senders_list` and `whatsapp_templates_get` tools.
+
 ### Changed
 
-- Server instructions rewritten as descriptive text (resources, tool naming,
-  pagination, billing, authentication) with no directives to the assistant;
-  a regression test guards against imperatives returning.
+- Server instructions are descriptive text.
+- WhatsApp tool descriptions match the current WhatsApp API.
 
 ## [1.1.0] - 2026-09-23
 
@@ -39,5 +44,6 @@ Entries are derived from the commit history, which follows
 - Invoice download and 10DLC evidence upload are excluded from the tool surface.
 - The OAuth issuer is advertised without an RFC 8414-breaking trailing slash.
 
-[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.0.0...v1.1.0
