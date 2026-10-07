@@ -897,13 +897,16 @@ whatsapp_templates_get: >-
   template ID that belongs to one of the account's WhatsApp Business Accounts.
 
 whatsapp_templates_create: >-
-  Creates a WhatsApp message template in a WhatsApp Business Account and submits
-  it to the provider for review. Use when the user wants to register new
-  template content; the template is not usable for sending until the provider
-  approves it. Submission is irreversible — a submitted template cannot be
-  un-submitted, and a template with the same name and language cannot be
-  created twice for the same sender. Requires the `whatsapp:write` scope, the
-  WhatsApp channel enabled, the
+  Creates a WhatsApp message template in a WhatsApp Business Account. The
+  response returns it in `draft` status; Wavix then submits it to the provider
+  for review in the background. Use when the user wants to register new
+  template content, then poll whatsapp_templates_get until the status is
+  `approved` or `rejected`; the template is not usable for sending until the
+  provider approves it. The API has no operation to withdraw a template, and a
+  template with the same name and language cannot be created twice in the same
+  WhatsApp Business Account: repeating a request while it is still a draft
+  returns that draft, and after it leaves draft the repeat is rejected with 409.
+  Requires the `whatsapp:write` scope, the WhatsApp channel enabled, the
   account's `templates` capability, `name`, `language`, `category`, and
   `components` with exactly one `body`, and `waba_id` or `sender`, either of
   which may be omitted when the account has a single WhatsApp Business Account.
