@@ -860,6 +860,15 @@ sub_accounts_update: >-
   sub-organization's `id`; `status` accepts `enabled` or `disabled`, and `name`
   may be up to 255 characters.
 
+whatsapp_senders_list: >-
+  Lists the WhatsApp senders on the account's WhatsApp Business Accounts, newest
+  first, each with its registration status and its WhatsApp Business Account.
+  Use to discover which WhatsApp sender numbers the account has and what state
+  they are in before listing templates or sending. Read-only, no side effects.
+  Requires the `whatsapp:read` scope and the WhatsApp channel enabled;
+  filterable by `status` and `waba_id`; results are paginated with `per_page`
+  from 1 to 100 (default 25) and `page` starting at 1.
+
 whatsapp_senders_get: >-
   Retrieves a single WhatsApp sender registered to the account, resolved by its
   phone number, returning its display name, provider registration status,
@@ -870,20 +879,35 @@ whatsapp_senders_get: >-
   caller's account.
 
 whatsapp_templates_list: >-
-  Lists the WhatsApp message templates belonging to a given sender, with each
-  template's name, language, category, approval status, and components. Use to discover which templates exist and which are approved for
+  Lists the WhatsApp message templates owned by the account's WhatsApp Business
+  Accounts, each with its name, language, category, review status, and
+  components, filterable by `waba_id`, `sender`, `status`, `name`, and
+  `language`. Use to discover which templates exist and which are approved for
   sending before calling whatsapp_messages_send. Read-only, no side effects.
-  Requires the `whatsapp:read` scope, the WhatsApp channel enabled, and a sender
-  number on the caller's account.
+  Requires the `whatsapp:read` scope and the WhatsApp channel enabled; results
+  are paginated with `per_page` from 1 to 100 (default 25) and `page` starting
+  at 1.
+
+whatsapp_templates_get: >-
+  Retrieves a single WhatsApp message template by its template ID, returning its
+  name, language, category, review status, quality rating, and components. Use to
+  inspect one template's current state after listing or creating it, for example
+  to check whether it is approved for sending. Read-only, no side effects.
+  Requires the `whatsapp:read` scope, the WhatsApp channel enabled, and a
+  template ID that belongs to one of the account's WhatsApp Business Accounts.
 
 whatsapp_templates_create: >-
-  Creates a WhatsApp message template for a sender and submits it to the
-  provider for approval. Use when the user wants to register new template
-  content; the template is not usable for sending until the provider approves
-  it. Submission is irreversible — a submitted template cannot be un-submitted,
-  and a duplicate (same sender, name, and language) is rejected. Requires the
-  `whatsapp:write` scope, the WhatsApp channel enabled, the account's `templates`
-  capability, and a sender number on the caller's account.
+  Creates a WhatsApp message template in a WhatsApp Business Account and
+  submits it for review. Use when the user wants to register new template
+  content, then poll whatsapp_templates_get until the status is `approved` or
+  `rejected`; the template is not usable for sending until the provider
+  approves it. The API has no operation to withdraw a template, and a template
+  whose name and language already exist in the WhatsApp Business Account is
+  rejected with 409.
+  Requires the `whatsapp:write` scope, the WhatsApp channel enabled, the
+  account's `templates` capability, `name`, `language`, `category`, and
+  `components` with exactly one `body`, and `waba_id` or `sender`, either of
+  which may be omitted when the account has a single WhatsApp Business Account.
 
 whatsapp_messages_send: >-
   Sends an approved WhatsApp template message from one of the account's senders
@@ -892,15 +916,19 @@ whatsapp_messages_send: >-
   the sender, recipient, template, and its variable values. Billable to the
   account balance and irreversible once accepted; the provider may still reject
   or defer delivery. Requires the `whatsapp:write` scope, the WhatsApp channel
-  enabled, the account's `sending` capability, a registered sender as `from`,
-  and a template that is approved for that sender.
+  enabled, the account's `sending` capability, and a registered sender as
+  `from`. Use a template that is approved for that sender. Pass `idempotency_key` (up to
+  128 characters, unique per account) to make retries safe: a repeated send with
+  the same key returns the original message and sends nothing, and the rest of
+  the request is not compared, so reuse a key only for the same send.
 
 whatsapp_messages_list: >-
   Lists the account's WhatsApp messages, filterable by direction, delivery
-  status, and date range. Use to review sent and received WhatsApp messages or
-  check delivery outcomes. Read-only, no side effects. Requires the
-  `whatsapp:read` scope and the WhatsApp channel enabled; results are paginated
-  with `per_page` from 1 to 100 (default 25) and `page` starting at 1.
+  status, sender or recipient number, and date range. Use to review sent and
+  received WhatsApp messages or check delivery outcomes. Read-only, no side
+  effects. Requires the `whatsapp:read` scope and the WhatsApp channel enabled;
+  results are paginated with `per_page` from 1 to 100 (default 25) and `page`
+  starting at 1.
 
 whatsapp_messages_get: >-
   Retrieves a single WhatsApp message by its UUID, including its direction,
