@@ -18,7 +18,7 @@ from mcp.types import ToolAnnotations
 
 from . import scopes
 from .auth import build_auth_provider, mcp_path
-from .confirmation import CONFIRMATIONS, TOKEN_PARAMETER, ConfirmationMiddleware
+from .confirmation import CONFIRMATIONS, TOKEN_PARAMETER, TOKEN_TTL_S, ConfirmationMiddleware
 from .docs import register_api_spec, register_docs
 from .scope_filter import ScopeFilterMiddleware
 
@@ -52,7 +52,7 @@ EXCLUDED_ENDPOINTS: tuple[tuple[str, str], ...] = (
     ("/v1/billing/invoices/{id}", "get"),
 )
 
-INSTRUCTIONS = """\
+INSTRUCTIONS = f"""\
 The Wavix MCP server exposes the Wavix telecom platform: SMS and MMS, WhatsApp, voice calls, 2FA, SIP trunking, phone numbers, 10DLC registration, call detail records, and speech analytics.
 
 Documentation resources:
@@ -63,7 +63,7 @@ Tool naming conventions:
 - *_list tools return a collection with basic filters. Paginated collections accept per_page (1 to 100, default 25) and page (starting at 1); each tool's input schema shows whether it is paginated.
 - *_get tools return a single entity, identified by the key named in the tool's input schema (usually an ID).
 - *_create, *_update, and *_delete tools change account state. Each tool carries MCP annotations (readOnlyHint, destructiveHint, openWorldHint), and its description states any cost and whether the change can be reversed.
-- Tools that place calls, stream call audio, register call webhooks, send messages or verification codes, buy or release numbers, or change or delete SIP trunks, sub-accounts and 10DLC brands or campaigns run in two steps. The first call does nothing and returns a preview of the action with a confirmation_token; the action runs only when the same tool is called again with the same arguments and that token, once the user has approved the preview. A token is single-use and expires after 5 minutes.
+- Tools that place calls, stream call audio, register call webhooks, send messages or verification codes, buy or release numbers, or change or delete SIP trunks, sub-accounts and 10DLC brands or campaigns run in two steps. The first call does nothing and returns a preview of the action with a confirmation_token; the action runs only when the same tool is called again with the same arguments and that token, once the user has approved the preview. A token is single-use and expires after {TOKEN_TTL_S / 60:g} minutes.
 - Some bulk operations run asynchronously. For example, number_validator_create_bulk with async set to true returns a request ID, and number_validator_results_get returns the results for that ID.
 
 Billing:

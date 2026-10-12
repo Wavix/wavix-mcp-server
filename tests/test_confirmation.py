@@ -219,7 +219,7 @@ def test_token_runs_the_action_once_without_forwarding_the_token(isolated_routes
     assert json.loads(api.posts[0].content) == CALL
 
 
-def test_token_is_single_use(isolated_routes, anonymous):
+def test_retried_confirm_returns_the_first_result_without_acting_again(isolated_routes, anonymous):
     api = _Api()
     mcp = _server(api)
 
@@ -227,14 +227,65 @@ def test_token_is_single_use(isolated_routes, anonymous):
         async with Client(mcp) as client:
             preview = await client.call_tool("call_control_create", CALL)
             confirmed = {**CALL, TOKEN_PARAMETER: _token(preview)}
-            await client.call_tool("call_control_create", confirmed)
-            return await client.call_tool("call_control_create", confirmed)
+            first = await client.call_tool("call_control_create", confirmed)
+            again = await client.call_tool("call_control_create", confirmed)
+            return first, again
 
-    again = asyncio.run(run())
+    first, again = asyncio.run(run())
     assert api.dials == 1
+    assert not first.is_error and again.structured_content == first.structured_content
+
+
+def test_failed_confirm_spends_the_token(isolated_routes, anonymous):
+    api = _Api(status=422)
+    mcp = _server(api)
+
+    async def run():
+        async with Client(mcp) as client:
+            preview = await client.call_tool("call_control_create", CALL)
+            confirmed = {**CALL, TOKEN_PARAMETER: _token(preview)}
+            failed = await client.call_tool("call_control_create", confirmed, raise_on_error=False)
+            again = await client.call_tool("call_control_create", confirmed, raise_on_error=False)
+            return failed, again
+
+    failed, again = asyncio.run(run())
+    assert failed.is_error and api.dials == 1
     assert _text(again).startswith("The confirmation token has expired or does not match")
-    assert "This will place a billable call" in _text(again)
-    assert not again.is_error
+
+
+def _direct(middleware: ConfirmationMiddleware, arguments: dict, session_id: str = "s1"):
+    return MiddlewareContext(
+        message=CallToolRequestParams(name="call_control_create", arguments=arguments),
+        fastmcp_context=SimpleNamespace(session_id=session_id),
+    )
+
+
+def test_retry_during_the_confirmed_call_waits_for_its_result(anonymous):
+    dials = []
+
+    async def call_next(_context):
+        dials.append(1)
+        await anyio.sleep(0.1)
+        return ToolResult(structured_content={"uuid": "call-1"})
+
+    middleware = ConfirmationMiddleware(CONFIRMATIONS, httpx.AsyncClient())
+
+    async def run():
+        preview = await middleware.on_call_tool(_direct(middleware, CALL), call_next)
+        confirmed = {**CALL, TOKEN_PARAMETER: _token(preview)}
+        results = []
+
+        async def confirm():
+            results.append(await middleware.on_call_tool(_direct(middleware, confirmed), call_next))
+
+        async with anyio.create_task_group() as group:
+            group.start_soon(confirm)
+            group.start_soon(confirm)
+        return results
+
+    results = asyncio.run(run())
+    assert dials == [1]
+    assert [r.structured_content for r in results] == [{"uuid": "call-1"}] * 2
 
 
 def test_token_does_not_cover_changed_arguments(isolated_routes, anonymous):
@@ -314,9 +365,10 @@ def test_api_key_callers_are_told_apart_by_authorization(monkeypatch):
     monkeypatch.setattr(confirmation, "get_access_token", lambda: None)
     headers = {"authorization": "Bearer A"}
     monkeypatch.setattr(confirmation, "get_http_headers", lambda **_: headers)
-    first = ConfirmationMiddleware._binding(None, "call_control_create", CALL)
+    first = ConfirmationMiddleware._caller(None)
     headers["authorization"] = "Bearer B"
-    assert ConfirmationMiddleware._binding(None, "call_control_create", CALL) != first
+    second = ConfirmationMiddleware._caller(None)
+    assert first is not None and second is not None and first != second
 
 
 def test_passthrough_token_is_keyed_by_authorization_not_sub(monkeypatch):
@@ -327,12 +379,8 @@ def test_passthrough_token_is_keyed_by_authorization_not_sub(monkeypatch):
 
 
 def test_anonymous_callers_in_different_sessions_do_not_share_tokens(anonymous):
-    first = ConfirmationMiddleware._binding(
-        SimpleNamespace(session_id="s1"), "call_control_create", CALL
-    )
-    second = ConfirmationMiddleware._binding(
-        SimpleNamespace(session_id="s2"), "call_control_create", CALL
-    )
+    first = ConfirmationMiddleware._caller(SimpleNamespace(session_id="s1"))
+    second = ConfirmationMiddleware._caller(SimpleNamespace(session_id="s2"))
     assert first != second
 
 
@@ -587,6 +635,7 @@ def test_trunk_update_lists_only_the_changes():
     text = _preview("sip_trunks_update", arguments, lookups)
     assert text == (
         "This will change SIP trunk Office:\n"
+        "• password: (hidden)\n"
         "• callerid: 15550100 → 15550199\n"
         "• ip_restrict: true → false"
     )
@@ -595,7 +644,7 @@ def test_trunk_update_lists_only_the_changes():
 
 def test_trunk_update_without_lookup_lists_the_new_values():
     text = _preview("sip_trunks_update", {"id": 7, "label": "Office", "password": "p"})
-    assert text == "This will change SIP trunk 7:\n• label: Office"
+    assert text == "This will change SIP trunk 7:\n• label: Office\n• password: (hidden)"
 
 
 def test_sub_account_update_compares_nested_destinations():
@@ -747,8 +796,8 @@ def test_build_server_registers_confirmation_inside_scope_filter(isolated_routes
         ),
         (
             {"stream_type": "oneway", "stream_channel": "outbound"},
-            "This will stream the live audio of call c1, only the audio sent from Wavix into "
-            "the call, to wss://x.test/a.",
+            "This will stream the live audio of call c1, including the other party's voice, "
+            "to wss://x.test/a.",
         ),
         (
             {"stream_type": "twoway", "stream_channel": "outbound"},
@@ -757,7 +806,7 @@ def test_build_server_registers_confirmation_inside_scope_filter(isolated_routes
         ),
     ],
 )
-def test_stream_preview_follows_type_and_channel(stream, expected):
+def test_stream_preview_names_the_voice_and_two_way_talk_back(stream, expected):
     arguments = {"call_id": "c1", "stream_url": "wss://x.test/a", **stream}
     assert _preview("call_control_streams_create", arguments) == expected
 
@@ -808,27 +857,105 @@ def test_empty_token_counts_as_a_first_call(isolated_routes, anonymous):
     assert _text(result).startswith("This will place a billable call")
 
 
-def test_pending_tokens_are_capped(monkeypatch, anonymous):
-    monkeypatch.setattr(confirmation, "MAX_PENDING_TOKENS", 2)
+def test_pending_tokens_are_capped_per_caller(monkeypatch, anonymous):
+    monkeypatch.setattr(confirmation, "MAX_PENDING_PER_CALLER", 2)
 
     async def call_next(_context):
         return ToolResult(content="ok")
 
     middleware = ConfirmationMiddleware(CONFIRMATIONS, httpx.AsyncClient())
-    context = MiddlewareContext(
-        message=CallToolRequestParams(name="call_control_create", arguments=CALL),
-        fastmcp_context=SimpleNamespace(session_id="s1"),
-    )
 
     async def run():
+        other = await middleware.on_call_tool(_direct(middleware, CALL, "s2"), call_next)
         for _ in range(3):
-            await middleware.on_call_tool(context, call_next)
+            await middleware.on_call_tool(_direct(middleware, CALL), call_next)
+        return other
+
+    other = asyncio.run(run())
+    assert len(middleware._pending["anonymous:s1"]) == 2
+    assert _token(other) in middleware._pending["anonymous:s2"]
+
+
+def test_expired_tokens_of_idle_callers_are_swept(anonymous):
+    clock = _Clock()
+
+    async def call_next(_context):
+        return ToolResult(content="ok")
+
+    middleware = ConfirmationMiddleware(CONFIRMATIONS, httpx.AsyncClient(), clock=clock)
+
+    async def run():
+        await middleware.on_call_tool(_direct(middleware, CALL, "idle"), call_next)
+        clock.now += TOKEN_TTL_S
+        await middleware.on_call_tool(_direct(middleware, CALL, "active"), call_next)
 
     asyncio.run(run())
-    assert len(middleware._pending) == 2
+    assert "anonymous:idle" not in middleware._pending
 
 
-def test_anonymous_callers_without_a_session_never_share_a_binding(anonymous):
-    first = ConfirmationMiddleware._binding(SimpleNamespace(), "call_control_create", CALL)
-    second = ConfirmationMiddleware._binding(SimpleNamespace(), "call_control_create", CALL)
-    assert first != second
+def test_anonymous_caller_without_a_session_is_refused(anonymous):
+    dials = []
+
+    async def call_next(_context):
+        dials.append(1)
+        return ToolResult(content="ok")
+
+    middleware = ConfirmationMiddleware(CONFIRMATIONS, httpx.AsyncClient())
+    context = MiddlewareContext(
+        message=CallToolRequestParams(name="call_control_create", arguments=CALL),
+        fastmcp_context=SimpleNamespace(),
+    )
+    result = asyncio.run(middleware.on_call_tool(context, call_next))
+    assert result.is_error and dials == [] and middleware._pending == {}
+
+
+def test_sms_to_a_short_code_is_previewed():
+    arguments = {"from": "Wavix", "to": "12345", "message_body": {"text": "STOP"}}
+    assert _preview("sms_and_mms_messages_send", arguments) == (
+        'This will send a billable message from Wavix to 12345: "STOP"'
+    )
+
+
+def test_whatsapp_preview_shows_header_and_buttons():
+    arguments = {
+        "from": "15550100",
+        "to": "15550199",
+        "template": {
+            "name": "order",
+            "language": "en",
+            "header": {
+                "type": "document",
+                "media_url": "https://m.test/a.pdf",
+                "filename": "a.pdf",
+            },
+            "buttons": [{"type": "url", "parameter": "track/42"}, {"type": "quick_reply"}],
+        },
+    }
+    assert _preview("whatsapp_messages_send", arguments) == (
+        'This will send a billable message from 15550100 to 15550199: template "order" (en).\n'
+        "• header (document): https://m.test/a.pdf, a.pdf\n"
+        "• button (url): track/42\n"
+        "• button (quick_reply)"
+    )
+
+
+def test_instructions_state_the_token_lifetime():
+    assert f"expires after {TOKEN_TTL_S / 60:g} minutes" in server.INSTRUCTIONS
+
+
+def test_failed_confirm_drops_the_token_from_memory(anonymous):
+    async def call_next(_context):
+        return ToolResult(content="rejected", is_error=True)
+
+    middleware = ConfirmationMiddleware(CONFIRMATIONS, httpx.AsyncClient())
+
+    async def run():
+        preview = await middleware.on_call_tool(_direct(middleware, CALL), call_next)
+        token = _token(preview)
+        await middleware.on_call_tool(
+            _direct(middleware, {**CALL, TOKEN_PARAMETER: token}), call_next
+        )
+        return token
+
+    token = asyncio.run(run())
+    assert token not in middleware._pending.get("anonymous:s1", {})

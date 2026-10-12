@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 TOKEN_PARAMETER = "confirmation_token"
 TOKEN_TTL_S = 300.0
 MAX_LISTED_NUMBERS = 20
-MAX_PENDING_TOKENS = 10_000
+MAX_PENDING_PER_CALLER = 100
 MESSAGE_PREVIEW_CHARS = 80
 
 _PHONE_NUMBER = re.compile(r"\+?[0-9]{7,15}")
@@ -31,7 +31,9 @@ _TOKEN_MISMATCH = (
     "The confirmation token has expired or does not match these arguments. Nothing was done."
 )
 _PREVIEW_FAILED = "The confirmation preview could not be prepared, so nothing was done."
+_NO_CALLER = "This action needs an authenticated MCP session, so nothing was done."
 _SECRET_FIELDS = frozenset({"password"})
+_HEADER_FIELDS = ("text", "placeholder", "parameter_name", "media_url", "filename")
 
 
 class ConfirmationInputError(ValueError):
@@ -125,12 +127,8 @@ async def _voice_campaign(arguments: Mapping[str, Any], _api: httpx.AsyncClient)
 def _streamed_audio(arguments: Mapping[str, Any], party: str) -> tuple[str, str]:
     stream_url = _text(arguments, "stream_url")
     two_way = arguments.get("stream_type") == "twoway"
-    if two_way or arguments.get("stream_channel") != "outbound":
-        audio = f"including the {party}'s voice"
-    else:
-        audio = "only the audio sent from Wavix into the call"
     talk_back = " The destination can also play audio into the call." if two_way else ""
-    return f"{audio}, to {stream_url}.", talk_back
+    return f"including the {party}'s voice, to {stream_url}.", talk_back
 
 
 async def _call_stream(arguments: Mapping[str, Any], _api: httpx.AsyncClient) -> str:
@@ -153,39 +151,42 @@ async def _call_webhook(arguments: Mapping[str, Any], _api: httpx.AsyncClient) -
     return f"This will send call metadata for every {event_type} event to {url}."
 
 
-async def _numbers_by_id(api: httpx.AsyncClient, ids: list[int]) -> list[str]:
-    lines = [""] * len(ids)
+def _capped(lines: list[str], total: int) -> list[str]:
+    shown = lines[:MAX_LISTED_NUMBERS]
+    if total > len(shown):
+        shown.append(f"and {total - len(shown)} more")
+    return shown
 
-    async def lookup(index: int, number_id: int) -> None:
-        entity = await _fetch(api, f"/v1/numbers/{number_id}")
-        lines[index] = _number_line(entity, f"number ID {number_id}")
+
+async def _lookup_all(keys: list[Any], lookup: Callable[[Any], Awaitable[str]]) -> list[str]:
+    lines = [""] * len(keys)
+
+    async def run(index: int, key: Any) -> None:
+        lines[index] = await lookup(key)
 
     async with anyio.create_task_group() as group:
-        for index, number_id in enumerate(ids):
-            group.start_soon(lookup, index, number_id)
+        for index, key in enumerate(keys):
+            group.start_soon(run, index, key)
     return lines
 
 
-async def _numbers_by_did(api: httpx.AsyncClient, dids: list[str]) -> list[str]:
-    lines = [""] * len(dids)
+async def _number_by_id(api: httpx.AsyncClient, number_id: int) -> str:
+    entity = await _fetch(api, f"/v1/numbers/{number_id}")
+    return _number_line(entity, f"number ID {number_id}")
 
-    async def lookup(index: int, did: str) -> None:
-        page = await _fetch(api, "/v1/numbers", search=did)
-        items = page.get("items") if isinstance(page, Mapping) else None
-        match = next(
-            (
-                item
-                for item in items or []
-                if isinstance(item, Mapping) and str(item.get("number")).lstrip("+") == did
-            ),
-            None,
-        )
-        lines[index] = _number_line(match, did)
 
-    async with anyio.create_task_group() as group:
-        for index, did in enumerate(dids):
-            group.start_soon(lookup, index, did)
-    return lines
+async def _number_by_did(api: httpx.AsyncClient, did: str) -> str:
+    page = await _fetch(api, "/v1/numbers", search=did)
+    items = page.get("items") if isinstance(page, Mapping) else None
+    match = next(
+        (
+            item
+            for item in items or []
+            if isinstance(item, Mapping) and str(item.get("number")).lstrip("+") == did
+        ),
+        None,
+    )
+    return _number_line(match, did)
 
 
 async def _release_numbers(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
@@ -198,18 +199,20 @@ async def _release_numbers(arguments: Mapping[str, Any], api: httpx.AsyncClient)
         if any(isinstance(v, bool) or not isinstance(v, int) for v in ids):
             raise _invalid("ids")
         total = len(ids)
-        lines = await _numbers_by_id(api, ids[:MAX_LISTED_NUMBERS])
+        lines = await _lookup_all(
+            ids[:MAX_LISTED_NUMBERS], lambda number_id: _number_by_id(api, number_id)
+        )
     else:
         selected = [d.strip().lstrip("+") for d in _text(arguments, "dids").split(",")]
         selected = [did for did in selected if did]
         if not selected:
             raise _invalid("dids")
         total = len(selected)
-        lines = await _numbers_by_did(api, selected[:MAX_LISTED_NUMBERS])
-    if total > MAX_LISTED_NUMBERS:
-        lines.append(f"and {total - MAX_LISTED_NUMBERS} more")
+        lines = await _lookup_all(
+            selected[:MAX_LISTED_NUMBERS], lambda did: _number_by_did(api, did)
+        )
     heading = f"This will release {_plural(total, 'number')} back to stock (irreversible):"
-    return f"{heading}\n{_bullets(lines)}"
+    return f"{heading}\n{_bullets(_capped(lines, total))}"
 
 
 def _display(value: Any) -> str:
@@ -258,7 +261,10 @@ def _changes(
     known = _flatten(current) if isinstance(current, Mapping) else None
     lines = []
     for field, new in _flatten(arguments).items():
-        if field in skip or field == TOKEN_PARAMETER or field in _SECRET_FIELDS:
+        if field in skip or field == TOKEN_PARAMETER:
+            continue
+        if field in _SECRET_FIELDS:
+            lines.append(f"{field}: (hidden)")
             continue
         if known is None:
             lines.append(f"{field}: {_display(new)}")
@@ -323,10 +329,9 @@ async def _delete_campaign(arguments: Mapping[str, Any], api: httpx.AsyncClient)
     numbers = [n for n in known.get("phone_numbers") or [] if isinstance(n, str) and n]
     if not numbers:
         return preview
-    shown = numbers[:MAX_LISTED_NUMBERS]
-    if len(numbers) > len(shown):
-        shown.append(f"and {len(numbers) - len(shown)} more")
-    stopping = f"These numbers will stop sending through it:\n{_bullets(shown)}"
+    stopping = (
+        f"These numbers will stop sending through it:\n{_bullets(_capped(numbers, len(numbers)))}"
+    )
     return f"{preview}\n{stopping}"
 
 
@@ -338,7 +343,7 @@ def _excerpt(text: str) -> str:
 
 async def _send_sms(arguments: Mapping[str, Any], _api: httpx.AsyncClient) -> str:
     sender = _text(arguments, "from")
-    destination = _phone_number(arguments, "to")
+    destination = _text(arguments, "to")
     body = _mapping(arguments, "message_body")
     text = body.get("text")
     media = [url for url in body.get("media") or [] if isinstance(url, str) and url]
@@ -357,10 +362,28 @@ async def _send_whatsapp(arguments: Mapping[str, Any], _api: httpx.AsyncClient) 
     language = _text(template, "language", "template.language")
     placeholders = [p for p in template.get("placeholders") or [] if isinstance(p, str)]
     values = f", values: {', '.join(placeholders)}" if placeholders else ""
-    return (
+    preview = (
         f"This will send a billable message from {sender} to {destination}: "
         f'template "{name}" ({language}){values}.'
     )
+    extras = _template_extras(template)
+    return f"{preview}\n{_bullets(extras)}" if extras else preview
+
+
+def _template_extras(template: Mapping[str, Any]) -> list[str]:
+    extras = []
+    header = template.get("header")
+    if isinstance(header, Mapping):
+        parts = [str(header[k]) for k in _HEADER_FIELDS if header.get(k) not in (None, "")]
+        if header.get("latitude") is not None and header.get("longitude") is not None:
+            parts.append(f"{header['latitude']}, {header['longitude']}")
+        extras.append(f"header ({header.get('type')}): {', '.join(parts)}".rstrip(": "))
+    for button in template.get("buttons") or []:
+        if isinstance(button, Mapping):
+            parameter = button.get("parameter")
+            line = f"button ({button.get('type')})"
+            extras.append(f"{line}: {parameter}" if parameter else line)
+    return extras
 
 
 async def _send_otp(arguments: Mapping[str, Any], _api: httpx.AsyncClient) -> str:
@@ -450,10 +473,12 @@ def _refused(text: str) -> ToolResult:
     return ToolResult(content=text, is_error=True)
 
 
-@dataclass(frozen=True)
+@dataclass
 class _Pending:
     binding: str
     expires_at: float
+    done: anyio.Event | None = None
+    result: ToolResult | None = None
 
 
 class ConfirmationMiddleware(Middleware):
@@ -467,7 +492,8 @@ class ConfirmationMiddleware(Middleware):
         self._builders = dict(builders)
         self._api_client = api_client
         self._clock = clock
-        self._pending: dict[str, _Pending] = {}
+        self._pending: dict[str, dict[str, _Pending]] = {}
+        self._swept_at = clock()
 
     async def on_call_tool(self, context: MiddlewareContext, call_next):
         tool = context.message.name
@@ -479,11 +505,20 @@ class ConfirmationMiddleware(Middleware):
         token = arguments.pop(TOKEN_PARAMETER, None) or None
         stripped = context.copy(message=context.message.model_copy(update={"arguments": arguments}))
 
-        self._purge_expired()
-        binding = self._binding(context.fastmcp_context, tool, arguments)
-        pending = self._pending.pop(str(token), None) if token is not None else None
+        caller = self._caller(context.fastmcp_context)
+        if caller is None:
+            return _refused(_NO_CALLER)
+        tokens = self._tokens(caller)
+        binding = self._binding(caller, tool, arguments)
+        pending = tokens.get(str(token)) if token is not None else None
         if pending is not None and pending.binding == binding:
-            return await self._run(stripped, call_next)
+            if pending.done is None:
+                return await self._run_once(caller, str(token), pending, stripped, call_next)
+            await pending.done.wait()
+            if pending.result is not None:
+                return pending.result
+        elif pending is not None:
+            del tokens[str(token)]
 
         try:
             preview = await build(arguments, self._api_client)
@@ -498,34 +533,76 @@ class ConfirmationMiddleware(Middleware):
             preview = f"{_TOKEN_MISMATCH}\n\n{preview}"
 
         issued = secrets.token_urlsafe(24)
-        if len(self._pending) >= MAX_PENDING_TOKENS:
-            del self._pending[next(iter(self._pending))]
-        self._pending[issued] = _Pending(binding, self._clock() + TOKEN_TTL_S)
+        tokens = self._pending.setdefault(caller, {})
+        if len(tokens) >= MAX_PENDING_PER_CALLER:
+            del tokens[next(iter(tokens))]
+        tokens[issued] = _Pending(binding, self._clock() + TOKEN_TTL_S)
         return ToolResult(
             content=(
                 f'{preview}\nCall this tool again with {TOKEN_PARAMETER}="{issued}" to proceed.'
             )
         )
 
-    @staticmethod
-    async def _run(context: MiddlewareContext, call_next) -> ToolResult:
-        # a client cancel must not abort a request the API may already have accepted
-        with anyio.CancelScope(shield=True):
-            return await call_next(context)
+    async def _run_once(
+        self,
+        caller: str,
+        token: str,
+        pending: _Pending,
+        context: MiddlewareContext,
+        call_next,
+    ) -> ToolResult:
+        pending.done = anyio.Event()
+        result: ToolResult | None = None
+        try:
+            # a client cancel must not abort a request the API may already have accepted
+            with anyio.CancelScope(shield=True):
+                result = await call_next(context)
+            return result
+        finally:
+            tokens = self._pending.setdefault(caller, {})
+            if result is not None and not result.is_error:
+                pending.result = result
+                pending.expires_at = self._clock() + TOKEN_TTL_S
+                tokens.pop(token, None)
+                tokens[token] = pending
+            elif tokens.get(token) is pending:
+                del tokens[token]
+            pending.done.set()
 
-    def _purge_expired(self) -> None:
+    def _tokens(self, caller: str) -> dict[str, _Pending]:
         now = self._clock()
-        for token in [t for t, p in self._pending.items() if p.expires_at <= now]:
-            del self._pending[token]
+        if now - self._swept_at >= TOKEN_TTL_S:
+            self._swept_at = now
+            for other in list(self._pending):
+                self._purge(other, now)
+        else:
+            self._purge(caller, now)
+        return self._pending.setdefault(caller, {})
+
+    def _purge(self, caller: str, now: float) -> None:
+        tokens = self._pending.get(caller)
+        if tokens is None:
+            return
+        while tokens:
+            oldest = next(iter(tokens))
+            if tokens[oldest].expires_at > now:
+                break
+            del tokens[oldest]
+        if not tokens:
+            del self._pending[caller]
 
     @staticmethod
-    def _binding(ctx: Any, tool: str, arguments: Mapping[str, Any]) -> str:
+    def _caller(ctx: Any) -> str | None:
         caller = _caller_identity()
-        material: dict[str, Any] = {"caller": caller, "tool": tool, "arguments": arguments}
-        if caller == _ANONYMOUS_CALLER:
-            try:
-                material["session"] = ctx.session_id
-            except (AttributeError, RuntimeError):
-                material["session"] = secrets.token_hex(16)
+        if caller != _ANONYMOUS_CALLER:
+            return caller
+        try:
+            return f"{_ANONYMOUS_CALLER}:{ctx.session_id}"
+        except (AttributeError, RuntimeError):
+            return None
+
+    @staticmethod
+    def _binding(caller: str, tool: str, arguments: Mapping[str, Any]) -> str:
+        material = {"caller": caller, "tool": tool, "arguments": arguments}
         encoded = json.dumps(material, sort_keys=True, separators=(",", ":"), default=str)
         return hashlib.sha256(encoded.encode()).hexdigest()

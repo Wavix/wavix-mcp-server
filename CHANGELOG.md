@@ -16,7 +16,8 @@ Entries are derived from the commit history, which follows
   SIP trunks, sub-accounts and 10DLC brands or campaigns run in two steps: the
   first call does nothing and returns a preview with a single-use
   `confirmation_token` valid for 5 minutes; the action runs only when the tool
-  is called again with the same arguments and that token. Covers
+  is called again with the same arguments and that token; repeating that
+  confirmed call returns the first result instead of acting again. Covers
   `call_control_create`, `voice_campaigns_create`,
   `call_control_streams_create`, `call_control_answer` (with `stream_url`),
   `call_webhooks_create`, `my_numbers_delete`, `sip_trunks_delete`,
@@ -29,7 +30,7 @@ Entries are derived from the commit history, which follows
 
 - **Breaking:** the tools above no longer act on the first call; a client
   must call them again with the `confirmation_token` from the preview. Phone
-  numbers for calls, SMS and one-time passwords must be E.164 digits, with an
+  numbers for calls and one-time passwords must be E.164 digits, with an
   optional leading `+`, without spaces or punctuation.
 - The tools above no longer publish an output schema, so a preview returns as a
   normal result.
