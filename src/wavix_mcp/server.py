@@ -18,6 +18,7 @@ from mcp.types import ToolAnnotations
 
 from . import scopes
 from .auth import build_auth_provider, mcp_path
+from .confirmation import CONFIRMATIONS, ConfirmationMiddleware
 from .docs import register_api_spec, register_docs
 from .scope_filter import ScopeFilterMiddleware
 
@@ -521,6 +522,9 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
         # Every tool reaches the live Wavix API, never a closed local set.
         openWorldHint=_hint(xmcp.get("openWorld"), True),
     )
+    # MCP clients reject a non-error result lacking structuredContent when outputSchema is declared.
+    if component.name in CONFIRMATIONS:
+        component.output_schema = None
 
 
 async def _resolve_to_download_url(
@@ -728,6 +732,7 @@ def build_server() -> FastMCP:
     tool_routes = {**_TOOL_ROUTES, **_HAND_TOOL_ROUTES}
     _warn_on_never_gated_tools(tool_routes)
     mcp.add_middleware(ScopeFilterMiddleware(tool_routes))
+    mcp.add_middleware(ConfirmationMiddleware(CONFIRMATIONS, api_client))
     return mcp
 
 
