@@ -559,7 +559,46 @@ def test_accept_joins_a_retry_dial_that_a_failed_owner_left_in_flight(anonymous)
     in_flight_dials, results = asyncio.run(run())
     assert in_flight_dials == [0, 1]
     assert not any(isinstance(r, BaseException) for r in results)
-    assert len(dials) <= 3
+    assert len(dials) == 3
+
+
+def test_replay_waiter_joins_a_retry_dial_that_finished_first(anonymous):
+    dials = []
+    release_first = asyncio.Event()
+    gates = [asyncio.Event() for _ in range(4)]
+
+    async def call_next(_context):
+        dials.append(len(dials))
+        if len(dials) == 1:
+            await release_first.wait()
+            return ToolResult(content="rejected", is_error=True)
+        return ToolResult(structured_content={"uuid": f"call-{len(dials)}"})
+
+    async def before_answer(index):
+        await gates[index].wait()
+
+    direct = _Direct(call_next, before_answer=before_answer)
+
+    async def run():
+        owner = asyncio.create_task(direct.call())
+        await asyncio.sleep(0.02)
+        joiner = asyncio.create_task(direct.call())
+        await asyncio.sleep(0.02)
+        gates[0].set()
+        await asyncio.sleep(0.02)
+        gates[1].set()
+        await asyncio.sleep(0.02)
+        replay = asyncio.create_task(direct.call())
+        await asyncio.sleep(0.02)
+        release_first.set()
+        await asyncio.sleep(0.05)
+        gates[2].set()
+        gates[3].set()
+        with anyio.fail_after(5):
+            return await asyncio.gather(owner, joiner, replay)
+
+    asyncio.run(run())
+    assert len(dials) == 2
 
 
 def test_failing_overwritten_owner_leaves_the_new_owner_entry_and_its_waiters(anonymous):
