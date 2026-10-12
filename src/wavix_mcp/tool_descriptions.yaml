@@ -863,9 +863,8 @@ sub_accounts_update: >-
   wants to rename a sub-organization, enable or disable it, or change its default
   webhook destinations. Overwrites the provided settings; setting `status` to
   `disabled` suspends the sub-organization. Requires the `subaccounts:write`
-  scope, the sub-organization's `id`, and its `name` (up to 75 characters) on
-  every request, so send the current `name` (from `sub_accounts_get`) when the
-  user does not want to rename it; `status` accepts `enabled` or `disabled`.
+  scope and the sub-organization's `id`; `name` may be up to 75 characters, and
+  `status` accepts `enabled` or `disabled`.
 
 whatsapp_senders_list: >-
   Lists the WhatsApp senders on the account's WhatsApp Business Accounts, newest
