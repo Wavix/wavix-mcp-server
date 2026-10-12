@@ -25,6 +25,13 @@ Entries are derived from the commit history, which follows
   schema, so a declined call returns as a normal result.
 - Requires `fastmcp>=3.4.8`; `anyio`, `mcp` and `pydantic` are declared dependencies.
 
+### Fixed
+
+- A connection signed in with a Wavix account no longer answers every action with
+  "Access denied" once its access token expires. The server now replies with an
+  OAuth challenge, so the client renews the token or asks the user to sign in
+  again. Connections that use a Wavix API key are unchanged.
+
 ## [1.2.0] - 2026-10-07
 
 ### Added

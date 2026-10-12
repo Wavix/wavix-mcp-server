@@ -155,14 +155,14 @@ def test_verified_jwt_is_returned_unchanged_by_the_passthrough_wrapper():
         async def verify_token(self, token):
             return issued
 
-    verified = asyncio.run(_ApiKeyPassthroughVerifier(_Inner()).verify_token("jwt"))
+    verified = asyncio.run(_ApiKeyPassthroughVerifier(_Inner(), issuer=ISSUER).verify_token("jwt"))
 
     assert verified is issued
     assert verified.client_id != PASSTHROUGH_CLIENT_ID
 
 
-def test_passthrough_marks_the_token_so_scope_filtering_skips_it():
-    from wavix_mcp.auth import PASSTHROUGH_CLIENT_ID, _ApiKeyPassthroughVerifier
+def _rejecting_passthrough():
+    from wavix_mcp.auth import _ApiKeyPassthroughVerifier
 
     class _Inner:
         required_scopes = None
@@ -170,12 +170,106 @@ def test_passthrough_marks_the_token_so_scope_filtering_skips_it():
         async def verify_token(self, token):
             return None
 
-    token = asyncio.run(_ApiKeyPassthroughVerifier(_Inner()).verify_token("an-api-key"))
+    return _ApiKeyPassthroughVerifier(_Inner(), issuer=ISSUER)
+
+
+def test_passthrough_marks_the_token_so_scope_filtering_skips_it():
+    from wavix_mcp.auth import PASSTHROUGH_CLIENT_ID
+
+    token = asyncio.run(_rejecting_passthrough().verify_token("an-api-key"))
 
     assert token is not None
     assert token.token == "an-api-key"
     assert token.client_id == PASSTHROUGH_CLIENT_ID
     assert token.scopes == []
+
+
+@pytest.fixture
+def issuer_key(monkeypatch):
+    from fastmcp.server.auth.providers.jwt import JWTVerifier, RSAKeyPair
+
+    key = RSAKeyPair.generate()
+
+    async def _issuer_public_key(self, token):
+        return key.public_key
+
+    monkeypatch.setattr(JWTVerifier, "_get_verification_key", _issuer_public_key)
+    return key
+
+
+def _issuer_token(key, expires_in_seconds: int) -> str:
+    return key.create_token(
+        issuer=ISSUER,
+        audience=f"{RESOURCE}{mcp_path()}",
+        scopes=["numbers:read"],
+        expires_in_seconds=expires_in_seconds,
+    )
+
+
+def test_valid_issuer_jwt_is_accepted(oauth_env, issuer_key):
+    response = _initialize(build_auth_provider(), _issuer_token(issuer_key, 3600))
+
+    assert response.status_code == 200
+
+
+def test_expired_issuer_jwt_is_challenged_instead_of_forwarded(oauth_env, issuer_key):
+    response = _initialize(build_auth_provider(), _issuer_token(issuer_key, -60))
+
+    assert response.status_code == 401
+    challenge = response.headers["www-authenticate"]
+    assert 'error="invalid_token"' in challenge
+    assert "resource_metadata=" in challenge
+
+
+def test_passthrough_rejects_an_expired_token_from_the_issuer():
+    from fastmcp.server.auth.providers.jwt import RSAKeyPair
+
+    token = RSAKeyPair.generate().create_token(issuer=ISSUER, expires_in_seconds=-60)
+
+    assert asyncio.run(_rejecting_passthrough().verify_token(token)) is None
+
+
+@pytest.mark.parametrize(
+    ("issuer", "expires_in_seconds"),
+    [(ISSUER, 3600), ("https://other.example", -60)],
+    ids=["unexpired-issuer-token", "expired-foreign-token"],
+)
+def test_passthrough_forwards_a_failed_jwt_it_cannot_attribute_to_an_expired_sign_in(
+    issuer, expires_in_seconds
+):
+    from fastmcp.server.auth.providers.jwt import RSAKeyPair
+
+    from wavix_mcp.auth import PASSTHROUGH_CLIENT_ID
+
+    token = RSAKeyPair.generate().create_token(issuer=issuer, expires_in_seconds=expires_in_seconds)
+
+    forwarded = asyncio.run(_rejecting_passthrough().verify_token(token))
+
+    assert forwarded is not None
+    assert forwarded.client_id == PASSTHROUGH_CLIENT_ID
+
+
+ISSUER_TOKEN_WITH_BOOLEAN_EXP = "x.eyJpc3MiOiJodHRwczovL2FwcC50ZXN0LmV4YW1wbGUiLCJleHAiOnRydWV9.y"
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        "0123456789abcdef" * 4,
+        "a.b.c",
+        "x.e30.y",
+        "x.bm90LWpzb24.y",
+        "x.W10.y",
+        ISSUER_TOKEN_WITH_BOOLEAN_EXP,
+    ],
+)
+def test_passthrough_forwards_bearers_without_readable_claims(token):
+    from wavix_mcp.auth import PASSTHROUGH_CLIENT_ID
+
+    forwarded = asyncio.run(_rejecting_passthrough().verify_token(token))
+
+    assert forwarded is not None
+    assert forwarded.client_id == PASSTHROUGH_CLIENT_ID
 
 
 def test_mcp_path_override(monkeypatch):
