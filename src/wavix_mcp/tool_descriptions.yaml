@@ -111,11 +111,13 @@ call_control_collect: >-
 call_control_create: >-
   Places a real, billable outbound PSTN call from `from` to `to`, returning the
   call's `uuid` for tracking and control. Use when the user asks to start an
-  outbound phone call and has confirmed the caller ID and destination number.
-  Billable to the account balance; the call is placed on the live PSTN network as
-  soon as the request is accepted. Requires the `calls:write` scope, a `from`
-  Caller ID that is an active or verified number on the account, a `to` number in
-  E.164 format, and a `callback_url` for call status updates.
+  outbound phone call. Before dialling, the tool asks the user through the
+  client to confirm the caller ID and destination; nothing is dialled if they
+  decline. Billable to the account balance; the call is placed on the live PSTN
+  network as soon as the user accepts the confirmation. Requires the
+  `calls:write` scope, a `from` Caller ID that is an active or verified number on
+  the account, a `to` number in E.164 format, and a `callback_url` for call
+  status updates.
 
 call_control_delete: >-
   Ends the active call identified by `id` by hanging up. Use when the user asks to
@@ -591,10 +593,11 @@ webrtc_tokens_update: >-
 voice_campaigns_create: >-
   Launches a voice campaign that places a real outbound call running a
   pre-approved call flow, returning a voice campaign `id` to track progress. Use
-  when the user asks to trigger a voice scenario and has confirmed the exact
-  destination number (`contact`), the account Caller ID (`caller_id`), and which
-  call flow (`callflow_id`) to run. Billable and irreversible: a real outbound
-  call is placed once the campaign launches, and it fails with `422` when the
+  when the user asks to trigger a voice scenario. Before dialling, the tool asks
+  the user through the client to confirm the call flow (`callflow_id`), the
+  Caller ID (`caller_id`) and the destination (`contact`); nothing is dialled if
+  they decline. Billable and irreversible: a real outbound call is placed once
+  the campaign launches, and it fails with `422` when the
   account has insufficient funds. Requires the `campaigns:write` scope and a
   `voice_campaign` with `callflow_id` (a pre-approved call flow), plus
   `caller_id` and `contact` in E.164 format.

@@ -9,6 +9,22 @@ Entries are derived from the commit history, which follows
 
 ## [Unreleased]
 
+### Added
+
+- `call_control_create` and `voice_campaigns_create` ask the user to confirm the
+  caller ID and destination through the MCP client (elicitation) and dial only
+  after the user accepts.
+
+### Changed
+
+- **Breaking:** clients without form elicitation can no longer place calls with
+  `call_control_create` and `voice_campaigns_create`; they get an error pointing
+  to the Wavix portal. Phone numbers must be E.164 digits, with an optional
+  leading `+`, without spaces or punctuation.
+- `call_control_create` and `voice_campaigns_create` no longer publish an output
+  schema, so a declined call returns as a normal result.
+- Requires `fastmcp>=3.4.8`; `anyio`, `mcp` and `pydantic` are declared dependencies.
+
 ## [1.2.0] - 2026-10-07
 
 ### Added

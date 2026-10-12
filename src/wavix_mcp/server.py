@@ -18,6 +18,7 @@ from mcp.types import ToolAnnotations
 
 from . import scopes
 from .auth import build_auth_provider, mcp_path
+from .confirmation import CONFIRMATIONS, ConfirmationMiddleware
 from .docs import register_api_spec, register_docs
 from .scope_filter import ScopeFilterMiddleware
 
@@ -62,6 +63,7 @@ Tool naming conventions:
 - *_list tools return a collection with basic filters. Paginated collections accept per_page (1 to 100, default 25) and page (starting at 1); each tool's input schema shows whether it is paginated.
 - *_get tools return a single entity, identified by the key named in the tool's input schema (usually an ID).
 - *_create, *_update, and *_delete tools change account state. Each tool carries MCP annotations (readOnlyHint, destructiveHint, openWorldHint), and its description states any cost and whether the change can be reversed.
+- call_control_create and voice_campaigns_create ask the user to confirm through the client before dialling; that prompt is the confirmation.
 - Some bulk operations run asynchronously. For example, number_validator_create_bulk with async set to true returns a request ID, and number_validator_results_get returns the results for that ID.
 
 Billing:
@@ -521,6 +523,9 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
         # Every tool reaches the live Wavix API, never a closed local set.
         openWorldHint=_hint(xmcp.get("openWorld"), True),
     )
+    # MCP clients reject a non-error result lacking structuredContent when outputSchema is declared.
+    if component.name in CONFIRMATIONS:
+        component.output_schema = None
 
 
 async def _resolve_to_download_url(
@@ -726,8 +731,10 @@ def build_server() -> FastMCP:
     register_api_spec(mcp, docs_client)
 
     tool_routes = {**_TOOL_ROUTES, **_HAND_TOOL_ROUTES}
+    _require_gated_tools(tool_routes)
     _warn_on_never_gated_tools(tool_routes)
     mcp.add_middleware(ScopeFilterMiddleware(tool_routes))
+    mcp.add_middleware(ConfirmationMiddleware(CONFIRMATIONS, api_client))
     return mcp
 
 
@@ -736,6 +743,12 @@ def build_server() -> FastMCP:
 # denies these to every OAuth token. Their tools are correctly hidden from OAuth
 # connections, so they are not drift and must not raise the reconcile warning.
 _EXPECTED_UNSCOPED_PREFIXES = ("/v1/api-keys",)
+
+
+def _require_gated_tools(tool_routes: dict[str, tuple[str, str]]) -> None:
+    missing = sorted(set(CONFIRMATIONS) - set(tool_routes))
+    if missing:
+        raise RuntimeError(f"Confirmation is configured for unknown tools: {', '.join(missing)}")
 
 
 def _warn_on_never_gated_tools(tool_routes: dict[str, tuple[str, str]]) -> None:
