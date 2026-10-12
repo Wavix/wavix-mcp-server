@@ -198,7 +198,8 @@ class ConfirmationMiddleware(Middleware):
         replayed = await self._replay(key)
         if replayed is not None:
             return replayed
-        seen = self._accepted.get(key) if key is not None else None
+        entry = self._accepted.get(key) if key is not None else None
+        seen = entry if entry is not None and entry.done.is_set() and entry.replayed else None
 
         if ctx is None or not supports_form_elicitation(_client_capabilities(ctx)):
             return _refused(spec.refusal)
@@ -233,7 +234,6 @@ class ConfirmationMiddleware(Middleware):
         while (existing := self._accepted.get(key)) is not None and existing is not seen:
             await existing.done.wait()
             if existing.result is not None:
-                existing.replayed = True
                 return existing.result
         return await self._run_accepted(key, context, call_next)
 
@@ -261,16 +261,21 @@ class ConfirmationMiddleware(Middleware):
         try:
             result = await self._dial(context, call_next)
         except BaseException:
-            del self._accepted[key]
-            entry.done.set()
+            self._discard(key, entry)
             raise
-        if result.is_error:
-            del self._accepted[key]
         else:
-            entry.result = result
-            entry.finished_at = self._clock()
-        entry.done.set()
-        return result
+            if result.is_error:
+                self._discard(key, entry)
+            else:
+                entry.result = result
+                entry.finished_at = self._clock()
+            return result
+        finally:
+            entry.done.set()
+
+    def _discard(self, key: str, entry: _Accepted) -> None:
+        if self._accepted.get(key) is entry:
+            del self._accepted[key]
 
     def _purge_expired(self) -> None:
         now = self._clock()

@@ -413,9 +413,9 @@ class _Direct:
             **extra,
         )
 
-    async def call(self):
+    async def call(self, arguments=None):
         context = MiddlewareContext(
-            message=SimpleNamespace(name="call_control_create", arguments=dict(CALL)),
+            message=SimpleNamespace(name="call_control_create", arguments=dict(arguments or CALL)),
             fastmcp_context=self._ctx,
         )
         return await self.middleware.on_call_tool(context, self._call_next)
@@ -516,6 +516,147 @@ def test_card_opened_before_the_call_joins_the_stored_result_after_a_replay(anon
     assert dials == [1]
     assert replay.structured_content == accepted.structured_content
     assert late.structured_content == accepted.structured_content
+
+
+def test_accept_joins_a_retry_dial_that_a_failed_owner_left_in_flight(anonymous):
+    dials = []
+    releases = [asyncio.Event() for _ in range(4)]
+    gates = [asyncio.Event() for _ in range(4)]
+
+    async def call_next(_context):
+        index = len(dials)
+        dials.append(index)
+        await releases[index].wait()
+        return ToolResult(content="rejected", is_error=True)
+
+    async def before_answer(index):
+        await gates[index].wait()
+
+    direct = _Direct(call_next, before_answer=before_answer)
+
+    async def run():
+        owner = asyncio.create_task(direct.call())
+        await asyncio.sleep(0.02)
+        waiter = asyncio.create_task(direct.call())
+        await asyncio.sleep(0.02)
+        gates[0].set()
+        await asyncio.sleep(0.02)
+        gates[1].set()
+        await asyncio.sleep(0.02)
+        replay = asyncio.create_task(direct.call())
+        await asyncio.sleep(0.02)
+        releases[0].set()
+        await asyncio.sleep(0.02)
+        gates[2].set()
+        await asyncio.sleep(0.02)
+        in_flight_dials = list(dials)
+        for release in releases:
+            release.set()
+        with anyio.fail_after(5):
+            results = await asyncio.gather(owner, waiter, replay, return_exceptions=True)
+        return in_flight_dials, results
+
+    in_flight_dials, results = asyncio.run(run())
+    assert in_flight_dials == [0, 1]
+    assert not any(isinstance(r, BaseException) for r in results)
+    assert len(dials) <= 3
+
+
+def test_failing_overwritten_owner_leaves_the_new_owner_entry_and_its_waiters(anonymous):
+    middleware = ConfirmationMiddleware(CALL_CONFIRMATIONS, httpx.AsyncClient(), clock=_Clock())
+    releases = [asyncio.Event(), asyncio.Event()]
+    dials = []
+
+    async def call_next(_context):
+        index = len(dials)
+        dials.append(index)
+        await releases[index].wait()
+        return ToolResult(content="rejected", is_error=True)
+
+    async def run():
+        first = asyncio.create_task(middleware._run_accepted("k", None, call_next))
+        await asyncio.sleep(0.02)
+        second = asyncio.create_task(middleware._run_accepted("k", None, call_next))
+        await asyncio.sleep(0.02)
+        second_entry = middleware._accepted["k"]
+        releases[0].set()
+        await asyncio.sleep(0.02)
+        assert middleware._accepted.get("k") is second_entry
+        releases[1].set()
+        with anyio.fail_after(5):
+            await asyncio.gather(first, second)
+        return second_entry
+
+    second_entry = asyncio.run(run())
+    assert second_entry.done.is_set()
+    assert "k" not in middleware._accepted
+
+
+def test_joining_a_second_card_does_not_spend_the_replay(anonymous):
+    dials = []
+    gates = [asyncio.Event() for _ in range(3)]
+    gates[2].set()
+
+    async def call_next(_context):
+        dials.append(1)
+        return ToolResult(structured_content={"uuid": f"call-{len(dials)}"})
+
+    async def before_answer(index):
+        await gates[index].wait()
+
+    direct = _Direct(call_next, before_answer=before_answer)
+
+    async def run():
+        first = asyncio.create_task(direct.call())
+        await asyncio.sleep(0.02)
+        second = asyncio.create_task(direct.call())
+        await asyncio.sleep(0.02)
+        gates[0].set()
+        accepted = await first
+        gates[1].set()
+        with anyio.fail_after(5):
+            joined = await second
+            retry = await direct.call()
+        return accepted, joined, retry
+
+    accepted, joined, retry = asyncio.run(run())
+    assert dials == [1] and len(direct.cards) == 2
+    assert joined.structured_content == accepted.structured_content
+    assert retry.structured_content == accepted.structured_content
+
+
+def test_spent_entry_survives_an_unrelated_call_until_the_window_ends(anonymous):
+    dialed = []
+    gates = [asyncio.Event() for _ in range(3)]
+    gates[2].set()
+    other = {**CALL, "to": "+15550123"}
+
+    async def call_next(context):
+        dialed.append(context.message.arguments["to"])
+        return ToolResult(structured_content={"uuid": f"call-{len(dialed)}"})
+
+    async def before_answer(index):
+        await gates[index].wait()
+
+    direct = _Direct(call_next, before_answer=before_answer)
+
+    async def run():
+        first = asyncio.create_task(direct.call())
+        await asyncio.sleep(0.02)
+        second = asyncio.create_task(direct.call())
+        await asyncio.sleep(0.02)
+        gates[0].set()
+        accepted = await first
+        await direct.call()
+        with anyio.fail_after(5):
+            await direct.call(other)
+        gates[1].set()
+        with anyio.fail_after(5):
+            return accepted, await second
+
+    accepted, joined = asyncio.run(run())
+    assert dialed == [CALL["to"], other["to"]]
+    assert joined.structured_content == accepted.structured_content
 
 
 def test_anonymous_caller_without_session_asks_each_time_and_survives_cancel(anonymous):
