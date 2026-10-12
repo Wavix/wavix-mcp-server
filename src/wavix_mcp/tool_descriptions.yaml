@@ -89,7 +89,9 @@ call_control_audio_play: >-
   Plays an audio prompt into the active call identified by `id`, audible to the
   remote party in real time. Use to play a message, announcement, or prompt to the
   caller on a connected call. Streams the given `audio_file` into the live call so
-  the remote party hears it immediately. Requires the `calls:write` scope, the
+  the remote party hears it immediately. On outbound calls, the customer must
+  disclose at the start of the call that it is automated; this is an obligation
+  under the Wavix Terms of Service. Requires the `calls:write` scope, the
   call's `id` (`uuid`), and an `audio_file` URL to play.
 
 call_control_audio_stop: >-
@@ -147,7 +149,10 @@ call_control_streams_create: >-
   (`stream_channel`) you configure, returning the `stream_id`. Use to forward a
   live call's audio to an external real-time consumer, such as a transcription or
   AI service. Begins sending the live call's audio to the given `stream_url`, which
-  can be any URL you specify. Requires the `calls:write` scope, the call's
+  can be any URL you specify. On outbound calls that are automated or handled by
+  AI, the customer must disclose this to the called party at the start of the
+  call; this is an obligation under the Wavix Terms of Service. Requires the
+  `calls:write` scope, the call's
   `call_id` (`uuid`), a `stream_url` WebSocket URL, and the `stream_type` and
   `stream_channel` values.
 

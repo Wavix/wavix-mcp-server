@@ -18,6 +18,13 @@ DISCLOSURE_SENTENCES = {
         "This tool speaks synthesized text to the other party.",
         f"On outbound calls, the customer must disclose at the start of the call that it is automated; {TOS_CLAUSE}",
     ),
+    "call_control_audio_play": (
+        f"On outbound calls, the customer must disclose at the start of the call that it is automated; {TOS_CLAUSE}",
+    ),
+    "call_control_streams_create": (
+        "On outbound calls that are automated or handled by AI, the customer must disclose this to "
+        f"the called party at the start of the call; {TOS_CLAUSE}",
+    ),
     "voice_campaigns_create": (
         "running a pre-approved call flow",
         f"The customer must disclose at the start of the call that it is automated; {TOS_CLAUSE}",
