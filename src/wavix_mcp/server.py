@@ -63,6 +63,7 @@ Tool naming conventions:
 - *_list tools return a collection with basic filters. Paginated collections accept per_page (1 to 100, default 25) and page (starting at 1); each tool's input schema shows whether it is paginated.
 - *_get tools return a single entity, identified by the key named in the tool's input schema (usually an ID).
 - *_create, *_update, and *_delete tools change account state. Each tool carries MCP annotations (readOnlyHint, destructiveHint, openWorldHint), and its description states any cost and whether the change can be reversed.
+- call_control_create and voice_campaigns_create ask the user to confirm through the client before dialling; that prompt is the confirmation.
 - Some bulk operations run asynchronously. For example, number_validator_create_bulk with async set to true returns a request ID, and number_validator_results_get returns the results for that ID.
 
 Billing:

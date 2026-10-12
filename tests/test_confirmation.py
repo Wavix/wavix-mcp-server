@@ -2,12 +2,14 @@
 
 import asyncio
 import copy
+import importlib.resources
 import json
 from types import SimpleNamespace
 
 import anyio
 import httpx
 import pytest
+import yaml
 from fastmcp import Client, FastMCP
 from fastmcp.client.elicitation import ElicitResult
 from fastmcp.exceptions import ToolError
@@ -721,6 +723,16 @@ def test_failure_before_answer_fails_closed(isolated_routes, anonymous):
     result = asyncio.run(_call(mcp, answer))
     assert result.is_error and _text(result) == "refused"
     assert answer.messages == [] and api.dials == 0
+
+
+def test_call_wording_says_tool_asks():
+    overlay = yaml.safe_load(
+        (importlib.resources.files("wavix_mcp") / "tool_descriptions.yaml").read_text("utf-8")
+    )
+    for key in ("call_control_create", "voice_campaigns_create"):
+        assert "has confirmed" not in overlay[key]
+        assert "asks the user" in overlay[key]
+    assert "voice_campaigns_create ask the user to confirm" in server.INSTRUCTIONS
 
 
 def test_confirmation_form_is_one_prechecked_boolean():
