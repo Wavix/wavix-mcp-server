@@ -35,6 +35,7 @@ INSTRUCTIONS_RULE = (
     "customer to disclose this at the start of the call."
 )
 EXEMPT_PHRASES = ("active or verified number",)
+AI_INITIATED = re.compile(r"ai[- ]?initiated", re.IGNORECASE)
 UNSUPPORTED_CLAIMS = re.compile(r"ai[- ]?initiated|verif|check|enforc|monitor", re.IGNORECASE)
 SCOPES = (*DISCLOSURE_SENTENCES, "instructions")
 
@@ -62,6 +63,11 @@ def test_call_tool_carries_the_disclosure_pair(tool, sentences):
 def test_instructions_carry_the_rule_once_in_the_calls_section():
     assert INSTRUCTIONS.count(INSTRUCTIONS_RULE) == 1
     assert INSTRUCTIONS_RULE in calls_section(INSTRUCTIONS)
+
+
+@pytest.mark.parametrize("tool", sorted(TOOL_DESCRIPTIONS))
+def test_no_tool_description_says_ai_initiated(tool):
+    assert not AI_INITIATED.search(TOOL_DESCRIPTIONS[tool])
 
 
 @pytest.mark.parametrize("name", SCOPES)
