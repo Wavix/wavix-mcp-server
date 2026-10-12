@@ -104,7 +104,10 @@ call_control_collect: >-
   optionally playing a `prompt` first. Use to gather digits from the caller, such
   as a menu selection or PIN, on a connected call. Plays the prompt and waits for
   the caller to enter digits on the live call; collection ends on the termination
-  character, the digit limit, or the timeout. Requires the `calls:write` scope and
+  character, the digit limit, or the timeout. This tool speaks synthesized text to
+  the other party. On outbound calls, the customer must disclose at the start of
+  the call that it is automated; this is an obligation under the Wavix Terms of
+  Service. Requires the `calls:write` scope and
   the call's `id` (`uuid`); `max_digits` accepts 1 to 20 and `timeout` 1 to 60
   seconds.
 
@@ -113,7 +116,12 @@ call_control_create: >-
   call's `uuid` for tracking and control. Use when the user asks to start an
   outbound phone call and has confirmed the caller ID and destination number.
   Billable to the account balance; the call is placed on the live PSTN network as
-  soon as the request is accepted. Requires the `calls:write` scope, a `from`
+  soon as the request is accepted. What the called party hears depends on what the
+  customer connects to the call: audio playback, synthesized prompts, or a media
+  stream to an AI agent or to live agents. Whenever the call is automated or
+  handled by AI, the customer must disclose this to the called party at the start
+  of the call; this is an obligation under the Wavix Terms of Service. Requires
+  the `calls:write` scope, a `from`
   Caller ID that is an active or verified number on the account, a `to` number in
   E.164 format, and a `callback_url` for call status updates.
 
@@ -595,7 +603,9 @@ voice_campaigns_create: >-
   destination number (`contact`), the account Caller ID (`caller_id`), and which
   call flow (`callflow_id`) to run. Billable and irreversible: a real outbound
   call is placed once the campaign launches, and it fails with `422` when the
-  account has insufficient funds. Requires the `campaigns:write` scope and a
+  account has insufficient funds. The customer must disclose at the start of the
+  call that it is automated; this is an obligation under the Wavix Terms of
+  Service. Requires the `campaigns:write` scope and a
   `voice_campaign` with `callflow_id` (a pre-approved call flow), plus
   `caller_id` and `contact` in E.164 format.
 
