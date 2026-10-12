@@ -9,6 +9,18 @@ Entries are derived from the commit history, which follows
 
 ## [Unreleased]
 
+### Added
+
+- `call_control_create` and `voice_campaigns_create` ask the user to confirm the
+  caller ID and destination through the MCP client (elicitation) and dial only
+  after the user accepts. Clients without form elicitation are refused.
+
+### Changed
+
+- `call_control_create` and `voice_campaigns_create` no longer publish an output
+  schema, so a declined call returns as a normal result.
+- Requires `fastmcp>=3.4.8`; `anyio`, `mcp` and `pydantic` are declared dependencies.
+
 ## [1.2.0] - 2026-10-07
 
 ### Added
