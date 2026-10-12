@@ -11,18 +11,28 @@ Entries are derived from the commit history, which follows
 
 ### Added
 
-- `call_control_create` and `voice_campaigns_create` ask the user to confirm the
-  caller ID and destination through the MCP client (elicitation) and dial only
-  after the user accepts.
+- Tools that place calls, stream call audio, register call webhooks, send
+  messages or one-time passwords, buy or release numbers, or change or delete
+  SIP trunks, sub-accounts and 10DLC brands or campaigns run in two steps: the
+  first call does nothing and returns a preview with a single-use
+  `confirmation_token` valid for 5 minutes; the action runs only when the tool
+  is called again with the same arguments and that token. Covers
+  `call_control_create`, `voice_campaigns_create`,
+  `call_control_streams_create`, `call_control_answer` (with `stream_url`),
+  `call_webhooks_create`, `my_numbers_delete`, `sip_trunks_delete`,
+  `sip_trunks_update`, `sub_accounts_update`, `ten_dlc_brands_delete`,
+  `ten_dlc_brand_campaigns_delete`, `sms_and_mms_messages_send`,
+  `whatsapp_messages_send`, `two_fa_verification_create`,
+  `two_fa_verification_resend` and `cart_checkout`.
 
 ### Changed
 
-- **Breaking:** clients without form elicitation can no longer place calls with
-  `call_control_create` and `voice_campaigns_create`; they get an error pointing
-  to the Wavix portal. Phone numbers must be E.164 digits, with an optional
-  leading `+`, without spaces or punctuation.
-- `call_control_create` and `voice_campaigns_create` no longer publish an output
-  schema, so a declined call returns as a normal result.
+- **Breaking:** the tools above no longer act on the first call; a client
+  must call them again with the `confirmation_token` from the preview. Phone
+  numbers for calls, SMS and one-time passwords must be E.164 digits, with an
+  optional leading `+`, without spaces or punctuation.
+- The tools above no longer publish an output schema, so a preview returns as a
+  normal result.
 - Requires `fastmcp>=3.4.8`; `anyio`, `mcp` and `pydantic` are declared dependencies.
 
 ## [1.2.0] - 2026-10-07

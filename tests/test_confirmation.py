@@ -1,9 +1,10 @@
-"""User confirmation before a call is placed."""
+"""Two-step confirmation: a preview with a single-use token, then the action."""
 
 import asyncio
 import copy
 import importlib.resources
 import json
+import re
 from types import SimpleNamespace
 
 import anyio
@@ -11,93 +12,85 @@ import httpx
 import pytest
 import yaml
 from fastmcp import Client, FastMCP
-from fastmcp.client.elicitation import ElicitResult
 from fastmcp.exceptions import ToolError
-from fastmcp.server.elicitation import AcceptedElicitation
 from fastmcp.server.middleware import MiddlewareContext
 from fastmcp.tools.tool import ToolResult
-from mcp.types import (
-    ClientCapabilities,
-    ElicitationCapability,
-    FormElicitationCapability,
-    UrlElicitationCapability,
-)
+from mcp.types import CallToolRequestParams
 
 from wavix_mcp import confirmation, scope_filter, server
-from wavix_mcp.auth import PASSTHROUGH_CLIENT_ID
 from wavix_mcp.confirmation import (
-    CALL_CONFIRMATIONS,
     CONFIRMATIONS,
+    MAX_LISTED_NUMBERS,
+    TOKEN_PARAMETER,
+    TOKEN_TTL_S,
+    ConfirmationInputError,
     ConfirmationMiddleware,
-    confirmation_form,
-    supports_form_elicitation,
 )
 from wavix_mcp.scope_filter import ScopeFilterMiddleware
 
-CALL = {"from": "+15550100", "to": "+15550199"}
+CALL = {"from": "+15550100", "to": "+15550199", "callback_url": "https://cb.test/x"}
 CAMPAIGN = {
     "voice_campaign": {"callflow_id": 3212, "caller_id": "13123310912", "contact": "16729923812"}
 }
 
-_CALL_RESPONSE = {
+_UUID_RESPONSE = {
     "type": "object",
     "additionalProperties": False,
     "properties": {"uuid": {"type": "string"}},
 }
 
+
+def _post(operation_id: str, properties: dict) -> dict:
+    return {
+        "post": {
+            "operationId": operation_id,
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {"schema": {"type": "object", "properties": properties}}
+                },
+            },
+            "responses": {
+                "200": {
+                    "description": "ok",
+                    "content": {"application/json": {"schema": _UUID_RESPONSE}},
+                }
+            },
+        }
+    }
+
+
 _SPEC = {
     "openapi": "3.1.0",
     "info": {"title": "t", "version": "1"},
     "paths": {
-        "/v1/calls": {
-            "post": {
-                "operationId": "call_control_create",
-                "requestBody": {
-                    "required": True,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "from": {"type": "string"},
-                                    "to": {"type": "string"},
-                                },
-                            }
-                        }
+        "/v1/calls": _post(
+            "call_control_create",
+            {
+                "from": {"type": "string"},
+                "to": {"type": "string"},
+                "callback_url": {"type": "string"},
+            },
+        ),
+        "/v1/voice-campaigns": _post(
+            "voice_campaigns_create",
+            {
+                "voice_campaign": {
+                    "type": "object",
+                    "properties": {
+                        "callflow_id": {"type": "integer"},
+                        "caller_id": {"type": "string"},
+                        "contact": {"type": "string"},
                     },
-                },
-                "responses": {
-                    "200": {
-                        "description": "ok",
-                        "content": {"application/json": {"schema": _CALL_RESPONSE}},
-                    }
-                },
-            }
-        },
-        "/v1/voice-campaigns": {
+                }
+            },
+        ),
+        "/v1/calls/{id}/answer": {
             "post": {
-                "operationId": "voice_campaigns_create",
-                "requestBody": {
-                    "required": True,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "voice_campaign": {
-                                        "type": "object",
-                                        "properties": {
-                                            "callflow_id": {"type": "integer"},
-                                            "caller_id": {"type": "string"},
-                                            "contact": {"type": "string"},
-                                        },
-                                    }
-                                },
-                            }
-                        }
-                    },
-                },
-                "responses": {"200": {"description": "ok"}},
+                **_post("call_control_answer", {"stream_url": {"type": "string"}})["post"],
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}
+                ],
             }
         },
         "/v1/mydids": {
@@ -106,7 +99,7 @@ _SPEC = {
                 "responses": {
                     "200": {
                         "description": "ok",
-                        "content": {"application/json": {"schema": _CALL_RESPONSE}},
+                        "content": {"application/json": {"schema": _UUID_RESPONSE}},
                     }
                 },
             }
@@ -116,20 +109,29 @@ _SPEC = {
 
 
 class _Api:
-    def __init__(self, delay: float = 0.0, status: int = 200):
+    def __init__(self, status: int = 200, lookups: dict[str, object] | None = None):
         self.requests: list[httpx.Request] = []
-        self._delay = delay
         self._status = status
+        self._lookups = lookups or {}
 
     async def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
-        if self._delay:
-            await asyncio.sleep(self._delay)
-        return httpx.Response(self._status, json={"uuid": f"call-{len(self.requests)}"})
+        if request.method == "GET":
+            key = request.url.path
+            if request.url.query:
+                key += "?" + request.url.query.decode()
+            if key not in self._lookups:
+                return httpx.Response(404, json={"error": "not found"})
+            return httpx.Response(200, json=self._lookups[key])
+        return httpx.Response(self._status, json={"uuid": f"call-{self.dials + 1}"})
+
+    @property
+    def posts(self) -> list[httpx.Request]:
+        return [r for r in self.requests if r.method == "POST"]
 
     @property
     def dials(self) -> int:
-        return sum(1 for r in self.requests if r.method == "POST")
+        return len(self.posts)
 
 
 class _Clock:
@@ -138,30 +140,6 @@ class _Clock:
 
     def __call__(self) -> float:
         return self.now
-
-
-class _Answer:
-    def __init__(self, *actions):
-        self.actions = list(actions)
-        self.messages: list[str] = []
-        self.schemas: list[dict] = []
-
-    async def __call__(self, message, response_type, params, context):
-        self.messages.append(message)
-        self.schemas.append(params.requestedSchema)
-        action = self.actions.pop(0) if self.actions else "accept-true"
-        if action == "accept-true":
-            return ElicitResult(action="accept", content={"confirm": True})
-        if action == "accept-false":
-            return ElicitResult(action="accept", content={"confirm": False})
-        if action == "accept-empty":
-            return ElicitResult(action="accept", content={})
-        if action == "sleep":
-            await asyncio.sleep(1)
-            return ElicitResult(action="accept", content={"confirm": True})
-        if action == "raise":
-            raise RuntimeError("client failed")
-        return ElicitResult(action=action)
 
 
 @pytest.fixture
@@ -189,592 +167,540 @@ def _server(api: _Api, clock: _Clock | None = None, *, with_scope_filter: bool =
     )
     if with_scope_filter:
         mcp.add_middleware(ScopeFilterMiddleware(dict(server._TOOL_ROUTES)))
-    mcp.add_middleware(ConfirmationMiddleware(CALL_CONFIRMATIONS, client, clock=clock or _Clock()))
+    mcp.add_middleware(ConfirmationMiddleware(CONFIRMATIONS, client, clock=clock or _Clock()))
     return mcp
 
 
-async def _call(mcp, handler, tool="call_control_create", arguments=CALL, **kwargs):
-    async with Client(mcp, elicitation_handler=handler) as client:
-        return await client.call_tool(tool, arguments, raise_on_error=False, **kwargs)
+async def _calls(mcp, *steps):
+    results = []
+    async with Client(mcp) as client:
+        for tool, arguments in steps:
+            results.append(await client.call_tool(tool, arguments, raise_on_error=False))
+    return results
 
 
 def _text(result) -> str:
     return " ".join(c.text for c in result.content if hasattr(c, "text"))
 
 
-def test_accept_places_call_after_one_card(isolated_routes, anonymous):
-    api, answer = _Api(), _Answer("accept-true")
-    result = asyncio.run(_call(_server(api), answer))
-    assert not result.is_error
-    assert api.dials == 1
-    assert len(answer.messages) == 1
-    assert "+15550100" in answer.messages[0] and "+15550199" in answer.messages[0]
-    assert "billable" in answer.messages[0]
-    field = answer.schemas[0]["properties"]["confirm"]
-    assert answer.schemas[0]["properties"].keys() == {"confirm"}
-    assert field["type"] == "boolean" and field["default"] is True
-    assert field["title"] == "Place the call"
+def _token(result) -> str:
+    match = re.search(rf'{TOKEN_PARAMETER}="([^"]+)"', _text(result))
+    assert match, _text(result)
+    return match.group(1)
 
 
-def test_accept_with_empty_content_proceeds(isolated_routes, anonymous):
-    api = _Api()
-    result = asyncio.run(
-        _call(_server(api), _Answer("accept-empty"), arguments={**CALL, "to": "+15550177"})
-    )
-    assert not result.is_error and api.dials == 1
-
-
-@pytest.mark.parametrize("action", ["decline", "cancel", "accept-false"])
-def test_declined_outcomes_place_no_call(isolated_routes, anonymous, action):
-    api = _Api()
-    result = asyncio.run(_call(_server(api), _Answer(action)))
-    assert api.dials == 0
-    assert not result.is_error
-    assert _text(result).startswith("The user declined to place the call to +15550199")
-
-
-def test_gated_tools_drop_output_schema(isolated_routes, anonymous):
+def _confirm(mcp, tool="call_control_create", arguments=CALL):
     async def run():
-        async with Client(_server(_Api()), elicitation_handler=_Answer("decline")) as client:
-            tools = {t.name: t for t in await client.list_tools()}
-            declined = await client.call_tool("call_control_create", CALL)
-            return tools, declined
+        async with Client(mcp) as client:
+            preview = await client.call_tool(tool, arguments, raise_on_error=False)
+            confirmed = {**arguments, TOKEN_PARAMETER: _token(preview)}
+            done = await client.call_tool(tool, confirmed, raise_on_error=False)
+            return preview, done
 
-    tools, declined = asyncio.run(run())
-    assert tools["call_control_create"].outputSchema is None
-    assert tools["my_numbers_list"].outputSchema is not None
-    assert not declined.is_error
+    return asyncio.run(run())
 
 
-def test_replay_window(isolated_routes, anonymous):
+def test_first_call_returns_a_preview_and_dials_nothing(isolated_routes, anonymous):
+    api = _Api()
+    [preview] = asyncio.run(_calls(_server(api), ("call_control_create", CALL)))
+    assert api.dials == 0
+    assert not preview.is_error
+    lines = _text(preview).splitlines()
+    assert lines[0] == "This will place a billable call from +15550100 to +15550199."
+    assert re.fullmatch(
+        rf'Call this tool again with {TOKEN_PARAMETER}="[\w-]+" to proceed\.', lines[1]
+    )
+
+
+def test_token_runs_the_action_once_without_forwarding_the_token(isolated_routes, anonymous):
+    api = _Api()
+    _preview, done = _confirm(_server(api))
+    assert not done.is_error and api.dials == 1
+    assert json.loads(api.posts[0].content) == CALL
+
+
+def test_token_is_single_use(isolated_routes, anonymous):
+    api = _Api()
+    mcp = _server(api)
+
+    async def run():
+        async with Client(mcp) as client:
+            preview = await client.call_tool("call_control_create", CALL)
+            confirmed = {**CALL, TOKEN_PARAMETER: _token(preview)}
+            await client.call_tool("call_control_create", confirmed)
+            return await client.call_tool("call_control_create", confirmed)
+
+    again = asyncio.run(run())
+    assert api.dials == 1
+    assert _text(again).startswith("The confirmation token has expired or does not match")
+    assert "This will place a billable call" in _text(again)
+    assert not again.is_error
+
+
+def test_token_does_not_cover_changed_arguments(isolated_routes, anonymous):
+    api = _Api()
+    mcp = _server(api)
+    other = {**CALL, "to": "+15550177"}
+
+    async def run():
+        async with Client(mcp) as client:
+            preview = await client.call_tool("call_control_create", CALL)
+            changed = {**other, TOKEN_PARAMETER: _token(preview)}
+            return await client.call_tool("call_control_create", changed)
+
+    result = asyncio.run(run())
+    assert api.dials == 0
+    assert "does not match" in _text(result) and "+15550177" in _text(result)
+
+
+def test_token_does_not_cover_another_tool(isolated_routes, anonymous):
+    api = _Api()
+    mcp = _server(api)
+
+    async def run():
+        async with Client(mcp) as client:
+            preview = await client.call_tool("call_control_create", CALL)
+            arguments = {**CAMPAIGN, TOKEN_PARAMETER: _token(preview)}
+            return await client.call_tool("voice_campaigns_create", arguments)
+
+    result = asyncio.run(run())
+    assert api.dials == 0 and "does not match" in _text(result)
+
+
+def test_unknown_token_gets_a_new_preview(isolated_routes, anonymous):
+    api = _Api()
+    [result] = asyncio.run(
+        _calls(_server(api), ("call_control_create", {**CALL, TOKEN_PARAMETER: "forged"}))
+    )
+    assert api.dials == 0 and "does not match" in _text(result)
+    assert _token(result) != "forged"
+
+
+def test_token_expires(isolated_routes, anonymous):
     api, clock = _Api(), _Clock()
     mcp = _server(api, clock)
-    answer = _Answer()
 
     async def run():
-        async with Client(mcp, elicitation_handler=answer) as client:
-            first = await client.call_tool("call_control_create", CALL)
-            replay = await client.call_tool("call_control_create", CALL)
-            third = await client.call_tool("call_control_create", CALL)
-            changed = await client.call_tool("call_control_create", {**CALL, "to": "+15550111"})
-            clock.now += 61
-            late = await client.call_tool("call_control_create", {**CALL, "to": "+15550111"})
-            return first, replay, third, changed, late
+        async with Client(mcp) as client:
+            preview = await client.call_tool("call_control_create", CALL)
+            clock.now += TOKEN_TTL_S
+            confirmed = {**CALL, TOKEN_PARAMETER: _token(preview)}
+            return await client.call_tool("call_control_create", confirmed)
 
-    first, replay, third, changed, late = asyncio.run(run())
-    assert replay.structured_content == first.structured_content
-    assert len(answer.messages) == 4
-    assert api.dials == 4
+    result = asyncio.run(run())
+    assert api.dials == 0 and "expired" in _text(result)
 
 
-def test_replay_after_failed_call_shows_new_card(isolated_routes, anonymous):
-    api, answer = _Api(status=500), _Answer()
-
-    async def run():
-        async with Client(_server(api), elicitation_handler=answer) as client:
-            await client.call_tool("call_control_create", CALL, raise_on_error=False)
-            await client.call_tool("call_control_create", CALL, raise_on_error=False)
-
-    asyncio.run(run())
-    assert len(answer.messages) == 2
-
-
-def test_replay_after_decline_shows_new_card(isolated_routes, anonymous):
-    api, answer = _Api(), _Answer("decline", "accept-true")
-
-    async def run():
-        async with Client(_server(api), elicitation_handler=answer) as client:
-            await client.call_tool("call_control_create", CALL)
-            await client.call_tool("call_control_create", CALL)
-
-    asyncio.run(run())
-    assert len(answer.messages) == 2 and api.dials == 1
-
-
-def test_replay_joins_in_flight_call(isolated_routes, anonymous):
-    api, answer = _Api(delay=0.5), _Answer()
+def test_token_is_bound_to_the_caller(isolated_routes, monkeypatch):
+    user = {"sub": "user-1"}
+    monkeypatch.setattr(
+        confirmation, "get_access_token", lambda: SimpleNamespace(claims=dict(user), scopes=[])
+    )
+    api = _Api()
     mcp = _server(api)
 
     async def run():
-        async with Client(mcp, elicitation_handler=answer) as client:
-            first = asyncio.create_task(client.call_tool("call_control_create", CALL))
-            await asyncio.sleep(0.1)
-            second = await client.call_tool("call_control_create", CALL)
-            return await first, second
+        async with Client(mcp) as client:
+            preview = await client.call_tool("call_control_create", CALL)
+            user["sub"] = "user-2"
+            confirmed = {**CALL, TOKEN_PARAMETER: _token(preview)}
+            return await client.call_tool("call_control_create", confirmed)
 
-    first, second = asyncio.run(run())
-    assert api.dials == 1 and len(answer.messages) == 1
-    assert second.structured_content == first.structured_content
-
-
-def test_two_accepted_cards_place_one_call(isolated_routes, anonymous):
-    api = _Api(delay=0.5)
-
-    async def slow_accept(message, response_type, params, context):
-        await asyncio.sleep(0.1)
-        return ElicitResult(action="accept", content={"confirm": True})
-
-    async def run():
-        async with Client(_server(api), elicitation_handler=slow_accept) as client:
-            return await asyncio.gather(
-                client.call_tool("call_control_create", CALL),
-                client.call_tool("call_control_create", CALL),
-            )
-
-    first, second = asyncio.run(run())
-    assert api.dials == 1
-    assert first.structured_content == second.structured_content
+    result = asyncio.run(run())
+    assert api.dials == 0 and "does not match" in _text(result)
 
 
-def test_identified_caller_survives_a_new_session(isolated_routes, monkeypatch):
-    first_user = SimpleNamespace(claims={"sub": "user-1"}, scopes=[])
-    second_user = SimpleNamespace(claims={"sub": "user-2"}, scopes=[])
-    api, answer = _Api(), _Answer()
-    mcp = _server(api)
-
-    monkeypatch.setattr(confirmation, "get_access_token", lambda: first_user)
-    asyncio.run(_call(mcp, answer))
-    assert api.dials == 1 and len(answer.messages) == 1
-
-    monkeypatch.setattr(confirmation, "get_access_token", lambda: second_user)
-    asyncio.run(_call(mcp, answer))
-    assert api.dials == 2 and len(answer.messages) == 2
-
-    monkeypatch.setattr(confirmation, "get_access_token", lambda: first_user)
-    asyncio.run(_call(mcp, answer))
-    assert api.dials == 2 and len(answer.messages) == 2
-
-
-def test_api_key_callers_are_told_apart_by_authorization(isolated_routes, monkeypatch):
+def test_api_key_callers_are_told_apart_by_authorization(monkeypatch):
     monkeypatch.setattr(confirmation, "get_access_token", lambda: None)
     headers = {"authorization": "Bearer A"}
     monkeypatch.setattr(confirmation, "get_http_headers", lambda **_: headers)
-    api, answer = _Api(), _Answer()
-    mcp = _server(api)
-
-    asyncio.run(_call(mcp, answer))
-    assert api.dials == 1 and len(answer.messages) == 1
-
+    first = ConfirmationMiddleware._binding(None, "call_control_create", CALL)
     headers["authorization"] = "Bearer B"
-    asyncio.run(_call(mcp, answer))
-    assert api.dials == 2 and len(answer.messages) == 2
-
-    headers["authorization"] = "Bearer A"
-    asyncio.run(_call(mcp, answer))
-    assert api.dials == 2 and len(answer.messages) == 2
-
-
-def test_anonymous_caller_without_session_always_asks(monkeypatch):
-    monkeypatch.setattr(confirmation, "get_access_token", lambda: None)
-    middleware = ConfirmationMiddleware(CALL_CONFIRMATIONS, httpx.AsyncClient())
-    ctx = SimpleNamespace()
-    assert middleware._replay_key(ctx, "call_control_create", CALL) is None
-
-
-class _NoSessionContext(SimpleNamespace):
-    @property
-    def session_id(self) -> str:
-        raise RuntimeError("no session")
-
-
-class _Direct:
-    def __init__(
-        self,
-        call_next,
-        clock: _Clock | None = None,
-        capabilities: ClientCapabilities | None = None,
-        *,
-        middleware: ConfirmationMiddleware | None = None,
-        session_id: str | None = "s1",
-        before_answer=None,
-    ):
-        self.cards: list[str] = []
-        self.middleware = middleware or ConfirmationMiddleware(
-            CALL_CONFIRMATIONS, httpx.AsyncClient(), clock=clock or _Clock()
-        )
-        self._call_next = call_next
-
-        async def elicit(message, response_type):
-            self.cards.append(message)
-            if before_answer is not None:
-                await before_answer(len(self.cards) - 1)
-            return AcceptedElicitation(data=response_type(confirm=True))
-
-        context_type = SimpleNamespace if session_id is not None else _NoSessionContext
-        extra = {"session_id": session_id} if session_id is not None else {}
-        self._ctx = context_type(
-            session=SimpleNamespace(
-                client_params=SimpleNamespace(
-                    capabilities=capabilities
-                    or ClientCapabilities(elicitation=ElicitationCapability())
-                )
-            ),
-            elicit=elicit,
-            **extra,
-        )
-
-    async def call(self, arguments=None):
-        context = MiddlewareContext(
-            message=SimpleNamespace(name="call_control_create", arguments=dict(arguments or CALL)),
-            fastmcp_context=self._ctx,
-        )
-        return await self.middleware.on_call_tool(context, self._call_next)
-
-
-def test_cancelled_client_still_records_outcome(anonymous):
-    dials = []
-
-    async def call_next(_context):
-        await anyio.sleep(0.2)
-        dials.append(1)
-        return ToolResult(structured_content={"uuid": "call-1"})
-
-    direct = _Direct(call_next)
-
-    async def run():
-        with anyio.move_on_after(0.05):
-            await direct.call()
-        return await direct.call()
-
-    replay = asyncio.run(run())
-    assert dials == [1] and len(direct.cards) == 1
-    assert replay.structured_content == {"uuid": "call-1"}
-
-
-def test_cancelled_replay_leaves_the_entry_intact(anonymous):
-    dials = []
-
-    async def call_next(_context):
-        await anyio.sleep(0.5)
-        dials.append(1)
-        return ToolResult(structured_content={"uuid": "call-1"})
-
-    direct = _Direct(call_next)
-
-    async def run():
-        first = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.1)
-        with anyio.move_on_after(0.1):
-            await direct.call()
-        await first
-        return await direct.call()
-
-    replay = asyncio.run(run())
-    assert dials == [1] and len(direct.cards) == 1
-    assert replay.structured_content == {"uuid": "call-1"}
-
-
-def test_in_flight_call_outliving_the_window_is_replayed(anonymous):
-    clock = _Clock()
-    dials = []
-
-    async def call_next(_context):
-        clock.now += 120
-        dials.append(1)
-        return ToolResult(structured_content={"uuid": "call-1"})
-
-    direct = _Direct(call_next, clock)
-
-    async def run():
-        await direct.call()
-        return await direct.call()
-
-    replay = asyncio.run(run())
-    assert dials == [1] and len(direct.cards) == 1
-    assert replay.structured_content == {"uuid": "call-1"}
-
-
-def test_card_opened_before_the_call_joins_the_stored_result_after_a_replay(anonymous):
-    dials = []
-    gates: list[asyncio.Event] = []
-
-    async def call_next(_context):
-        dials.append(1)
-        return ToolResult(structured_content={"uuid": f"call-{len(dials)}"})
-
-    async def before_answer(index):
-        await gates[index].wait()
-
-    direct = _Direct(call_next, before_answer=before_answer)
-
-    async def run():
-        gates.extend(asyncio.Event() for _ in range(2))
-        first = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.05)
-        third = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.05)
-        gates[0].set()
-        accepted = await first
-        with anyio.fail_after(5):
-            replay = await direct.call()
-        assert len(direct.cards) == 2
-        gates[1].set()
-        with anyio.fail_after(5):
-            return accepted, replay, await third
-
-    accepted, replay, late = asyncio.run(run())
-    assert dials == [1]
-    assert replay.structured_content == accepted.structured_content
-    assert late.structured_content == accepted.structured_content
-
-
-def test_accept_joins_a_retry_dial_that_a_failed_owner_left_in_flight(anonymous):
-    dials = []
-    releases = [asyncio.Event() for _ in range(4)]
-    gates = [asyncio.Event() for _ in range(4)]
-
-    async def call_next(_context):
-        index = len(dials)
-        dials.append(index)
-        await releases[index].wait()
-        return ToolResult(content="rejected", is_error=True)
-
-    async def before_answer(index):
-        await gates[index].wait()
-
-    direct = _Direct(call_next, before_answer=before_answer)
-
-    async def run():
-        owner = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.02)
-        waiter = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.02)
-        gates[0].set()
-        await asyncio.sleep(0.02)
-        gates[1].set()
-        await asyncio.sleep(0.02)
-        replay = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.02)
-        releases[0].set()
-        await asyncio.sleep(0.02)
-        gates[2].set()
-        await asyncio.sleep(0.02)
-        in_flight_dials = list(dials)
-        for release in releases:
-            release.set()
-        with anyio.fail_after(5):
-            results = await asyncio.gather(owner, waiter, replay, return_exceptions=True)
-        return in_flight_dials, results
-
-    in_flight_dials, results = asyncio.run(run())
-    assert in_flight_dials == [0, 1]
-    assert not any(isinstance(r, BaseException) for r in results)
-    assert len(dials) == 3
-
-
-def test_replay_waiter_joins_a_retry_dial_that_finished_first(anonymous):
-    dials = []
-    release_first = asyncio.Event()
-    gates = [asyncio.Event() for _ in range(4)]
-
-    async def call_next(_context):
-        dials.append(len(dials))
-        if len(dials) == 1:
-            await release_first.wait()
-            return ToolResult(content="rejected", is_error=True)
-        return ToolResult(structured_content={"uuid": f"call-{len(dials)}"})
-
-    async def before_answer(index):
-        await gates[index].wait()
-
-    direct = _Direct(call_next, before_answer=before_answer)
-
-    async def run():
-        owner = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.02)
-        joiner = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.02)
-        gates[0].set()
-        await asyncio.sleep(0.02)
-        gates[1].set()
-        await asyncio.sleep(0.02)
-        replay = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.02)
-        release_first.set()
-        await asyncio.sleep(0.05)
-        gates[2].set()
-        gates[3].set()
-        with anyio.fail_after(5):
-            return await asyncio.gather(owner, joiner, replay)
-
-    asyncio.run(run())
-    assert len(dials) == 2
-
-
-def test_failing_overwritten_owner_leaves_the_new_owner_entry_and_its_waiters(anonymous):
-    middleware = ConfirmationMiddleware(CALL_CONFIRMATIONS, httpx.AsyncClient(), clock=_Clock())
-    releases = [asyncio.Event(), asyncio.Event()]
-    dials = []
-
-    async def call_next(_context):
-        index = len(dials)
-        dials.append(index)
-        await releases[index].wait()
-        return ToolResult(content="rejected", is_error=True)
-
-    async def run():
-        first = asyncio.create_task(middleware._run_accepted("k", None, call_next))
-        await asyncio.sleep(0.02)
-        second = asyncio.create_task(middleware._run_accepted("k", None, call_next))
-        await asyncio.sleep(0.02)
-        second_entry = middleware._accepted["k"]
-        releases[0].set()
-        await asyncio.sleep(0.02)
-        assert middleware._accepted.get("k") is second_entry
-        releases[1].set()
-        with anyio.fail_after(5):
-            await asyncio.gather(first, second)
-        return second_entry
-
-    second_entry = asyncio.run(run())
-    assert second_entry.done.is_set()
-    assert "k" not in middleware._accepted
-
-
-def test_joining_a_second_card_does_not_spend_the_replay(anonymous):
-    dials = []
-    gates = [asyncio.Event() for _ in range(3)]
-    gates[2].set()
-
-    async def call_next(_context):
-        dials.append(1)
-        return ToolResult(structured_content={"uuid": f"call-{len(dials)}"})
-
-    async def before_answer(index):
-        await gates[index].wait()
-
-    direct = _Direct(call_next, before_answer=before_answer)
-
-    async def run():
-        first = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.02)
-        second = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.02)
-        gates[0].set()
-        accepted = await first
-        gates[1].set()
-        with anyio.fail_after(5):
-            joined = await second
-            retry = await direct.call()
-        return accepted, joined, retry
-
-    accepted, joined, retry = asyncio.run(run())
-    assert dials == [1] and len(direct.cards) == 2
-    assert joined.structured_content == accepted.structured_content
-    assert retry.structured_content == accepted.structured_content
-
-
-def test_spent_entry_survives_an_unrelated_call_until_the_window_ends(anonymous):
-    dialed = []
-    gates = [asyncio.Event() for _ in range(3)]
-    gates[2].set()
-    other = {**CALL, "to": "+15550123"}
-
-    async def call_next(context):
-        dialed.append(context.message.arguments["to"])
-        return ToolResult(structured_content={"uuid": f"call-{len(dialed)}"})
-
-    async def before_answer(index):
-        await gates[index].wait()
-
-    direct = _Direct(call_next, before_answer=before_answer)
-
-    async def run():
-        first = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.02)
-        second = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.02)
-        gates[0].set()
-        accepted = await first
-        await direct.call()
-        with anyio.fail_after(5):
-            await direct.call(other)
-        gates[1].set()
-        with anyio.fail_after(5):
-            return accepted, await second
-
-    accepted, joined = asyncio.run(run())
-    assert dialed == [CALL["to"], other["to"]]
-    assert joined.structured_content == accepted.structured_content
-
-
-def test_anonymous_caller_without_session_asks_each_time_and_survives_cancel(anonymous):
-    dials = []
-
-    async def call_next(_context):
-        await anyio.sleep(0.2)
-        dials.append(1)
-        return ToolResult(structured_content={"uuid": "call-1"})
-
-    direct = _Direct(call_next, session_id=None)
-
-    async def run():
-        with anyio.move_on_after(0.05):
-            await direct.call()
-        assert dials == [1] and len(direct.cards) == 1
-        await direct.call()
-
-    asyncio.run(run())
-    assert len(direct.cards) == 2
-
-
-def test_anonymous_callers_in_different_sessions_each_get_a_card(anonymous):
-    dials = []
-
-    async def call_next(_context):
-        dials.append(1)
-        return ToolResult(structured_content={"uuid": f"call-{len(dials)}"})
-
-    first = _Direct(call_next, session_id="s1")
-    second = _Direct(call_next, middleware=first.middleware, session_id="s2")
-
-    async def run():
-        await first.call()
-        await second.call()
-
-    asyncio.run(run())
-    assert len(first.cards) == 1 and len(second.cards) == 1 and dials == [1, 1]
-
-
-def test_replay_during_a_call_running_past_the_window_waits_for_it(anonymous):
-    clock = _Clock()
-    dials = []
-    release = []
-
-    async def call_next(_context):
-        dials.append(1)
-        await release[0].wait()
-        return ToolResult(structured_content={"uuid": "call-1"})
-
-    direct = _Direct(call_next, clock)
-
-    async def run():
-        release.append(asyncio.Event())
-        first = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.05)
-        clock.now += 61
-        replay = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.05)
-        assert not replay.done()
-        release[0].set()
-        with anyio.fail_after(5):
-            return await first, await replay
-
-    first, replay = asyncio.run(run())
-    assert dials == [1] and len(direct.cards) == 1
-    assert replay.structured_content == first.structured_content
+    assert ConfirmationMiddleware._binding(None, "call_control_create", CALL) != first
 
 
 def test_passthrough_token_is_keyed_by_authorization_not_sub(monkeypatch):
-    token = SimpleNamespace(client_id=PASSTHROUGH_CLIENT_ID, claims={"sub": "someone"}, scopes=[])
+    token = SimpleNamespace(client_id=confirmation.PASSTHROUGH_CLIENT_ID, claims={"sub": "shared"})
     monkeypatch.setattr(confirmation, "get_access_token", lambda: token)
     monkeypatch.setattr(confirmation, "get_http_headers", lambda **_: {"authorization": "Bearer A"})
     assert confirmation._caller_identity().startswith("auth:")
 
 
-def test_confirmation_form_is_built_once_per_label():
-    assert confirmation_form("Place the call") is confirmation_form("Place the call")
-    assert confirmation_form("Place the call") is not confirmation_form("Launch the campaign")
+def test_anonymous_callers_in_different_sessions_do_not_share_tokens(anonymous):
+    first = ConfirmationMiddleware._binding(
+        SimpleNamespace(session_id="s1"), "call_control_create", CALL
+    )
+    second = ConfirmationMiddleware._binding(
+        SimpleNamespace(session_id="s2"), "call_control_create", CALL
+    )
+    assert first != second
+
+
+def test_cancelled_client_does_not_abort_the_confirmed_call(anonymous):
+    dials = []
+
+    async def call_next(_context):
+        await anyio.sleep(0.2)
+        dials.append(1)
+        return ToolResult(structured_content={"uuid": "call-1"})
+
+    middleware = ConfirmationMiddleware(CONFIRMATIONS, httpx.AsyncClient())
+
+    def context(arguments):
+        return MiddlewareContext(
+            message=CallToolRequestParams(name="call_control_create", arguments=arguments),
+            fastmcp_context=SimpleNamespace(session_id="s1"),
+        )
+
+    async def run():
+        preview = await middleware.on_call_tool(context(CALL), call_next)
+        confirmed = {**CALL, TOKEN_PARAMETER: _token(preview)}
+        with anyio.move_on_after(0.05):
+            await middleware.on_call_tool(context(confirmed), call_next)
+
+    asyncio.run(run())
+    assert dials == [1]
+
+
+def test_answer_without_stream_runs_at_once(isolated_routes, anonymous):
+    api = _Api()
+    [result] = asyncio.run(_calls(_server(api), ("call_control_answer", {"id": "c1"})))
+    assert not result.is_error and api.dials == 1
+
+
+def test_answer_with_stream_needs_the_token(isolated_routes, anonymous):
+    api = _Api()
+    arguments = {"id": "c1", "stream_url": "wss://agent.test/s"}
+    preview, done = _confirm(_server(api), "call_control_answer", arguments)
+    assert _text(preview).startswith(
+        "This will answer call c1 and stream its live audio, "
+        "including the caller's voice, to wss://agent.test/s."
+    )
+    assert not done.is_error and api.dials == 1
+    assert json.loads(api.posts[0].content) == {"stream_url": "wss://agent.test/s"}
+
+
+def test_gated_tools_take_a_token_and_drop_output_schema(isolated_routes, anonymous):
+    async def run():
+        async with Client(_server(_Api())) as client:
+            return {t.name: t for t in await client.list_tools()}
+
+    tools = asyncio.run(run())
+    gated = tools["call_control_create"]
+    assert gated.outputSchema is None
+    assert TOKEN_PARAMETER in gated.inputSchema["properties"]
+    assert TOKEN_PARAMETER not in gated.inputSchema.get("required", [])
+    assert tools["my_numbers_list"].outputSchema is not None
+    assert TOKEN_PARAMETER not in tools["my_numbers_list"].inputSchema.get("properties", {})
+
+
+def test_scope_denial_precedes_the_preview(isolated_routes, anonymous, monkeypatch):
+    monkeypatch.setattr(
+        scope_filter,
+        "get_access_token",
+        lambda: SimpleNamespace(scopes=["numbers:read"], claims={}),
+    )
+    api = _Api()
+
+    async def run():
+        async with Client(_server(api, with_scope_filter=True)) as client:
+            return await client.call_tool("call_control_create", CALL)
+
+    with pytest.raises(ToolError, match="calls:write"):
+        asyncio.run(run())
+    assert api.requests == []
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments", "field"),
+    [
+        ("call_control_create", {"from": "+15550100"}, "to"),
+        ("call_control_create", {"from": "+15550100", "to": "  "}, "to"),
+        ("call_control_create", {"from": 15550100, "to": "+15550199"}, "from"),
+        ("call_control_create", {"from": "+15550100", "to": " +15550199"}, "to"),
+        ("voice_campaigns_create", {}, "voice_campaign"),
+        ("voice_campaigns_create", {"voice_campaign": {"callflow_id": True}}, "callflow_id"),
+    ],
+)
+def test_missing_argument_fails_closed(isolated_routes, anonymous, tool, arguments, field):
+    api = _Api()
+    [result] = asyncio.run(_calls(_server(api), (tool, arguments)))
+    assert result.is_error and field in _text(result)
+    assert api.dials == 0
+
+
+def test_failure_while_building_the_preview_fails_closed(monkeypatch, anonymous):
+    async def broken(_arguments, _api):
+        raise RuntimeError("boom")
+
+    dials = []
+
+    async def call_next(_context):
+        dials.append(1)
+        return ToolResult(content="ok")
+
+    middleware = ConfirmationMiddleware({"call_control_create": broken}, httpx.AsyncClient())
+    context = MiddlewareContext(
+        message=CallToolRequestParams(name="call_control_create", arguments=CALL),
+        fastmcp_context=SimpleNamespace(session_id="s1"),
+    )
+    result = asyncio.run(middleware.on_call_tool(context, call_next))
+    assert result.is_error and dials == []
+
+
+def _preview(tool: str, arguments: dict, lookups: dict | None = None) -> str:
+    api = httpx.AsyncClient(
+        base_url="http://api.test", transport=httpx.MockTransport(_Api(lookups=lookups))
+    )
+    result = asyncio.run(CONFIRMATIONS[tool](arguments, api))
+    assert result is not None
+    return result
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments", "expected"),
+    [
+        (
+            "voice_campaigns_create",
+            CAMPAIGN,
+            "This will launch call flow 3212: a billable call from 13123310912 to 16729923812.",
+        ),
+        (
+            "call_control_streams_create",
+            {"call_id": "c1", "stream_url": "wss://x.test/a"},
+            "This will stream the live audio of call c1, including the other party's voice, "
+            "to wss://x.test/a.",
+        ),
+        (
+            "call_webhooks_create",
+            {"url": "https://hook.test/a", "event_type": "on-call"},
+            "This will send call metadata for every on-call event to https://hook.test/a.",
+        ),
+        (
+            "sms_and_mms_messages_send",
+            {"from": "Wavix", "to": "15550199", "message_body": {"text": "Hi there"}},
+            'This will send a billable message from Wavix to 15550199: "Hi there"',
+        ),
+        (
+            "sms_and_mms_messages_send",
+            {
+                "from": "Wavix",
+                "to": "15550199",
+                "message_body": {"text": None, "media": ["https://m.test/1.png"]},
+            },
+            "This will send a billable message from Wavix to 15550199.\n"
+            "• media: https://m.test/1.png",
+        ),
+        (
+            "whatsapp_messages_send",
+            {
+                "from": "15550100",
+                "to": "15550199",
+                "template": {"name": "otp", "language": "en", "placeholders": ["1234"]},
+            },
+            "This will send a billable message from 15550100 to 15550199: "
+            'template "otp" (en), values: 1234.',
+        ),
+        (
+            "two_fa_verification_create",
+            {"service_id": "s", "to": "15550199", "channel": "sms"},
+            "This will send a billable verification code by sms to 15550199 from 2FA service s.",
+        ),
+        (
+            "two_fa_verification_resend",
+            {"session_id": "abc", "channel": "voice"},
+            "This will resend a billable verification code by voice for verification abc.",
+        ),
+    ],
+)
+def test_preview_text(tool, arguments, expected):
+    assert _preview(tool, arguments) == expected
+
+
+def test_release_numbers_by_id_names_each_number():
+    lookups = {
+        "/v1/numbers/1": {"number": "12125550101", "city": "New York", "country": "United States"},
+    }
+    text = _preview("my_numbers_delete", {"ids": [1, 2]}, lookups)
+    assert text == (
+        "This will release 2 numbers back to stock (irreversible):\n"
+        "• 12125550101 (New York, United States)\n"
+        "• number ID 2"
+    )
+
+
+def test_release_numbers_by_did_matches_the_exact_number():
+    lookups = {
+        "/v1/numbers?search=442079460958": {
+            "items": [
+                {"number": "4420794609580", "city": "Elsewhere", "country": "X"},
+                {"number": "442079460958", "city": "London", "country": "United Kingdom"},
+            ]
+        }
+    }
+    text = _preview("my_numbers_delete", {"dids": "+442079460958, 15550100"}, lookups)
+    assert text == (
+        "This will release 2 numbers back to stock (irreversible):\n"
+        "• 442079460958 (London, United Kingdom)\n"
+        "• 15550100"
+    )
+
+
+def test_release_numbers_lists_at_most_the_cap():
+    ids = list(range(1, MAX_LISTED_NUMBERS + 4))
+    text = _preview("my_numbers_delete", {"ids": ids})
+    lines = text.splitlines()
+    assert lines[0] == f"This will release {len(ids)} numbers back to stock (irreversible):"
+    assert len(lines) == MAX_LISTED_NUMBERS + 2 and lines[-1] == "• and 3 more"
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [{}, {"ids": [1], "dids": "1555"}, {"ids": []}, {"ids": [True]}, {"dids": " , "}],
+)
+def test_release_numbers_rejects_an_unclear_selection(arguments):
+    with pytest.raises(ConfirmationInputError):
+        _preview("my_numbers_delete", arguments)
+
+
+def test_trunk_update_lists_only_the_changes():
+    lookups = {
+        "/v1/trunks/7": {
+            "label": "Office",
+            "callerid": "15550100",
+            "host": "a.test",
+            "allowed_ips": [{"id": 1, "ip": "1.1.1.1"}],
+            "max_call_cost": "0.50",
+            "ip_restrict": True,
+        }
+    }
+    arguments = {
+        "id": 7,
+        "label": "Office",
+        "password": "secret",
+        "callerid": "15550199",
+        "host_request": {"host": "a.test"},
+        "allowed_ips": [{"ip": "1.1.1.1"}],
+        "max_call_cost": 0.5,
+        "ip_restrict": False,
+    }
+    text = _preview("sip_trunks_update", arguments, lookups)
+    assert text == (
+        "This will change SIP trunk Office:\n"
+        "• callerid: 15550100 → 15550199\n"
+        "• ip_restrict: true → false"
+    )
+    assert "secret" not in text
+
+
+def test_trunk_update_without_lookup_lists_the_new_values():
+    text = _preview("sip_trunks_update", {"id": 7, "label": "Office", "password": "p"})
+    assert text == "This will change SIP trunk 7:\n• label: Office"
+
+
+def test_sub_account_update_compares_nested_destinations():
+    lookups = {
+        "/v1/sub-organizations/3": {
+            "name": "Shop",
+            "status": "enabled",
+            "default_destinations": {
+                "sms_endpoint": "https://a.test",
+                "dlr_endpoint": "https://b.test",
+            },
+        }
+    }
+    arguments = {
+        "id": 3,
+        "status": "disabled",
+        "default_destinations": {"sms_endpoint": "https://a.test"},
+    }
+    assert _preview("sub_accounts_update", arguments, lookups) == (
+        "This will change sub-account Shop:\n• status: enabled → disabled"
+    )
+
+
+def test_trunk_delete_names_the_trunk():
+    lookups = {"/v1/trunks/7": {"label": "Office", "callerid": "15550100"}}
+    assert _preview("sip_trunks_delete", {"id": 7}, lookups) == (
+        "This will delete SIP trunk Office with Caller ID 15550100 (irreversible)."
+    )
+    assert (
+        _preview("sip_trunks_delete", {"id": 8}) == "This will delete SIP trunk 8 (irreversible)."
+    )
+
+
+def test_ten_dlc_deletes_name_the_brand_and_campaign():
+    lookups = {
+        "/v3/10dlc/brands/BABC123": {"dba_name": "Acme"},
+        "/v3/10dlc/brands/BABC123/campaigns/C9": {"name": "Alerts"},
+    }
+    assert _preview("ten_dlc_brands_delete", {"brand_id": "BABC123"}, lookups) == (
+        "This will delete 10DLC brand Acme (BABC123) (irreversible)."
+    )
+    assert _preview(
+        "ten_dlc_brand_campaigns_delete", {"brand_id": "BABC123", "campaign_id": "C9"}, lookups
+    ) == ("This will delete 10DLC campaign Alerts (C9) (irreversible).")
+    assert _preview("ten_dlc_brands_delete", {"brand_id": "BXYZ999"}) == (
+        "This will delete 10DLC brand BXYZ999 (irreversible)."
+    )
+
+
+def test_checkout_lists_numbers_and_the_total():
+    lookups = {
+        "/v1/buy/cart": {
+            "dids": [
+                {
+                    "id": 11,
+                    "number": "12125550101",
+                    "city": "New York",
+                    "country": "US",
+                    "activation_fee": "1.00",
+                    "monthly_fee": "2.50",
+                },
+                {
+                    "id": 12,
+                    "number": "442079460958",
+                    "city": "London",
+                    "country": "UK",
+                    "activation_fee": "0",
+                    "monthly_fee": "3.00",
+                },
+            ]
+        }
+    }
+    assert _preview("cart_checkout", {"ids": ["11", "12"]}, lookups) == (
+        "This will buy 2 numbers for 6.50, charged to your balance:\n"
+        "• 12125550101 (New York, US)\n"
+        "• 442079460958 (London, UK)"
+    )
+
+
+def test_checkout_without_cart_omits_the_total():
+    assert _preview("cart_checkout", {"ids": ["11"]}) == (
+        "This will buy 1 number, charged to your balance:\n• cart item 11"
+    )
+
+
+def test_every_gated_tool_has_a_preview_builder_in_the_real_tool_set():
+    expected = {
+        "call_control_create",
+        "voice_campaigns_create",
+        "call_control_streams_create",
+        "call_control_answer",
+        "call_webhooks_create",
+        "my_numbers_delete",
+        "sip_trunks_delete",
+        "sip_trunks_update",
+        "sub_accounts_update",
+        "ten_dlc_brands_delete",
+        "ten_dlc_brand_campaigns_delete",
+        "sms_and_mms_messages_send",
+        "whatsapp_messages_send",
+        "two_fa_verification_create",
+        "two_fa_verification_resend",
+        "cart_checkout",
+    }
+    assert set(CONFIRMATIONS) == expected
 
 
 def test_gated_tool_missing_from_routes_fails_startup():
@@ -793,274 +719,116 @@ def test_build_server_fails_when_a_gated_tool_is_not_in_the_spec(isolated_routes
         server.build_server()
 
 
-def test_error_result_is_not_replayed(anonymous):
-    async def call_next(_context):
-        return ToolResult(content="rejected", is_error=True)
-
-    direct = _Direct(call_next)
-
-    async def run():
-        await direct.call()
-        await direct.call()
-
-    asyncio.run(run())
-    assert len(direct.cards) == 2
-
-
-def test_concurrent_replays_share_one_result(anonymous):
-    dials = []
-
-    async def call_next(_context):
-        await anyio.sleep(0.3)
-        dials.append(1)
-        return ToolResult(structured_content={"uuid": f"call-{len(dials)}"})
-
-    direct = _Direct(call_next)
-
-    async def run():
-        first = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.1)
-        with anyio.fail_after(5):
-            replays = await asyncio.gather(direct.call(), direct.call())
-        await first
-        return replays
-
-    replays = asyncio.run(run())
-    assert len(direct.cards) == 2 and len(dials) == 2
-    assert sorted(r.structured_content["uuid"] for r in replays) == ["call-1", "call-2"]
-
-
-def test_raising_in_flight_call_releases_waiting_replay(anonymous):
-    attempts = []
-
-    async def call_next(_context):
-        attempts.append(1)
-        if len(attempts) == 1:
-            await anyio.sleep(0.3)
-            raise RuntimeError("network")
-        return ToolResult(structured_content={"uuid": "call-2"})
-
-    direct = _Direct(call_next)
-
-    async def run():
-        first = asyncio.create_task(direct.call())
-        await asyncio.sleep(0.1)
-        with anyio.fail_after(5):
-            second = await direct.call()
-        with pytest.raises(RuntimeError):
-            await first
-        return second
-
-    second = asyncio.run(run())
-    assert len(attempts) == 2 and len(direct.cards) == 2
-    assert second.structured_content == {"uuid": "call-2"}
-
-
-def test_joiners_of_a_failed_call_dial_once_more(isolated_routes, anonymous):
-    attempts = []
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        attempts.append(1)
-        await asyncio.sleep(0.3)
-        status = 500 if len(attempts) == 1 else 200
-        return httpx.Response(status, json={"uuid": f"call-{len(attempts)}"})
-
-    async def slow_accept(message, response_type, params, context):
-        await asyncio.sleep(0.1)
-        return ElicitResult(action="accept", content={"confirm": True})
-
-    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(handler))
-    mcp = FastMCP.from_openapi(
-        openapi_spec=_SPEC, client=client, name="t", mcp_component_fn=server._xmcp_component_fn
+def test_gated_descriptions_describe_the_two_steps():
+    overlay = yaml.safe_load(
+        (importlib.resources.files("wavix_mcp") / "tool_descriptions.yaml").read_text("utf-8")
     )
-    mcp.add_middleware(ConfirmationMiddleware(CALL_CONFIRMATIONS, client))
-
-    async def run():
-        async with Client(mcp, elicitation_handler=slow_accept) as session:
-            with anyio.fail_after(5):
-                return await asyncio.gather(
-                    *(
-                        session.call_tool("call_control_create", CALL, raise_on_error=False)
-                        for _ in range(3)
-                    )
-                )
-
-    results = asyncio.run(run())
-    assert len(attempts) == 2
-    assert sum(1 for r in results if not r.is_error) == 2
+    for key in CONFIRMATIONS:
+        assert "has confirmed" not in overlay[key], key
+        assert "`confirmation_token`" in overlay[key], key
+    assert "run in two steps" in server.INSTRUCTIONS
 
 
 def test_build_server_registers_confirmation_inside_scope_filter(isolated_routes, monkeypatch):
+    in_spec = ("call_control_create", "voice_campaigns_create", "call_control_answer")
+    monkeypatch.setattr(server, "CONFIRMATIONS", {k: CONFIRMATIONS[k] for k in in_spec})
     monkeypatch.setattr(server, "load_spec", lambda: copy.deepcopy(_SPEC))
     names = [type(m).__name__ for m in server.build_server().middleware]
     assert names.index("ScopeFilterMiddleware") < names.index("ConfirmationMiddleware")
 
 
-def test_client_without_elicitation_is_refused(isolated_routes, anonymous):
+@pytest.mark.parametrize(
+    ("stream", "expected"),
+    [
+        (
+            {"stream_type": "oneway", "stream_channel": "both"},
+            "This will stream the live audio of call c1, including the other party's voice, "
+            "to wss://x.test/a.",
+        ),
+        (
+            {"stream_type": "oneway", "stream_channel": "outbound"},
+            "This will stream the live audio of call c1, only the audio sent from Wavix into "
+            "the call, to wss://x.test/a.",
+        ),
+        (
+            {"stream_type": "twoway", "stream_channel": "outbound"},
+            "This will stream the live audio of call c1, including the other party's voice, "
+            "to wss://x.test/a. The destination can also play audio into the call.",
+        ),
+    ],
+)
+def test_stream_preview_follows_type_and_channel(stream, expected):
+    arguments = {"call_id": "c1", "stream_url": "wss://x.test/a", **stream}
+    assert _preview("call_control_streams_create", arguments) == expected
+
+
+def test_recorded_call_says_so():
+    assert _preview("call_control_create", {**CALL, "recording": True}) == (
+        "This will place a billable call from +15550100 to +15550199. The call will be recorded."
+    )
+
+
+def test_campaign_delete_lists_the_numbers_that_stop_sending():
+    lookups = {
+        "/v3/10dlc/brands/BABC123/campaigns/C9": {
+            "name": "Alerts",
+            "phone_numbers": ["15550100", "15550101"],
+        }
+    }
+    arguments = {"brand_id": "BABC123", "campaign_id": "C9"}
+    assert _preview("ten_dlc_brand_campaigns_delete", arguments, lookups) == (
+        "This will delete 10DLC campaign Alerts (C9) (irreversible).\n"
+        "These numbers will stop sending through it:\n"
+        "• 15550100\n"
+        "• 15550101"
+    )
+
+
+def test_long_message_is_cut_in_the_preview():
+    text = "x" * (confirmation.MESSAGE_PREVIEW_CHARS + 20)
+    arguments = {"from": "Wavix", "to": "15550199", "message_body": {"text": text}}
+    preview = _preview("sms_and_mms_messages_send", arguments)
+    assert preview.endswith('"' + "x" * confirmation.MESSAGE_PREVIEW_CHARS + '…"')
+
+
+def test_numeric_looking_text_change_is_shown():
+    lookups = {"/v1/trunks/7": {"label": "Office", "rewrite_prefix": "0"}}
+    arguments = {"id": 7, "label": "Office", "rewrite_prefix": "00"}
+    assert _preview("sip_trunks_update", arguments, lookups) == (
+        "This will change SIP trunk Office:\n• rewrite_prefix: 0 → 00"
+    )
+
+
+def test_empty_token_counts_as_a_first_call(isolated_routes, anonymous):
     api = _Api()
-    result = asyncio.run(_call(_server(api), None))
+    [result] = asyncio.run(
+        _calls(_server(api), ("call_control_create", {**CALL, TOKEN_PARAMETER: ""}))
+    )
     assert api.dials == 0
-    assert result.is_error
-    assert "https://app.wavix.com" in _text(result)
+    assert _text(result).startswith("This will place a billable call")
 
 
-def test_client_without_elicitation_is_never_sent_a_card(anonymous):
-    dials = []
+def test_pending_tokens_are_capped(monkeypatch, anonymous):
+    monkeypatch.setattr(confirmation, "MAX_PENDING_TOKENS", 2)
 
     async def call_next(_context):
-        dials.append(1)
-        return ToolResult(structured_content={"uuid": "call-1"})
+        return ToolResult(content="ok")
 
-    direct = _Direct(call_next, capabilities=ClientCapabilities())
-    result = asyncio.run(direct.call())
-    assert result.is_error and direct.cards == [] and dials == []
-
-
-@pytest.mark.parametrize(
-    ("capabilities", "supported"),
-    [
-        (None, False),
-        (ClientCapabilities(), False),
-        (
-            ClientCapabilities(elicitation=ElicitationCapability(url=UrlElicitationCapability())),
-            False,
-        ),
-        (ClientCapabilities(elicitation=ElicitationCapability()), True),
-        (
-            ClientCapabilities(elicitation=ElicitationCapability(form=FormElicitationCapability())),
-            True,
-        ),
-        (
-            ClientCapabilities(
-                elicitation=ElicitationCapability(
-                    form=FormElicitationCapability(), url=UrlElicitationCapability()
-                )
-            ),
-            True,
-        ),
-    ],
-)
-def test_form_elicitation_support(capabilities, supported):
-    assert supports_form_elicitation(capabilities) is supported
-
-
-def test_unanswered_card_places_no_call(isolated_routes, anonymous, monkeypatch):
-    monkeypatch.setattr(confirmation, "CONFIRMATION_TIMEOUT_S", 0.05)
-    api, answer = _Api(), _Answer("sleep", "decline")
-    mcp = _server(api)
+    middleware = ConfirmationMiddleware(CONFIRMATIONS, httpx.AsyncClient())
+    context = MiddlewareContext(
+        message=CallToolRequestParams(name="call_control_create", arguments=CALL),
+        fastmcp_context=SimpleNamespace(session_id="s1"),
+    )
 
     async def run():
-        async with Client(mcp, elicitation_handler=answer) as client:
-            first = await client.call_tool("call_control_create", CALL)
-            await asyncio.sleep(1.1)
-            await client.call_tool("call_control_create", CALL)
-            return first
+        for _ in range(3):
+            await middleware.on_call_tool(context, call_next)
 
-    first = asyncio.run(run())
-    assert api.dials == 0
-    assert not first.is_error
-    assert "did not answer" in _text(first)
-    assert len(answer.messages) == 2
+    asyncio.run(run())
+    assert len(middleware._pending) == 2
 
 
-def test_scope_denial_precedes_card(isolated_routes, anonymous, monkeypatch):
-    monkeypatch.setattr(
-        scope_filter,
-        "get_access_token",
-        lambda: SimpleNamespace(scopes=["numbers:read"], claims={}),
-    )
-    api, answer = _Api(), _Answer()
-    with pytest.raises(ToolError, match="calls:write"):
-        asyncio.run(_call_raising(_server(api, with_scope_filter=True), answer))
-    assert answer.messages == [] and api.dials == 0
-
-
-async def _call_raising(mcp, handler):
-    async with Client(mcp, elicitation_handler=handler) as client:
-        return await client.call_tool("call_control_create", CALL)
-
-
-def test_voice_campaign_card(isolated_routes, anonymous):
-    api, answer = _Api(), _Answer()
-    result = asyncio.run(
-        _call(_server(api), answer, tool="voice_campaigns_create", arguments=CAMPAIGN)
-    )
-    assert not result.is_error and api.dials == 1
-    message = answer.messages[0]
-    for value in ("3212", "13123310912", "16729923812", "billable"):
-        assert value in message
-    assert answer.schemas[0]["properties"]["confirm"]["title"] == "Launch the campaign"
-
-
-@pytest.mark.parametrize(
-    ("tool", "arguments", "field"),
-    [
-        ("call_control_create", {"from": "+15550100"}, "to"),
-        ("call_control_create", {"from": "+15550100", "to": "  "}, "to"),
-        ("call_control_create", {"from": 15550100, "to": "+15550199"}, "from"),
-        ("call_control_create", {"from": "+15550100", "to": "+1 555 0100 or +1 555 0199"}, "to"),
-        ("call_control_create", {"from": "+15550100", "to": "+15550199 +15550100"}, "to"),
-        ("call_control_create", {"from": "+15550100", "to": " +15550199"}, "to"),
-        ("voice_campaigns_create", {"voice_campaign": "x"}, "voice_campaign"),
-        (
-            "voice_campaigns_create",
-            {"voice_campaign": {**CAMPAIGN["voice_campaign"], "callflow_id": True}},
-            "voice_campaign.callflow_id",
-        ),
-        (
-            "voice_campaigns_create",
-            {"voice_campaign": {**CAMPAIGN["voice_campaign"], "callflow_id": "3212"}},
-            "voice_campaign.callflow_id",
-        ),
-        (
-            "voice_campaigns_create",
-            {"voice_campaign": {**CAMPAIGN["voice_campaign"], "contact": ""}},
-            "voice_campaign.contact",
-        ),
-        (
-            "voice_campaigns_create",
-            {"voice_campaign": {**CAMPAIGN["voice_campaign"], "caller_id": None}},
-            "voice_campaign.caller_id",
-        ),
-    ],
-)
-def test_missing_argument_fails_closed(isolated_routes, anonymous, tool, arguments, field):
-    api, answer = _Api(), _Answer()
-    result = asyncio.run(_call(_server(api), answer, tool=tool, arguments=arguments))
-    assert result.is_error
-    assert _text(result) == f"Missing or invalid required argument: {field}"
-    assert answer.messages == [] and api.dials == 0
-
-
-def test_failure_before_answer_fails_closed(isolated_routes, anonymous):
-    api = _Api()
-    result = asyncio.run(_call(_server(api), _Answer("raise")))
-    assert result.is_error and "cannot show a confirmation prompt" in _text(result)
-    assert api.dials == 0
-
-    async def broken(arguments, api_client):
-        raise RuntimeError("lookup failed")
-
-    specs = {"call_control_create": confirmation.ConfirmationSpec(broken, "refused")}
-    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
-    mcp = FastMCP.from_openapi(openapi_spec=_SPEC, client=client, name="t")
-    mcp.add_middleware(ConfirmationMiddleware(specs, client))
-    answer = _Answer()
-    result = asyncio.run(_call(mcp, answer))
-    assert result.is_error and _text(result) == "refused"
-    assert answer.messages == [] and api.dials == 0
-
-
-def test_call_wording_says_tool_asks():
-    overlay = yaml.safe_load(
-        (importlib.resources.files("wavix_mcp") / "tool_descriptions.yaml").read_text("utf-8")
-    )
-    for key in ("call_control_create", "voice_campaigns_create"):
-        assert "has confirmed" not in overlay[key]
-        assert "asks the user" in overlay[key]
-    assert "voice_campaigns_create ask the user to confirm" in server.INSTRUCTIONS
-
-
-def test_confirmation_form_is_one_prechecked_boolean():
-    schema = confirmation_form("Place the call").model_json_schema()
-    assert json.loads(json.dumps(schema))["properties"]["confirm"]["default"] is True
+def test_anonymous_callers_without_a_session_never_share_a_binding(anonymous):
+    first = ConfirmationMiddleware._binding(SimpleNamespace(), "call_control_create", CALL)
+    second = ConfirmationMiddleware._binding(SimpleNamespace(), "call_control_create", CALL)
+    assert first != second

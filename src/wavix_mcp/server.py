@@ -18,7 +18,7 @@ from mcp.types import ToolAnnotations
 
 from . import scopes
 from .auth import build_auth_provider, mcp_path
-from .confirmation import CONFIRMATIONS, ConfirmationMiddleware
+from .confirmation import CONFIRMATIONS, TOKEN_PARAMETER, ConfirmationMiddleware
 from .docs import register_api_spec, register_docs
 from .scope_filter import ScopeFilterMiddleware
 
@@ -63,7 +63,7 @@ Tool naming conventions:
 - *_list tools return a collection with basic filters. Paginated collections accept per_page (1 to 100, default 25) and page (starting at 1); each tool's input schema shows whether it is paginated.
 - *_get tools return a single entity, identified by the key named in the tool's input schema (usually an ID).
 - *_create, *_update, and *_delete tools change account state. Each tool carries MCP annotations (readOnlyHint, destructiveHint, openWorldHint), and its description states any cost and whether the change can be reversed.
-- call_control_create and voice_campaigns_create ask the user to confirm through the client before dialling; that prompt is the confirmation.
+- Tools that place calls, stream call audio, register call webhooks, send messages or verification codes, buy or release numbers, or change or delete SIP trunks, sub-accounts and 10DLC brands or campaigns run in two steps. The first call does nothing and returns a preview of the action with a confirmation_token; the action runs only when the same tool is called again with the same arguments and that token, once the user has approved the preview. A token is single-use and expires after 5 minutes.
 - Some bulk operations run asynchronously. For example, number_validator_create_bulk with async set to true returns a request ID, and number_validator_results_get returns the results for that ID.
 
 Billing:
@@ -526,6 +526,22 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
     # MCP clients reject a non-error result lacking structuredContent when outputSchema is declared.
     if component.name in CONFIRMATIONS:
         component.output_schema = None
+        component.parameters = _with_confirmation_token(component.parameters)
+
+
+def _with_confirmation_token(parameters: dict[str, Any]) -> dict[str, Any]:
+    properties = {
+        **parameters.get("properties", {}),
+        TOKEN_PARAMETER: {
+            "type": "string",
+            "description": (
+                "Token from this tool's preview result. Absent on the first call, which "
+                "returns the preview and does nothing; the action runs only when the "
+                "token comes back with the same arguments."
+            ),
+        },
+    }
+    return {**parameters, "properties": properties}
 
 
 async def _resolve_to_download_url(
