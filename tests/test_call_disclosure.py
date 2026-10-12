@@ -7,40 +7,68 @@ import pytest
 from wavix_mcp.server import INSTRUCTIONS, TOOL_DESCRIPTIONS
 
 DISCLOSURE_TOOLS = ("call_control_create", "call_control_collect", "voice_campaigns_create")
+TEXT_NAMES = (*DISCLOSURE_TOOLS, "instructions")
 OBLIGATION = "this is an obligation under the Wavix Terms of Service"
-ENFORCEMENT_PHRASES = ("wavix verifies", "wavix checks", "wavix enforces", "enforce")
+DISCLOSURE_CORE = ("disclose", "at the start of the call")
+LEGITIMATE_PHRASE = "active or verified number"
+UNSUPPORTED_CLAIMS = re.compile(
+    r"ai[- ]?initiated|verif|check|enforc|monitor",
+    re.IGNORECASE,
+)
 
 
-def disclosure_sentences(text: str) -> list[str]:
-    return [s for s in re.split(r"(?<=\.)\s+", text) if "Terms of Service" in s]
+def shipped_text(name):
+    return INSTRUCTIONS if name == "instructions" else TOOL_DESCRIPTIONS[name]
+
+
+def disclosure_violations(text):
+    return UNSUPPORTED_CLAIMS.findall(text.replace(LEGITIMATE_PHRASE, ""))
+
+
+@pytest.mark.parametrize("name", TEXT_NAMES)
+def test_text_states_the_disclosure_itself(name):
+    text = shipped_text(name)
+    for phrase in DISCLOSURE_CORE:
+        assert phrase in text
 
 
 @pytest.mark.parametrize("tool", DISCLOSURE_TOOLS)
-def test_call_tool_states_the_obligation(tool: str) -> None:
+def test_call_tool_states_the_tos_obligation(tool):
     assert OBLIGATION in TOOL_DESCRIPTIONS[tool]
 
 
-def test_collect_scopes_the_obligation_to_outbound_calls() -> None:
+def test_collect_scopes_the_obligation_to_outbound_calls():
     assert "On outbound calls" in TOOL_DESCRIPTIONS["call_control_collect"]
 
 
-def test_create_states_the_conditional_form() -> None:
+def test_create_states_the_conditional_form():
     assert (
         "Whenever the call is automated or handled by AI"
         in TOOL_DESCRIPTIONS["call_control_create"]
     )
 
 
-def test_instructions_state_the_obligation_once() -> None:
+def test_instructions_state_the_obligation_once():
     assert INSTRUCTIONS.count("Terms of Service") == 1
     assert "automated or handled by AI" in INSTRUCTIONS
 
 
-@pytest.mark.parametrize("name", [*DISCLOSURE_TOOLS, "instructions"])
-def test_text_avoids_ai_initiated_and_enforcement_claims(name: str) -> None:
-    text = INSTRUCTIONS if name == "instructions" else TOOL_DESCRIPTIONS[name]
-    assert "ai-initiated" not in text.lower()
-    sentences = disclosure_sentences(text)
-    assert sentences
-    for sentence in sentences:
-        assert not any(phrase in sentence.lower() for phrase in ENFORCEMENT_PHRASES)
+@pytest.mark.parametrize("name", TEXT_NAMES)
+def test_text_makes_no_ai_initiated_or_enforcement_claim(name):
+    assert disclosure_violations(shipped_text(name)) == []
+
+
+@pytest.mark.parametrize("name", TEXT_NAMES)
+@pytest.mark.parametrize(
+    "planted",
+    [
+        "Wavix verifies the disclosure on every call.",
+        "The disclosure is verified by Wavix.",
+        "Compliance is monitored by Wavix.",
+        "Wavix enforces this rule.",
+        "Calls are AI-initiated.",
+        "Calls are AI initiated.",
+    ],
+)
+def test_guard_catches_planted_claim(name, planted):
+    assert disclosure_violations(f"{shipped_text(name)} {planted}") != []
