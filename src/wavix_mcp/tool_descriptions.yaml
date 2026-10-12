@@ -439,16 +439,13 @@ sip_trunks_list: >-
 
 sip_trunks_update: >-
   Updates the SIP trunk identified by `id`; only the fields provided in the
-  request change, except `max_call_cost`, which a request without it clears. Use
-  when the user wants to change one or more settings of an existing SIP trunk,
+  request change. Use when the user wants to change one or more settings of an existing SIP trunk,
   such as its label, password, Caller ID, or call limits. Overwrites the provided
   settings on the trunk, including the `password` when supplied; addresses in
   `allowed_ips` are added to the trunk's allowed list, and addresses already on it
   are kept; on trial accounts every update also applies the trial limits, a
   `call_limit` of at most 300 seconds (300 when omitted) and one concurrent call.
-  Requires the `trunks:write` scope and the SIP trunk's `id`; when the trunk has
-  `cost_limit` enabled, read its current `max_call_cost` with `sip_trunks_get` and
-  send it with every update, or the per-call cost limit is cleared; on trial
+  Requires the `trunks:write` scope and the SIP trunk's `id`; on trial
   accounts, send the current `call_limit` to keep it; a `callerid` must be an
   active or verified number on the account; `ip_restrict` takes effect only when
   the trunk has at least one allowed IP address, stored or sent in `allowed_ips`.
@@ -837,7 +834,7 @@ sub_accounts_create: >-
   returns it with a generated `api_key`. Use when the user wants to add a
   sub-organization and has confirmed its name. Creates a persistent
   sub-organization and issues its `api_key`. Requires the `subaccounts:write`
-  scope and a `name` of up to 255 characters; the optional `default_destinations`
+  scope and a `name` of up to 75 characters; the optional `default_destinations`
   object sets default webhook URLs for inbound messages and delivery reports.
 
 sub_accounts_get: >-
@@ -866,7 +863,7 @@ sub_accounts_update: >-
   wants to rename a sub-organization, enable or disable it, or change its default
   webhook destinations. Overwrites the provided settings; setting `status` to
   `disabled` suspends the sub-organization. Requires the `subaccounts:write`
-  scope, the sub-organization's `id`, and its `name` (up to 255 characters) on
+  scope, the sub-organization's `id`, and its `name` (up to 75 characters) on
   every request, so send the current `name` (from `sub_accounts_get`) when the
   user does not want to rename it; `status` accepts `enabled` or `disabled`.
 
