@@ -350,11 +350,13 @@ cdrs_list: >-
 cdrs_retranscribe: >-
   Transcribes the recording of the call identified by `call_id`; transcription is
   asynchronous, so poll the transcription endpoint for the result. Use when the
-  user wants a transcript of a recorded call that has not been transcribed yet.
-  Billed per minute at the account's call-transcription rate; fails with an
-  insufficient-funds error when the balance cannot cover it. Requires the
-  `calls:write` scope and the call's `call_id`; optionally set the transcription
-  `language` and a `webhook_url` to receive the result.
+  user wants a transcript of a recorded call, or wants an already transcribed call
+  transcribed again. Billed per minute at the account's call-transcription rate,
+  and fails with an insufficient-funds error when the balance cannot cover it;
+  when it completes, the new transcription replaces any earlier one that the
+  transcription endpoints return. Requires the `calls:write` scope and the call's
+  `call_id`; optionally set the transcription `language` and a `webhook_url` to
+  receive the result.
 
 cdrs_search: >-
   Searches the account's call transcriptions for the given keywords or phrases
@@ -436,12 +438,15 @@ sip_trunks_list: >-
   `per_page` from 1 to 100 (default 25) and `page` starting at 1.
 
 sip_trunks_update: >-
-  Replaces the configuration of the SIP trunk identified by `id`; any omitted
-  fields revert to their defaults. Use when the user wants to change a SIP
-  trunk's settings and has provided the full desired configuration. Overwrites
-  the trunk's existing configuration on the account. Requires the `trunks:write`
-  scope, the SIP trunk's `id`, a `callerid` that is an active or verified number
-  on the account, and `allowed_ips` whenever `ip_restrict` is `true`.
+  Updates the SIP trunk identified by `id`; only the fields provided in the
+  request change, and omitted fields keep their current values. Use when the user
+  wants to change one or more settings of an existing SIP trunk, such as its
+  label, password, Caller ID, or call limits. Overwrites the provided settings on
+  the trunk, including the `password` when supplied; addresses in `allowed_ips`
+  are added to the trunk's allowed list, and addresses already on it are kept.
+  Requires the `trunks:write` scope and the SIP trunk's `id`; a `callerid` must be
+  an active or verified number on the account, and `allowed_ips` is required
+  whenever `ip_restrict` is set to `true`.
 
 api_keys_create: >-
   Creates an API key for the authenticated account, optionally restricting its
@@ -851,14 +856,13 @@ sub_accounts_transactions_list: >-
   paginated with `per_page` from 1 to 100 (default 25) and `page` starting at 1.
 
 sub_accounts_update: >-
-  Replaces the configuration of the sub-organization identified by `id`,
-  updating its `name`, `status`, and `default_destinations`. Use when the user
+  Updates the sub-organization identified by `id`; only the fields provided in the
+  request change, and omitted fields keep their current values. Use when the user
   wants to rename a sub-organization, enable or disable it, or change its default
-  webhook destinations, and has confirmed the full intended configuration.
-  Overwrites the existing configuration — any field omitted from the request
-  reverts to its default. Requires the `subaccounts:write` scope and the
-  sub-organization's `id`; `status` accepts `enabled` or `disabled`, and `name`
-  may be up to 255 characters.
+  webhook destinations. Overwrites the provided settings; setting `status` to
+  `disabled` suspends the sub-organization. Requires the `subaccounts:write`
+  scope, the sub-organization's `id`, and its `name` (up to 255 characters) on
+  every request; `status` accepts `enabled` or `disabled`.
 
 whatsapp_senders_list: >-
   Lists the WhatsApp senders on the account's WhatsApp Business Accounts, newest
