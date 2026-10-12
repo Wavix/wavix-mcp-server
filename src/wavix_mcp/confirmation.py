@@ -148,7 +148,7 @@ def _caller_identity() -> str:
     token = get_access_token()
     if token is not None and getattr(token, "client_id", None) == PASSTHROUGH_CLIENT_ID:
         token = None
-    subject = (getattr(token, "claims", None) or {}).get("sub") if token is not None else None
+    subject = (getattr(token, "claims", None) or {}).get("sub")
     if isinstance(subject, str) and subject:
         return f"sub:{subject}"
     try:
