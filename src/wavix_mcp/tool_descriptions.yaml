@@ -442,7 +442,8 @@ sip_trunks_update: >-
   request change. Use when the user wants to change one or more settings of an
   existing SIP trunk, such as its label, password, Caller ID, or call limits.
   Overwrites the provided settings on the trunk, including the `password` when
-  supplied; setting `multiple_numbers` to `true` clears the trunk's `callerid`;
+  supplied; setting `multiple_numbers` to `true` clears the trunk's `callerid`,
+  unless Caller ID passthrough is enabled on the trunk;
   addresses in `allowed_ips` are added to the trunk's allowed list, and addresses
   already on it are kept; on trial accounts every update also applies the trial
   limits, a `call_limit` of at most 300 seconds (300 when omitted) and one
