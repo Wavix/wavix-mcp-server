@@ -24,8 +24,10 @@ from mcp.types import (
 )
 
 from wavix_mcp import confirmation, scope_filter, server
+from wavix_mcp.auth import PASSTHROUGH_CLIENT_ID
 from wavix_mcp.confirmation import (
     CALL_CONFIRMATIONS,
+    CONFIRMATIONS,
     ConfirmationMiddleware,
     confirmation_form,
     supports_form_elicitation,
@@ -369,32 +371,46 @@ def test_anonymous_caller_without_session_always_asks(monkeypatch):
     assert middleware._replay_key(ctx, "call_control_create", CALL) is None
 
 
+class _NoSessionContext(SimpleNamespace):
+    @property
+    def session_id(self) -> str:
+        raise RuntimeError("no session")
+
+
 class _Direct:
     def __init__(
         self,
         call_next,
         clock: _Clock | None = None,
         capabilities: ClientCapabilities | None = None,
+        *,
+        middleware: ConfirmationMiddleware | None = None,
+        session_id: str | None = "s1",
+        before_answer=None,
     ):
         self.cards: list[str] = []
-        self.middleware = ConfirmationMiddleware(
+        self.middleware = middleware or ConfirmationMiddleware(
             CALL_CONFIRMATIONS, httpx.AsyncClient(), clock=clock or _Clock()
         )
         self._call_next = call_next
 
         async def elicit(message, response_type):
             self.cards.append(message)
+            if before_answer is not None:
+                await before_answer(len(self.cards) - 1)
             return AcceptedElicitation(data=response_type(confirm=True))
 
-        self._ctx = SimpleNamespace(
+        context_type = SimpleNamespace if session_id is not None else _NoSessionContext
+        extra = {"session_id": session_id} if session_id is not None else {}
+        self._ctx = context_type(
             session=SimpleNamespace(
                 client_params=SimpleNamespace(
                     capabilities=capabilities
                     or ClientCapabilities(elicitation=ElicitationCapability())
                 )
             ),
-            session_id="s1",
             elicit=elicit,
+            **extra,
         )
 
     async def call(self):
@@ -466,6 +482,135 @@ def test_in_flight_call_outliving_the_window_is_replayed(anonymous):
     replay = asyncio.run(run())
     assert dials == [1] and len(direct.cards) == 1
     assert replay.structured_content == {"uuid": "call-1"}
+
+
+def test_card_opened_before_the_call_joins_the_stored_result_after_a_replay(anonymous):
+    dials = []
+    gates: list[asyncio.Event] = []
+
+    async def call_next(_context):
+        dials.append(1)
+        return ToolResult(structured_content={"uuid": f"call-{len(dials)}"})
+
+    async def before_answer(index):
+        await gates[index].wait()
+
+    direct = _Direct(call_next, before_answer=before_answer)
+
+    async def run():
+        gates.extend(asyncio.Event() for _ in range(2))
+        first = asyncio.create_task(direct.call())
+        await asyncio.sleep(0.05)
+        third = asyncio.create_task(direct.call())
+        await asyncio.sleep(0.05)
+        gates[0].set()
+        accepted = await first
+        with anyio.fail_after(5):
+            replay = await direct.call()
+        assert len(direct.cards) == 2
+        gates[1].set()
+        with anyio.fail_after(5):
+            return accepted, replay, await third
+
+    accepted, replay, late = asyncio.run(run())
+    assert dials == [1]
+    assert replay.structured_content == accepted.structured_content
+    assert late.structured_content == accepted.structured_content
+
+
+def test_anonymous_caller_without_session_asks_each_time_and_survives_cancel(anonymous):
+    dials = []
+
+    async def call_next(_context):
+        await anyio.sleep(0.2)
+        dials.append(1)
+        return ToolResult(structured_content={"uuid": "call-1"})
+
+    direct = _Direct(call_next, session_id=None)
+
+    async def run():
+        with anyio.move_on_after(0.05):
+            await direct.call()
+        assert dials == [1] and len(direct.cards) == 1
+        await direct.call()
+
+    asyncio.run(run())
+    assert len(direct.cards) == 2
+
+
+def test_anonymous_callers_in_different_sessions_each_get_a_card(anonymous):
+    dials = []
+
+    async def call_next(_context):
+        dials.append(1)
+        return ToolResult(structured_content={"uuid": f"call-{len(dials)}"})
+
+    first = _Direct(call_next, session_id="s1")
+    second = _Direct(call_next, middleware=first.middleware, session_id="s2")
+
+    async def run():
+        await first.call()
+        await second.call()
+
+    asyncio.run(run())
+    assert len(first.cards) == 1 and len(second.cards) == 1 and dials == [1, 1]
+
+
+def test_replay_during_a_call_running_past_the_window_waits_for_it(anonymous):
+    clock = _Clock()
+    dials = []
+    release = []
+
+    async def call_next(_context):
+        dials.append(1)
+        await release[0].wait()
+        return ToolResult(structured_content={"uuid": "call-1"})
+
+    direct = _Direct(call_next, clock)
+
+    async def run():
+        release.append(asyncio.Event())
+        first = asyncio.create_task(direct.call())
+        await asyncio.sleep(0.05)
+        clock.now += 61
+        replay = asyncio.create_task(direct.call())
+        await asyncio.sleep(0.05)
+        assert not replay.done()
+        release[0].set()
+        with anyio.fail_after(5):
+            return await first, await replay
+
+    first, replay = asyncio.run(run())
+    assert dials == [1] and len(direct.cards) == 1
+    assert replay.structured_content == first.structured_content
+
+
+def test_passthrough_token_is_keyed_by_authorization_not_sub(monkeypatch):
+    token = SimpleNamespace(client_id=PASSTHROUGH_CLIENT_ID, claims={"sub": "someone"}, scopes=[])
+    monkeypatch.setattr(confirmation, "get_access_token", lambda: token)
+    monkeypatch.setattr(confirmation, "get_http_headers", lambda **_: {"authorization": "Bearer A"})
+    assert confirmation._caller_identity().startswith("auth:")
+
+
+def test_confirmation_form_is_built_once_per_label():
+    assert confirmation_form("Place the call") is confirmation_form("Place the call")
+    assert confirmation_form("Place the call") is not confirmation_form("Launch the campaign")
+
+
+def test_gated_tool_missing_from_routes_fails_startup():
+    routes = {name: ("POST", "/v1/x") for name in CONFIRMATIONS}
+    server._require_gated_tools(routes)
+    del routes["voice_campaigns_create"]
+    with pytest.raises(RuntimeError, match="voice_campaigns_create"):
+        server._require_gated_tools(routes)
+
+
+def test_build_server_fails_when_a_gated_tool_is_not_in_the_spec(isolated_routes, monkeypatch):
+    spec = copy.deepcopy(_SPEC)
+    del spec["paths"]["/v1/calls"]
+    monkeypatch.setattr(server, "load_spec", lambda: spec)
+    with pytest.raises(RuntimeError, match="call_control_create"):
+        server.build_server()
 
 
 def test_error_result_is_not_replayed(anonymous):
@@ -675,6 +820,7 @@ def test_voice_campaign_card(isolated_routes, anonymous):
         ("call_control_create", {"from": 15550100, "to": "+15550199"}, "from"),
         ("call_control_create", {"from": "+15550100", "to": "+1 555 0100 or +1 555 0199"}, "to"),
         ("call_control_create", {"from": "+15550100", "to": "+15550199 +15550100"}, "to"),
+        ("call_control_create", {"from": "+15550100", "to": " +15550199"}, "to"),
         ("voice_campaigns_create", {"voice_campaign": "x"}, "voice_campaign"),
         (
             "voice_campaigns_create",

@@ -5,6 +5,7 @@ import re
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
+from functools import cache
 from typing import Any
 
 import anyio
@@ -15,6 +16,8 @@ from fastmcp.server.middleware import Middleware, MiddlewareContext
 from fastmcp.tools.tool import ToolResult
 from mcp.types import ClientCapabilities
 from pydantic import BaseModel, Field, create_model
+
+from .auth import PASSTHROUGH_CLIENT_ID
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +59,9 @@ def _invalid(name: str) -> ConfirmationInputError:
 
 def _phone_number(arguments: Mapping[str, Any], key: str, name: str) -> str:
     value = arguments.get(key)
-    if not isinstance(value, str) or not _PHONE_NUMBER.fullmatch(value.strip()):
+    if not isinstance(value, str) or not _PHONE_NUMBER.fullmatch(value):
         raise _invalid(name)
-    return value.strip()
+    return value
 
 
 def _call_prompt(destination: str, message: str, label: str) -> ConfirmationPrompt:
@@ -126,6 +129,7 @@ class ConfirmationForm(BaseModel):
     confirm: bool = True
 
 
+@cache
 def confirmation_form(label: str) -> type[ConfirmationForm]:
     return create_model(
         "Confirm", __base__=ConfirmationForm, confirm=(bool, Field(default=True, title=label))
@@ -142,6 +146,8 @@ def _client_capabilities(ctx: Any) -> ClientCapabilities | None:
 
 def _caller_identity() -> str:
     token = get_access_token()
+    if token is not None and getattr(token, "client_id", None) == PASSTHROUGH_CLIENT_ID:
+        token = None
     subject = (getattr(token, "claims", None) or {}).get("sub") if token is not None else None
     if isinstance(subject, str) and subject:
         return f"sub:{subject}"
@@ -192,6 +198,7 @@ class ConfirmationMiddleware(Middleware):
         replayed = await self._replay(key)
         if replayed is not None:
             return replayed
+        seen = self._accepted.get(key) if key is not None else None
 
         if ctx is None or not supports_form_elicitation(_client_capabilities(ctx)):
             return _refused(spec.refusal)
@@ -217,18 +224,24 @@ class ConfirmationMiddleware(Middleware):
             return ToolResult(content=prompt.declined)
 
         if key is None:
-            return await call_next(context)
-        while (existing := self._accepted.get(key)) is not None:
-            if existing.done.is_set():
-                if existing.result is not None and not existing.replayed:
-                    existing.replayed = True
-                    return existing.result
-                del self._accepted[key]
-                break
+            return await self._dial(context, call_next)
+        return await self._join_entry_not_seen_or_dial(key, seen, context, call_next)
+
+    async def _join_entry_not_seen_or_dial(
+        self, key: str, seen: _Accepted | None, context: MiddlewareContext, call_next
+    ) -> ToolResult:
+        while (existing := self._accepted.get(key)) is not None and existing is not seen:
             await existing.done.wait()
             if existing.result is not None:
+                existing.replayed = True
                 return existing.result
         return await self._run_accepted(key, context, call_next)
+
+    @staticmethod
+    async def _dial(context: MiddlewareContext, call_next) -> ToolResult:
+        # a client cancel must not abort a request the API may already have accepted
+        with anyio.CancelScope(shield=True):
+            return await call_next(context)
 
     async def _replay(self, key: str | None) -> ToolResult | None:
         if key is None:
@@ -246,8 +259,7 @@ class ConfirmationMiddleware(Middleware):
         entry = _Accepted()
         self._accepted[key] = entry
         try:
-            with anyio.CancelScope(shield=True):
-                result = await call_next(context)
+            result = await self._dial(context, call_next)
         except BaseException:
             del self._accepted[key]
             entry.done.set()
@@ -265,8 +277,7 @@ class ConfirmationMiddleware(Middleware):
         expired = [
             key
             for key, entry in self._accepted.items()
-            if entry.finished_at is not None
-            and (entry.replayed or now - entry.finished_at > REPLAY_WINDOW_S)
+            if entry.finished_at is not None and now - entry.finished_at > REPLAY_WINDOW_S
         ]
         for key in expired:
             del self._accepted[key]

@@ -731,6 +731,7 @@ def build_server() -> FastMCP:
     register_api_spec(mcp, docs_client)
 
     tool_routes = {**_TOOL_ROUTES, **_HAND_TOOL_ROUTES}
+    _require_gated_tools(tool_routes)
     _warn_on_never_gated_tools(tool_routes)
     mcp.add_middleware(ScopeFilterMiddleware(tool_routes))
     mcp.add_middleware(ConfirmationMiddleware(CONFIRMATIONS, api_client))
@@ -742,6 +743,12 @@ def build_server() -> FastMCP:
 # denies these to every OAuth token. Their tools are correctly hidden from OAuth
 # connections, so they are not drift and must not raise the reconcile warning.
 _EXPECTED_UNSCOPED_PREFIXES = ("/v1/api-keys",)
+
+
+def _require_gated_tools(tool_routes: dict[str, tuple[str, str]]) -> None:
+    missing = sorted(set(CONFIRMATIONS) - set(tool_routes))
+    if missing:
+        raise RuntimeError(f"Confirmation is configured for unknown tools: {', '.join(missing)}")
 
 
 def _warn_on_never_gated_tools(tool_routes: dict[str, tuple[str, str]]) -> None:

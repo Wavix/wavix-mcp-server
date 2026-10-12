@@ -370,6 +370,7 @@ In either case, review `billing_transactions_list` and `cdrs_list` for unexpecte
 ## Compatibility & limits
 
 - Compatible with any MCP client supporting **Streamable HTTP** transport (Claude Desktop / Web / Code, Cursor 2.4+, VS Code, Windsurf, custom MCP SDKs) and any agent framework with an MCP client adapter.
+- Placing calls with `call_control_create` or `voice_campaigns_create` needs a client that supports MCP form elicitation. Other clients are refused and pointed to the Wavix portal.
 - Older clients may enforce a per-server tool cap; upgrade to a recent version to access the full catalogue.
 - Rate limits and usage charges follow your Wavix account plan. See [Wavix pricing](https://wavix.com/pricing).
 
