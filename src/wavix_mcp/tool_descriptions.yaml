@@ -439,16 +439,18 @@ sip_trunks_list: >-
 
 sip_trunks_update: >-
   Updates the SIP trunk identified by `id`; only the fields provided in the
-  request change. Use when the user wants to change one or more settings of an existing SIP trunk,
-  such as its label, password, Caller ID, or call limits. Overwrites the provided
-  settings on the trunk, including the `password` when supplied; addresses in
-  `allowed_ips` are added to the trunk's allowed list, and addresses already on it
-  are kept; on trial accounts every update also applies the trial limits, a
-  `call_limit` of at most 300 seconds (300 when omitted) and one concurrent call.
-  Requires the `trunks:write` scope and the SIP trunk's `id`; on trial
-  accounts, send the current `call_limit` to keep it; a `callerid` must be an
-  active or verified number on the account; `ip_restrict` takes effect only when
-  the trunk has at least one allowed IP address, stored or sent in `allowed_ips`.
+  request change. Use when the user wants to change one or more settings of an
+  existing SIP trunk, such as its label, password, Caller ID, or call limits.
+  Overwrites the provided settings on the trunk, including the `password` when
+  supplied; setting `multiple_numbers` to `true` clears the trunk's `callerid`;
+  addresses in `allowed_ips` are added to the trunk's allowed list, and addresses
+  already on it are kept; on trial accounts every update also applies the trial
+  limits, a `call_limit` of at most 300 seconds (300 when omitted) and one
+  concurrent call. Requires the `trunks:write` scope and the SIP trunk's `id`; on
+  trial accounts, send the current `call_limit` to keep it and do not send
+  `host_request`; a `callerid` must be an active or verified number on the
+  account; set `ip_restrict` to `true` only when the trunk has at least one
+  allowed IP address, stored or sent in `allowed_ips`.
 
 api_keys_create: >-
   Creates an API key for the authenticated account, optionally restricting its
