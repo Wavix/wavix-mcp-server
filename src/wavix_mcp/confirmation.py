@@ -539,7 +539,9 @@ class ConfirmationMiddleware(Middleware):
         tokens[issued] = _Pending(binding, self._clock() + TOKEN_TTL_S)
         return ToolResult(
             content=(
-                f'{preview}\nCall this tool again with {TOKEN_PARAMETER}="{issued}" to proceed.'
+                f"{preview}\nShow this preview to the user and wait for their reply. "
+                f'Call this tool again with {TOKEN_PARAMETER}="{issued}" only after the user '
+                "approves it in a later message; approval given before this preview does not count."
             )
         )
 

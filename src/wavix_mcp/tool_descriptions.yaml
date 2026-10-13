@@ -13,14 +13,14 @@
 # irreversibility}. {Preconditions}. See the mcp-tool-descriptions skill.
 
 sms_and_mms_messages_send: >-
-  Sends an SMS or MMS message to a single recipient. Use when the user asks to
-  send a text or multimedia message. The first call sends nothing and returns a
-  preview naming the Sender ID, the recipient number and the start of the message
-  with a `confirmation_token`; the message is sent only when the tool is called
-  again with the same arguments and that token after the user approves the
-  preview. Billable to the account balance; delivery is irreversible once the
-  message is accepted. Requires the `messages:write` scope and a `from` value that
-  is a registered Sender ID; MMS is supported for US recipients only; the
+  Sends an SMS or MMS message to a single recipient. Use when the user asks to send
+  a text or multimedia message. The first call sends nothing and returns a preview
+  naming the Sender ID, the recipient number and the start of the message with a
+  `confirmation_token`; the message is sent only when the tool is called again with
+  the same arguments and that token after the user has seen the preview and approved
+  it in a later message. Billable to the account balance; delivery is irreversible
+  once the message is accepted. Requires the `messages:write` scope and a `from`
+  value that is a registered Sender ID; MMS is supported for US recipients only; the
   recipient must not be on the account's opt-out list.
 
 sms_and_mms_messages_list: >-
@@ -83,16 +83,16 @@ call_control_answer: >-
   Answers the inbound call identified by `id`, optionally starting call recording,
   post-call transcription, or live media streaming to a WebSocket `stream_url` on
   answer. Use when an inbound call must be picked up before audio can be played,
-  input collected, or its media streamed. Without `stream_url` the call is
-  answered at once. With `stream_url`, the first call answers nothing and returns
-  a preview naming the call and the `stream_url` that would receive its audio,
-  including the caller's voice, with a `confirmation_token`; the call is answered
-  and streamed only when the tool is called again with the same arguments and that
-  token after the user approves the preview. Answers the live call and connects
-  the caller; enabling `call_recording` records the call, `call_transcription`
-  transcribes it after it ends, and any `stream_url` begins receiving the call's
-  audio, including the caller's voice. Requires the `calls:write` scope and the
-  call's `id` (`uuid`).
+  input collected, or its media streamed. Without `stream_url` the call is answered
+  at once. With `stream_url`, the first call answers nothing and returns a preview
+  naming the call and the `stream_url` that would receive its audio, including the
+  caller's voice, with a `confirmation_token`; the call is answered and streamed
+  only when the tool is called again with the same arguments and that token after
+  the user has seen the preview and approved it in a later message. Answers the live
+  call and connects the caller; enabling `call_recording` records the call,
+  `call_transcription` transcribes it after it ends, and any `stream_url` begins
+  receiving the call's audio, including the caller's voice. Requires the
+  `calls:write` scope and the call's `id` (`uuid`).
 
 call_control_audio_play: >-
   Plays an audio prompt into the active call identified by `id`, audible to the
@@ -120,14 +120,15 @@ call_control_collect: >-
 call_control_create: >-
   Places a real, billable outbound PSTN call from `from` to `to`, returning the
   call's `uuid` for tracking and control. Use when the user asks to start an
-  outbound phone call. The first call dials nothing and returns a preview naming
-  the caller ID, the destination and whether the call is recorded with a
+  outbound phone call. The first call dials nothing and returns a preview naming the
+  caller ID, the destination and whether the call is recorded with a
   `confirmation_token`; the call is placed only when the tool is called again with
-  the same arguments and that token after the user approves the preview. Billable
-  to the account balance; the call is placed on the live PSTN network as soon as
-  the confirmed request runs. Requires the `calls:write` scope, a `from` Caller ID
-  that is an active or verified number on the account, a `to` number in E.164
-  format, and a `callback_url` for call status updates.
+  the same arguments and that token after the user has seen the preview and approved
+  it in a later message. Billable to the account balance; the call is placed on the
+  live PSTN network as soon as the confirmed request runs. Requires the
+  `calls:write` scope, a `from` Caller ID that is an active or verified number on
+  the account, a `to` number in E.164 format, and a `callback_url` for call status
+  updates.
 
 call_control_delete: >-
   Ends the active call identified by `id` by hanging up. Use when the user asks to
@@ -148,17 +149,17 @@ call_control_list: >-
 call_control_streams_create: >-
   Starts streaming the audio of the call identified by `call_id` to the WebSocket
   `stream_url` you supply, in the audio direction (`stream_type`) and channel
-  (`stream_channel`) you configure, returning the `stream_id`. Use to forward a
-  live call's audio to an external real-time consumer, such as a transcription or
-  AI service. The first call streams nothing and returns a preview naming the call
-  and the `stream_url` that would receive its audio, including the other party's
-  voice, with a `confirmation_token`; streaming starts only when the tool is
-  called again with the same arguments and that token after the user approves the
-  preview. Begins sending the live call's audio, including the remote party's
-  voice, to the given `stream_url`; with `stream_type` `twoway` the destination
-  can also play audio into the call. Requires the `calls:write` scope, the call's
-  `call_id` (`uuid`), a `stream_url` WebSocket URL, and the `stream_type` and
-  `stream_channel` values.
+  (`stream_channel`) you configure, returning the `stream_id`. Use to forward a live
+  call's audio to an external real-time consumer, such as a transcription or AI
+  service. The first call streams nothing and returns a preview naming the call and
+  the `stream_url` that would receive its audio, including the other party's voice,
+  with a `confirmation_token`; streaming starts only when the tool is called again
+  with the same arguments and that token after the user has seen the preview and
+  approved it in a later message. Begins sending the live call's audio, including
+  the remote party's voice, to the given `stream_url`; with `stream_type` `twoway`
+  the destination can also play audio into the call. Requires the `calls:write`
+  scope, the call's `call_id` (`uuid`), a `stream_url` WebSocket URL, and the
+  `stream_type` and `stream_channel` values.
 
 call_control_streams_delete: >-
   Stops the media stream identified by `id` on the call identified by `call_id`.
@@ -177,14 +178,14 @@ call_control_update: >-
 call_webhooks_create: >-
   Registers a callback URL for the `on-call` or `post-call` event so Wavix sends a
   POST callback with call metadata to the URL when the event occurs. Use to set up
-  delivery of real-time or after-call status updates to your own endpoint. The
-  first call registers nothing and returns a preview naming the `url` and the
-  event type with a `confirmation_token`; the webhook is registered only when the
-  tool is called again with the same arguments and that token after the user
-  approves the preview. Creates persistent configuration that sends call metadata
-  to the URL, outside Wavix, on every matching call until the webhook is deleted.
-  Requires the `webhooks:write` scope, a `url` to receive callbacks, and an
-  `event_type` of `on-call` or `post-call`.
+  delivery of real-time or after-call status updates to your own endpoint. The first
+  call registers nothing and returns a preview naming the `url` and the event type
+  with a `confirmation_token`; the webhook is registered only when the tool is
+  called again with the same arguments and that token after the user has seen the
+  preview and approved it in a later message. Creates persistent configuration that
+  sends call metadata to the URL, outside Wavix, on every matching call until the
+  webhook is deleted. Requires the `webhooks:write` scope, a `url` to receive
+  callbacks, and an `event_type` of `on-call` or `post-call`.
 
 call_webhooks_delete: >-
   Removes the call webhook for the given event type, stopping Wavix from sending
@@ -215,12 +216,12 @@ my_numbers_delete: >-
   Releases the listed phone numbers back to stock, selected by either their record
   `ids` or their `dids` (the phone numbers themselves), but not both. Use when the
   user wants to give up one or more owned numbers. The first call releases nothing
-  and returns a preview listing the numbers with a `confirmation_token`; the
-  numbers are released only when the tool is called again with the same arguments
-  and that token after the user approves the preview. Permanent and irreversible;
-  once released the DIDs return to stock and the account no longer owns them.
-  Requires the `numbers:write` scope and either `ids` or `dids` (the two are
-  mutually exclusive).
+  and returns a preview listing the numbers with a `confirmation_token`; the numbers
+  are released only when the tool is called again with the same arguments and that
+  token after the user has seen the preview and approved it in a later message.
+  Permanent and irreversible; once released the DIDs return to stock and the account
+  no longer owns them. Requires the `numbers:write` scope and either `ids` or `dids`
+  (the two are mutually exclusive).
 
 my_numbers_get: >-
   Retrieves a single owned phone number by its `id`, including its inbound call
@@ -333,15 +334,16 @@ cart_add: >-
   the `numbers:write` scope and an `ids` array of the phone numbers to add.
 
 cart_checkout: >-
-  Purchases the phone numbers (DIDs) listed from the cart, provisioning them to
-  the account. Use as the final step of buying numbers, after staging them in the
-  cart. The first call buys nothing and returns a preview listing the numbers and
-  the total of their activation and monthly fees with a `confirmation_token`; the
-  purchase runs only when the tool is called again with the same arguments and
-  that token after the user approves the preview. This is the irreversible commit
-  step: activation and monthly fees are debited from the account balance
-  immediately, and the purchase cannot be reversed through this API. Requires the
-  `numbers:write` scope and an `ids` array of the cart numbers to purchase.
+  Purchases the phone numbers (DIDs) listed from the cart, provisioning them to the
+  account. Use as the final step of buying numbers, after staging them in the cart.
+  The first call buys nothing and returns a preview listing the numbers and the
+  total of their activation and monthly fees with a `confirmation_token`; the
+  purchase runs only when the tool is called again with the same arguments and that
+  token after the user has seen the preview and approved it in a later message. This
+  is the irreversible commit step: activation and monthly fees are debited from the
+  account balance immediately, and the purchase cannot be reversed through this API.
+  Requires the `numbers:write` scope and an `ids` array of the cart numbers to
+  purchase.
 
 cart_get: >-
   Retrieves the current purchase cart, including the phone numbers (DIDs) it
@@ -446,13 +448,13 @@ sip_trunks_create: >-
   `ip_restrict` is `true`.
 
 sip_trunks_delete: >-
-  Deletes the SIP trunk identified by `id`. Use when the user wants to remove a
-  SIP trunk they no longer need. The first call deletes nothing and returns a
-  preview naming the trunk and its Caller ID with a `confirmation_token`; the
-  trunk is deleted only when the tool is called again with the same arguments and
-  that token after the user approves the preview. Permanent and irreversible;
-  deletion stops all call routing through the trunk. Requires the `trunks:write`
-  scope and the SIP trunk's `id`.
+  Deletes the SIP trunk identified by `id`. Use when the user wants to remove a SIP
+  trunk they no longer need. The first call deletes nothing and returns a preview
+  naming the trunk and its Caller ID with a `confirmation_token`; the trunk is
+  deleted only when the tool is called again with the same arguments and that token
+  after the user has seen the preview and approved it in a later message. Permanent
+  and irreversible; deletion stops all call routing through the trunk. Requires the
+  `trunks:write` scope and the SIP trunk's `id`.
 
 sip_trunks_get: >-
   Retrieves the SIP trunk identified by `id`, including its configuration. Use to
@@ -466,16 +468,16 @@ sip_trunks_list: >-
   `per_page` from 1 to 100 (default 25) and `page` starting at 1.
 
 sip_trunks_update: >-
-  Replaces the configuration of the SIP trunk identified by `id`; any omitted
-  fields revert to their defaults. Use when the user wants to change a SIP trunk's
-  settings and has provided the full desired configuration. The first call changes
-  nothing and returns a preview listing the settings that would change with a
+  Replaces the configuration of the SIP trunk identified by `id`; any omitted fields
+  revert to their defaults. Use when the user wants to change a SIP trunk's settings
+  and has provided the full desired configuration. The first call changes nothing
+  and returns a preview listing the settings that would change with a
   `confirmation_token`; the configuration is replaced only when the tool is called
-  again with the same arguments and that token after the user approves the
-  preview. Overwrites the trunk's existing configuration on the account. Requires
-  the `trunks:write` scope, the SIP trunk's `id`, a `callerid` that is an active
-  or verified number on the account, and `allowed_ips` whenever `ip_restrict` is
-  `true`.
+  again with the same arguments and that token after the user has seen the preview
+  and approved it in a later message. Overwrites the trunk's existing configuration
+  on the account. Requires the `trunks:write` scope, the SIP trunk's `id`, a
+  `callerid` that is an active or verified number on the account, and `allowed_ips`
+  whenever `ip_restrict` is `true`.
 
 api_keys_create: >-
   Creates an API key for the authenticated account, optionally restricting its
@@ -572,26 +574,26 @@ two_fa_verification_check: >-
 two_fa_verification_create: >-
   Creates a 2FA verification and sends a real one-time password (OTP) to the
   destination number over the selected channel. Use when the user asks to start
-  phone verification. The first call sends nothing and returns a preview naming
-  the destination number, the channel and the 2FA service with a
-  `confirmation_token`; the OTP is sent only when the tool is called again with
-  the same arguments and that token after the user approves the preview. Billable
-  per OTP sent and irreversible: the message or call is delivered to a real phone
-  once accepted. Requires the `two_fa:write` scope, a `service_id` for a 2FA
+  phone verification. The first call sends nothing and returns a preview naming the
+  destination number, the channel and the 2FA service with a `confirmation_token`;
+  the OTP is sent only when the tool is called again with the same arguments and
+  that token after the user has seen the preview and approved it in a later message.
+  Billable per OTP sent and irreversible: the message or call is delivered to a real
+  phone once accepted. Requires the `two_fa:write` scope, a `service_id` for a 2FA
   service configured in the Wavix portal, a `to` number in E.164 format, and a
   `channel` of `sms` (text message) or `voice` (call reading the code aloud).
 
 two_fa_verification_resend: >-
   Resends the one-time password (OTP) for the 2FA verification identified by
   `session_id` over the specified channel, invalidating any previously sent codes.
-  Use when the end user did not receive the earlier code and asks for it to be
-  sent again. The first call sends nothing and returns a preview naming the
-  channel and the `session_id` with a `confirmation_token`; the OTP is resent only
-  when the tool is called again with the same arguments and that token after the
-  user approves the preview. Delivers a real, billable OTP to the destination
-  phone over the chosen channel and invalidates codes already sent. Requires the
-  `two_fa:write` scope, the verification's `session_id`, and a `channel` of `sms`
-  (text message) or `voice` (call reading the code aloud).
+  Use when the end user did not receive the earlier code and asks for it to be sent
+  again. The first call sends nothing and returns a preview naming the channel and
+  the `session_id` with a `confirmation_token`; the OTP is resent only when the tool
+  is called again with the same arguments and that token after the user has seen the
+  preview and approved it in a later message. Delivers a real, billable OTP to the
+  destination phone over the chosen channel and invalidates codes already sent.
+  Requires the `two_fa:write` scope, the verification's `session_id`, and a
+  `channel` of `sms` (text message) or `voice` (call reading the code aloud).
 
 webrtc_tokens_create: >-
   Creates a Wavix Embeddable widget token that authenticates a browser-based
@@ -628,17 +630,17 @@ webrtc_tokens_update: >-
   `payload`.
 
 voice_campaigns_create: >-
-  Launches a voice campaign that places a real outbound call running a
-  pre-approved call flow, returning a voice campaign `id` to track progress. Use
-  when the user asks to trigger a voice scenario. The first call launches nothing
-  and returns a preview naming the call flow (`callflow_id`), the Caller ID
-  (`caller_id`) and the destination (`contact`) with a `confirmation_token`; the
-  campaign launches only when the tool is called again with the same arguments and
-  that token after the user approves the preview. Billable and irreversible: a
-  real outbound call is placed once the campaign launches, and it fails with `422`
-  when the account has insufficient funds. Requires the `campaigns:write` scope
-  and a `voice_campaign` with `callflow_id` (a pre-approved call flow), plus
-  `caller_id` and `contact` in E.164 format.
+  Launches a voice campaign that places a real outbound call running a pre-approved
+  call flow, returning a voice campaign `id` to track progress. Use when the user
+  asks to trigger a voice scenario. The first call launches nothing and returns a
+  preview naming the call flow (`callflow_id`), the Caller ID (`caller_id`) and the
+  destination (`contact`) with a `confirmation_token`; the campaign launches only
+  when the tool is called again with the same arguments and that token after the
+  user has seen the preview and approved it in a later message. Billable and
+  irreversible: a real outbound call is placed once the campaign launches, and it
+  fails with `422` when the account has insufficient funds. Requires the
+  `campaigns:write` scope and a `voice_campaign` with `callflow_id` (a pre-approved
+  call flow), plus `caller_id` and `contact` in E.164 format.
 
 voice_campaigns_get: >-
   Returns the voice campaign identified by `id`, including its current status.
@@ -730,10 +732,10 @@ ten_dlc_brands_delete: >-
   Deletes the 10DLC Brand identified by `brand_id`. Use when the user wants to
   remove a Brand the account no longer needs. The first call deletes nothing and
   returns a preview naming the Brand with a `confirmation_token`; the Brand is
-  deleted only when the tool is called again with the same arguments and that
-  token after the user approves the preview. Permanent and irreversible; a Brand
-  with active 10DLC Campaigns cannot be deleted. Requires the `campaigns:write`
-  scope and the Brand's `brand_id`.
+  deleted only when the tool is called again with the same arguments and that token
+  after the user has seen the preview and approved it in a later message. Permanent
+  and irreversible; a Brand with active 10DLC Campaigns cannot be deleted. Requires
+  the `campaigns:write` scope and the Brand's `brand_id`.
 
 ten_dlc_brands_get: >-
   Retrieves the 10DLC Brand identified by `brand_id`, including its identity verification
@@ -770,13 +772,14 @@ ten_dlc_brand_campaigns_create: >-
 ten_dlc_brand_campaigns_delete: >-
   Deletes the 10DLC Campaign identified by `campaign_id` under the 10DLC Brand
   `brand_id`. Use when the user wants to remove a 10DLC Campaign they no longer
-  need. The first call deletes nothing and returns a preview naming the Campaign
-  and the numbers that stop sending through it with a `confirmation_token`; the
-  Campaign is deleted only when the tool is called again with the same arguments
-  and that token after the user approves the preview. Permanent and irreversible;
-  once deleted, the phone numbers associated with the Campaign can no longer be
-  used as Sender IDs. Requires the `campaigns:write` scope, the 10DLC feature
-  enabled for the account, and the `brand_id` and `campaign_id`.
+  need. The first call deletes nothing and returns a preview naming the Campaign and
+  the numbers that stop sending through it with a `confirmation_token`; the Campaign
+  is deleted only when the tool is called again with the same arguments and that
+  token after the user has seen the preview and approved it in a later message.
+  Permanent and irreversible; once deleted, the phone numbers associated with the
+  Campaign can no longer be used as Sender IDs. Requires the `campaigns:write`
+  scope, the 10DLC feature enabled for the account, and the `brand_id` and
+  `campaign_id`.
 
 ten_dlc_brand_campaigns_get: >-
   Retrieves the 10DLC Campaign identified by `campaign_id` under the 10DLC Brand
@@ -903,11 +906,11 @@ sub_accounts_update: >-
   rename a sub-organization, enable or disable it, or change its default webhook
   destinations. The first call changes nothing and returns a preview listing the
   settings that would change with a `confirmation_token`; the configuration is
-  replaced only when the tool is called again with the same arguments and that
-  token after the user approves the preview. Overwrites the existing configuration
-  — any field omitted from the request reverts to its default. Requires the
-  `subaccounts:write` scope and the sub-organization's `id`; `status` accepts
-  `enabled` or `disabled`, and `name` may be up to 255 characters.
+  replaced only when the tool is called again with the same arguments and that token
+  after the user has seen the preview and approved it in a later message. Overwrites
+  the existing configuration — any field omitted from the request reverts to its
+  default. Requires the `subaccounts:write` scope and the sub-organization's `id`;
+  `status` accepts `enabled` or `disabled`, and `name` may be up to 255 characters.
 
 whatsapp_senders_list: >-
   Lists the WhatsApp senders on the account's WhatsApp Business Accounts, newest
@@ -959,20 +962,20 @@ whatsapp_templates_create: >-
   which may be omitted when the account has a single WhatsApp Business Account.
 
 whatsapp_messages_send: >-
-  Sends an approved WhatsApp template message from one of the account's senders to
-  a single recipient, substituting the template's placeholders, header, and
-  buttons. Use when the user asks to send a WhatsApp message. The first call sends
-  nothing and returns a preview naming the sender, the recipient, the template and
-  its placeholder values with a `confirmation_token`; the message is sent only
-  when the tool is called again with the same arguments and that token after the
-  user approves the preview. Billable to the account balance and irreversible once
-  accepted; the provider may still reject or defer delivery. Requires the
-  `whatsapp:write` scope, the WhatsApp channel enabled, the account's `sending`
-  capability, and a registered sender as `from`. Use a template that is approved
-  for that sender. Pass `idempotency_key` (up to 128 characters, unique per
-  account) to make retries safe: a repeated send with the same key returns the
-  original message and sends nothing, and the rest of the request is not compared,
-  so reuse a key only for the same send.
+  Sends an approved WhatsApp template message from one of the account's senders to a
+  single recipient, substituting the template's placeholders, header, and buttons.
+  Use when the user asks to send a WhatsApp message. The first call sends nothing
+  and returns a preview naming the sender, the recipient, the template and its
+  placeholder values with a `confirmation_token`; the message is sent only when the
+  tool is called again with the same arguments and that token after the user has
+  seen the preview and approved it in a later message. Billable to the account
+  balance and irreversible once accepted; the provider may still reject or defer
+  delivery. Requires the `whatsapp:write` scope, the WhatsApp channel enabled, the
+  account's `sending` capability, and a registered sender as `from`. Use a template
+  that is approved for that sender. Pass `idempotency_key` (up to 128 characters,
+  unique per account) to make retries safe: a repeated send with the same key
+  returns the original message and sends nothing, and the rest of the request is not
+  compared, so reuse a key only for the same send.
 
 whatsapp_messages_list: >-
   Lists the account's WhatsApp messages, filterable by direction, delivery

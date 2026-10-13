@@ -208,7 +208,10 @@ def test_first_call_returns_a_preview_and_dials_nothing(isolated_routes, anonymo
     lines = _text(preview).splitlines()
     assert lines[0] == "This will place a billable call from +15550100 to +15550199."
     assert re.fullmatch(
-        rf'Call this tool again with {TOKEN_PARAMETER}="[\w-]+" to proceed\.', lines[1]
+        "Show this preview to the user and wait for their reply. "
+        rf'Call this tool again with {TOKEN_PARAMETER}="[\w-]+" only after the user '
+        "approves it in a later message; approval given before this preview does not count\\.",
+        lines[1],
     )
 
 

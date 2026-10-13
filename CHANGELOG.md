@@ -16,7 +16,8 @@ Entries are derived from the commit history, which follows
   SIP trunks, sub-accounts and 10DLC brands or campaigns run in two steps: the
   first call does nothing and returns a preview with a single-use
   `confirmation_token` valid for 5 minutes; the action runs only when the tool
-  is called again with the same arguments and that token; repeating that
+  is called again with the same arguments and that token, after the user has
+  seen the preview and approved it in a later message; repeating that
   confirmed call returns the first result instead of acting again. Covers
   `call_control_create`, `voice_campaigns_create`,
   `call_control_streams_create`, `call_control_answer` (with `stream_url`),
