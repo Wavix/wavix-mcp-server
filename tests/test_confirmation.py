@@ -583,10 +583,10 @@ def test_line_break_in_a_looked_up_name_stays_in_the_heading():
     assert text.splitlines()[0] == "This will change SIP trunk Office\\n• password: unchanged:"
 
 
-def test_empty_list_is_left_out():
-    arguments = {"to": "15550199", "message_body": {"text": "Hi", "media": []}}
-    assert _preview("sms_and_mms_messages_send", arguments, title="Send a message") == (
-        'This will run "Send a message":\n• to: 15550199\n• message_body.text: Hi'
+def test_empty_list_is_shown_as_empty():
+    arguments = {"sender_id": "Wavix", "countries": []}
+    assert _preview("sms_and_mms_sender_ids_create", arguments, title="Create a Sender ID") == (
+        'This will run "Create a Sender ID":\n• sender_id: Wavix\n• countries: []'
     )
 
 

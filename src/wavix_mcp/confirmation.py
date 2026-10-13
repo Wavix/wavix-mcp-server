@@ -190,6 +190,8 @@ def _display(value: Any) -> str:
     if isinstance(value, str):
         return value
     if isinstance(value, list):
+        if not value:
+            return "[]"
         return ", ".join(
             _display({k: v for k, v in item.items() if k != "id"})
             if isinstance(item, Mapping)
@@ -307,7 +309,7 @@ def _excerpt(text: str) -> str:
 def _argument_lines(arguments: Mapping[str, Any]) -> list[str]:
     lines = []
     for field, value in _flatten(arguments).items():
-        if value is None or value == [] or field == TOKEN_PARAMETER:
+        if value is None or field == TOKEN_PARAMETER:
             continue
         if field in _SECRET_FIELDS:
             lines.append(f"{field}: (hidden)")
