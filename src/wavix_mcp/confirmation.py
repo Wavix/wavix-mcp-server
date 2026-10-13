@@ -1,9 +1,9 @@
 import hashlib
 import json
 import logging
-import re
 import secrets
 import time
+import unicodedata
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -25,7 +25,6 @@ MAX_LISTED_NUMBERS = 20
 MAX_PENDING_PER_CALLER = 100
 MESSAGE_PREVIEW_CHARS = 80
 
-_PHONE_NUMBER = re.compile(r"\+?[0-9]{7,15}")
 _ANONYMOUS_CALLER = "anonymous"
 _TOKEN_MISMATCH = (
     "The confirmation token has expired or does not match these arguments. Nothing was done."
@@ -33,25 +32,26 @@ _TOKEN_MISMATCH = (
 _PREVIEW_FAILED = "The confirmation preview could not be prepared, so nothing was done."
 _NO_CALLER = "This action needs an authenticated MCP session, so nothing was done."
 _SECRET_FIELDS = frozenset({"password"})
-_HEADER_FIELDS = ("text", "placeholder", "parameter_name", "media_url", "filename")
+_EXCERPTED_FIELDS = frozenset({"message_body.text"})
+_INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
 
 
 class ConfirmationInputError(ValueError):
     pass
 
 
-PreviewBuilder = Callable[[Mapping[str, Any], httpx.AsyncClient], Awaitable[str | None]]
+PreviewBuilder = Callable[[Mapping[str, Any], httpx.AsyncClient], Awaitable[str]]
+Details = Callable[[Mapping[str, Any], httpx.AsyncClient], Awaitable[list[str]]]
+
+
+@dataclass(frozen=True)
+class ConfirmedTool:
+    title: str
+    required: tuple[str, ...] = ()
 
 
 def _invalid(name: str) -> ConfirmationInputError:
     return ConfirmationInputError(f"Missing or invalid required argument: {name}")
-
-
-def _phone_number(arguments: Mapping[str, Any], key: str, name: str | None = None) -> str:
-    value = arguments.get(key)
-    if not isinstance(value, str) or not _PHONE_NUMBER.fullmatch(value):
-        raise _invalid(name or key)
-    return value
 
 
 def _text(arguments: Mapping[str, Any], key: str, name: str | None = None) -> str:
@@ -68,13 +68,6 @@ def _integer(arguments: Mapping[str, Any], key: str, name: str | None = None) ->
     return value
 
 
-def _mapping(arguments: Mapping[str, Any], key: str) -> Mapping[str, Any]:
-    value = arguments.get(key)
-    if not isinstance(value, Mapping):
-        raise _invalid(key)
-    return value
-
-
 async def _fetch(api: httpx.AsyncClient, path: str, **params: Any) -> Any:
     try:
         response = await api.get(path, params=params or None)
@@ -85,16 +78,41 @@ async def _fetch(api: httpx.AsyncClient, path: str, **params: Any) -> Any:
         return None
 
 
+async def _entity(api: httpx.AsyncClient, path: str) -> Mapping[str, Any]:
+    found = await _fetch(api, path)
+    return found if isinstance(found, Mapping) else {}
+
+
+async def _items(api: httpx.AsyncClient, path: str) -> list[Mapping[str, Any]]:
+    found = await _fetch(api, path)
+    if isinstance(found, Mapping):
+        found = found.get("items")
+    return [item for item in found or [] if isinstance(item, Mapping)]
+
+
 def _plural(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
+def _visible(text: str) -> str:
+    return "".join(
+        char.encode("unicode_escape").decode("ascii")
+        if unicodedata.category(char) in _INVISIBLE_CATEGORIES
+        else char
+        for char in text
+    )
+
+
 def _bullets(lines: Iterable[str]) -> str:
-    return "\n".join(f"• {line}" for line in lines)
+    return "\n".join(f"• {_visible(line)}" for line in lines)
+
+
+def _joined(*parts: Any) -> str:
+    return ", ".join(str(part) for part in parts if part not in (None, ""))
 
 
 def _place(entity: Mapping[str, Any]) -> str:
-    return ", ".join(str(entity[k]) for k in ("city", "country") if entity.get(k))
+    return _joined(entity.get("city"), entity.get("country"))
 
 
 def _number_line(entity: Mapping[str, Any] | None, fallback: str) -> str:
@@ -102,53 +120,6 @@ def _number_line(entity: Mapping[str, Any] | None, fallback: str) -> str:
         return fallback
     place = _place(entity)
     return f"{entity['number']} ({place})" if place else str(entity["number"])
-
-
-async def _outbound_call(arguments: Mapping[str, Any], _api: httpx.AsyncClient) -> str:
-    caller_id = _phone_number(arguments, "from")
-    destination = _phone_number(arguments, "to")
-    preview = f"This will place a billable call from {caller_id} to {destination}."
-    if arguments.get("recording") is True:
-        preview += " The call will be recorded."
-    return preview
-
-
-async def _voice_campaign(arguments: Mapping[str, Any], _api: httpx.AsyncClient) -> str:
-    campaign = _mapping(arguments, "voice_campaign")
-    callflow_id = _integer(campaign, "callflow_id", "voice_campaign.callflow_id")
-    caller_id = _phone_number(campaign, "caller_id", "voice_campaign.caller_id")
-    destination = _phone_number(campaign, "contact", "voice_campaign.contact")
-    return (
-        f"This will launch call flow {callflow_id}: "
-        f"a billable call from {caller_id} to {destination}."
-    )
-
-
-def _streamed_audio(arguments: Mapping[str, Any], party: str) -> tuple[str, str]:
-    stream_url = _text(arguments, "stream_url")
-    two_way = arguments.get("stream_type") == "twoway"
-    talk_back = " The destination can also play audio into the call." if two_way else ""
-    return f"including the {party}'s voice, to {stream_url}.", talk_back
-
-
-async def _call_stream(arguments: Mapping[str, Any], _api: httpx.AsyncClient) -> str:
-    call_id = _text(arguments, "call_id")
-    audio, talk_back = _streamed_audio(arguments, "other party")
-    return f"This will stream the live audio of call {call_id}, {audio}{talk_back}"
-
-
-async def _call_answer(arguments: Mapping[str, Any], _api: httpx.AsyncClient) -> str | None:
-    if arguments.get("stream_url") is None:
-        return None
-    call_id = _text(arguments, "id")
-    audio, talk_back = _streamed_audio(arguments, "caller")
-    return f"This will answer call {call_id} and stream its live audio, {audio}{talk_back}"
-
-
-async def _call_webhook(arguments: Mapping[str, Any], _api: httpx.AsyncClient) -> str:
-    url = _text(arguments, "url")
-    event_type = _text(arguments, "event_type")
-    return f"This will send call metadata for every {event_type} event to {url}."
 
 
 def _capped(lines: list[str], total: int) -> list[str]:
@@ -276,6 +247,7 @@ def _changes(
 
 
 def _change_preview(subject: str, lines: list[str]) -> str:
+    subject = _visible(subject)
     if not lines:
         return f"This will change {subject}."
     return f"This will change {subject}:\n{_bullets(lines)}"
@@ -289,119 +261,12 @@ async def _update_trunk(arguments: Mapping[str, Any], api: httpx.AsyncClient) ->
     return _change_preview(f"SIP trunk {label or trunk_id}", lines)
 
 
-async def _delete_trunk(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
-    trunk_id = _integer(arguments, "id")
-    current = await _fetch(api, f"/v1/trunks/{trunk_id}")
-    known = current if isinstance(current, Mapping) else {}
-    caller_id = f" with Caller ID {known['callerid']}" if known.get("callerid") else ""
-    return f"This will delete SIP trunk {known.get('label') or trunk_id}{caller_id} (irreversible)."
-
-
 async def _update_sub_account(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
     account_id = _integer(arguments, "id")
     current = await _fetch(api, f"/v1/sub-organizations/{account_id}")
     name = current.get("name") if isinstance(current, Mapping) else None
     lines = _changes(arguments, current, {"id"}, {})
     return _change_preview(f"sub-account {name or account_id}", lines)
-
-
-def _named(name: Any, identifier: str) -> str:
-    return f"{name} ({identifier})" if isinstance(name, str) and name else identifier
-
-
-async def _delete_brand(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
-    brand_id = _text(arguments, "brand_id")
-    brand = await _fetch(api, f"/v3/10dlc/brands/{brand_id}")
-    name = (
-        (brand.get("dba_name") or brand.get("company_name")) if isinstance(brand, Mapping) else None
-    )
-    return f"This will delete 10DLC brand {_named(name, brand_id)} (irreversible)."
-
-
-async def _delete_campaign(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
-    brand_id = _text(arguments, "brand_id")
-    campaign_id = _text(arguments, "campaign_id")
-    campaign = await _fetch(api, f"/v3/10dlc/brands/{brand_id}/campaigns/{campaign_id}")
-    known = campaign if isinstance(campaign, Mapping) else {}
-    preview = (
-        f"This will delete 10DLC campaign {_named(known.get('name'), campaign_id)} (irreversible)."
-    )
-    numbers = [n for n in known.get("phone_numbers") or [] if isinstance(n, str) and n]
-    if not numbers:
-        return preview
-    stopping = (
-        f"These numbers will stop sending through it:\n{_bullets(_capped(numbers, len(numbers)))}"
-    )
-    return f"{preview}\n{stopping}"
-
-
-def _excerpt(text: str) -> str:
-    if len(text) <= MESSAGE_PREVIEW_CHARS:
-        return text
-    return text[:MESSAGE_PREVIEW_CHARS].rstrip() + "…"
-
-
-async def _send_sms(arguments: Mapping[str, Any], _api: httpx.AsyncClient) -> str:
-    sender = _text(arguments, "from")
-    destination = _text(arguments, "to")
-    body = _mapping(arguments, "message_body")
-    text = body.get("text")
-    media = [url for url in body.get("media") or [] if isinstance(url, str) and url]
-    heading = f"This will send a billable message from {sender} to {destination}"
-    heading += f': "{_excerpt(text)}"' if isinstance(text, str) and text else "."
-    if not media:
-        return heading
-    return f"{heading}\n{_bullets(f'media: {url}' for url in media)}"
-
-
-async def _send_whatsapp(arguments: Mapping[str, Any], _api: httpx.AsyncClient) -> str:
-    sender = _text(arguments, "from")
-    destination = _text(arguments, "to")
-    template = _mapping(arguments, "template")
-    name = _text(template, "name", "template.name")
-    language = _text(template, "language", "template.language")
-    placeholders = [p for p in template.get("placeholders") or [] if isinstance(p, str)]
-    values = f", values: {', '.join(placeholders)}" if placeholders else ""
-    preview = (
-        f"This will send a billable message from {sender} to {destination}: "
-        f'template "{name}" ({language}){values}.'
-    )
-    extras = _template_extras(template)
-    return f"{preview}\n{_bullets(extras)}" if extras else preview
-
-
-def _template_extras(template: Mapping[str, Any]) -> list[str]:
-    extras = []
-    header = template.get("header")
-    if isinstance(header, Mapping):
-        parts = [str(header[k]) for k in _HEADER_FIELDS if header.get(k) not in (None, "")]
-        if header.get("latitude") is not None and header.get("longitude") is not None:
-            parts.append(f"{header['latitude']}, {header['longitude']}")
-        extras.append(f"header ({header.get('type')}): {', '.join(parts)}".rstrip(": "))
-    for button in template.get("buttons") or []:
-        if isinstance(button, Mapping):
-            parameter = button.get("parameter")
-            line = f"button ({button.get('type')})"
-            extras.append(f"{line}: {parameter}" if parameter else line)
-    return extras
-
-
-async def _send_otp(arguments: Mapping[str, Any], _api: httpx.AsyncClient) -> str:
-    channel = _text(arguments, "channel")
-    destination = _phone_number(arguments, "to")
-    service_id = _text(arguments, "service_id")
-    return (
-        f"This will send a billable verification code by {channel} to {destination} "
-        f"from 2FA service {service_id}."
-    )
-
-
-async def _resend_otp(arguments: Mapping[str, Any], _api: httpx.AsyncClient) -> str:
-    channel = _text(arguments, "channel")
-    session_id = _text(arguments, "session_id")
-    return (
-        f"This will resend a billable verification code by {channel} for verification {session_id}."
-    )
 
 
 def _fee(entity: Mapping[str, Any], key: str) -> Decimal | None:
@@ -433,24 +298,207 @@ async def _checkout(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str
     return f"{heading}\n{_bullets(lines)}"
 
 
-CONFIRMATIONS: Mapping[str, PreviewBuilder] = {
-    "call_control_create": _outbound_call,
-    "voice_campaigns_create": _voice_campaign,
-    "call_control_streams_create": _call_stream,
-    "call_control_answer": _call_answer,
-    "call_webhooks_create": _call_webhook,
+def _excerpt(text: str) -> str:
+    if len(text) <= MESSAGE_PREVIEW_CHARS:
+        return text
+    return text[:MESSAGE_PREVIEW_CHARS].rstrip() + "…"
+
+
+def _argument_lines(arguments: Mapping[str, Any]) -> list[str]:
+    lines = []
+    for field, value in _flatten(arguments).items():
+        if value is None or value == [] or field == TOKEN_PARAMETER:
+            continue
+        if field in _SECRET_FIELDS:
+            lines.append(f"{field}: (hidden)")
+        elif field in _EXCERPTED_FIELDS and isinstance(value, str):
+            lines.append(f"{field}: {_excerpt(value)}")
+        else:
+            lines.append(f"{field}: {_display(value)}")
+    return lines
+
+
+def template_preview(tool: ConfirmedTool, details: Details | None = None) -> PreviewBuilder:
+    async def build(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
+        for name in tool.required:
+            value = arguments.get(name)
+            if value is None or (isinstance(value, str) and not value.strip()):
+                raise _invalid(name)
+        lines = _argument_lines(arguments)
+        if details is not None:
+            lines += await details(arguments, api)
+        heading = f'This will run "{tool.title}"'
+        return f"{heading}:\n{_bullets(lines)}" if lines else f"{heading}."
+
+    return build
+
+
+def _path_id(arguments: Mapping[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = arguments.get(key)
+        if isinstance(value, str | int) and not isinstance(value, bool) and str(value).strip():
+            return str(value)
+    return None
+
+
+async def _call_details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
+    call_id = _path_id(arguments, "call_id", "id")
+    if call_id is None:
+        return []
+    call = (await _entity(api, f"/v1/calls/{call_id}")).get("call")
+    if not isinstance(call, Mapping) or not call.get("from") or not call.get("to"):
+        return []
+    return [f"call: {call['from']} → {call['to']}"]
+
+
+async def _recording_details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
+    recording_id = _path_id(arguments, "id")
+    if recording_id is None:
+        return []
+    recording = await _entity(api, f"/v1/recordings/{recording_id}")
+    if not recording.get("from") or not recording.get("to"):
+        return []
+    parties = f"{recording['from']} → {recording['to']}"
+    date = str(recording.get("created_at") or "")[:10]
+    duration = recording.get("duration")
+    length = f"{duration} s" if isinstance(duration, int) else None
+    return [f"recording: {_joined(parties, date, length)}"]
+
+
+async def _trunk_details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
+    trunk_id = _path_id(arguments, "id")
+    if trunk_id is None:
+        return []
+    trunk = await _entity(api, f"/v1/trunks/{trunk_id}")
+    caller_id = f"Caller ID {trunk['callerid']}" if trunk.get("callerid") else None
+    summary = _joined(trunk.get("label"), caller_id)
+    return [f"SIP trunk: {summary}"] if summary else []
+
+
+async def _brand_details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
+    brand_id = _path_id(arguments, "brand_id")
+    if brand_id is None:
+        return []
+    brand = await _entity(api, f"/v3/10dlc/brands/{brand_id}")
+    name = brand.get("dba_name") or brand.get("company_name")
+    return [f"brand: {name}"] if name else []
+
+
+async def _campaign(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> Mapping[str, Any]:
+    brand_id = _path_id(arguments, "brand_id")
+    campaign_id = _path_id(arguments, "campaign_id")
+    if brand_id is None or campaign_id is None:
+        return {}
+    return await _entity(api, f"/v3/10dlc/brands/{brand_id}/campaigns/{campaign_id}")
+
+
+async def _campaign_details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
+    campaign = await _campaign(arguments, api)
+    return [f"campaign: {campaign['name']}"] if campaign.get("name") else []
+
+
+async def _campaign_delete_details(
+    arguments: Mapping[str, Any], api: httpx.AsyncClient
+) -> list[str]:
+    campaign = await _campaign(arguments, api)
+    lines = [f"campaign: {campaign['name']}"] if campaign.get("name") else []
+    numbers = [n for n in campaign.get("phone_numbers") or [] if isinstance(n, str) and n]
+    if numbers:
+        stopping = ", ".join(_capped(numbers, len(numbers)))
+        lines.append(f"numbers that stop sending: {stopping}")
+    return lines
+
+
+async def _sender_id_details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
+    sender_id = _path_id(arguments, "id")
+    if sender_id is None:
+        return []
+    sender = await _entity(api, f"/v3/messages/sender-ids/{sender_id}")
+    if not sender.get("sender_id"):
+        return []
+    kind = f" ({sender['type']})" if sender.get("type") else ""
+    return [f"Sender ID: {sender['sender_id']}{kind}"]
+
+
+async def _widget_token_details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
+    token_id = _path_id(arguments, "id")
+    if token_id is None:
+        return []
+    token = await _entity(api, f"/v2/webrtc/tokens/{token_id}")
+    return [f"SIP trunk: {token['sip_trunk']}"] if token.get("sip_trunk") else []
+
+
+async def _api_key_details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
+    key_id = _path_id(arguments, "id")
+    keys = await _items(api, "/v1/api-keys")
+    label = next((k.get("label") for k in keys if str(k.get("id")) == key_id), None)
+    return [f"API key: {label}"] if label else []
+
+
+def _current_url(items: list[Mapping[str, Any]], key: str, value: Any) -> list[str]:
+    url = next((item.get("url") for item in items if item.get(key) == value), None)
+    return [f"current URL: {url}"] if url else []
+
+
+async def _webhook_details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
+    webhooks = await _items(api, "/v1/calls/webhooks")
+    return _current_url(webhooks, "event_type", arguments.get("event_type"))
+
+
+async def _subscription_details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
+    subscriptions = await _items(api, "/v3/10dlc/subscriptions")
+    category = arguments.get("subscription_category")
+    return _current_url(subscriptions, "subscription_category", category)
+
+
+async def _evidence_details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
+    brand_id = _path_id(arguments, "brand_id")
+    evidence_id = _path_id(arguments, "id")
+    if brand_id is None:
+        return []
+    files = await _items(api, f"/v3/10dlc/brands/{brand_id}/evidence")
+    name = next((f.get("file_name") for f in files if f.get("uuid") == evidence_id), None)
+    return [f"file: {name}"] if name else []
+
+
+CUSTOM_PREVIEWS: Mapping[str, PreviewBuilder] = {
     "my_numbers_delete": _release_numbers,
-    "sip_trunks_delete": _delete_trunk,
     "sip_trunks_update": _update_trunk,
     "sub_accounts_update": _update_sub_account,
-    "ten_dlc_brands_delete": _delete_brand,
-    "ten_dlc_brand_campaigns_delete": _delete_campaign,
-    "sms_and_mms_messages_send": _send_sms,
-    "whatsapp_messages_send": _send_whatsapp,
-    "two_fa_verification_create": _send_otp,
-    "two_fa_verification_resend": _resend_otp,
     "cart_checkout": _checkout,
 }
+
+DETAILS: Mapping[str, Details] = {
+    "api_keys_delete": _api_key_details,
+    "call_control_answer": _call_details,
+    "call_control_audio_play": _call_details,
+    "call_control_audio_stop": _call_details,
+    "call_control_delete": _call_details,
+    "call_control_streams_create": _call_details,
+    "call_control_streams_delete": _call_details,
+    "call_recording_delete": _recording_details,
+    "call_webhooks_create": _webhook_details,
+    "call_webhooks_delete": _webhook_details,
+    "sip_trunks_delete": _trunk_details,
+    "sms_and_mms_sender_ids_delete": _sender_id_details,
+    "ten_dlc_brand_campaigns_delete": _campaign_delete_details,
+    "ten_dlc_brand_evidence_delete": _evidence_details,
+    "ten_dlc_brands_delete": _brand_details,
+    "ten_dlc_campaign_numbers_unlink": _campaign_details,
+    "ten_dlc_subscriptions_delete": _subscription_details,
+    "webrtc_tokens_delete": _widget_token_details,
+}
+
+ALWAYS_CONFIRMED = frozenset(
+    {"call_webhooks_create", "sip_trunks_update", "sub_accounts_update", *CUSTOM_PREVIEWS}
+)
+
+
+def preview_builders(tools: Mapping[str, ConfirmedTool]) -> dict[str, PreviewBuilder]:
+    return {
+        name: CUSTOM_PREVIEWS.get(name) or template_preview(tool, DETAILS.get(name))
+        for name, tool in tools.items()
+    }
 
 
 def _caller_identity() -> str:
@@ -527,8 +575,6 @@ class ConfirmationMiddleware(Middleware):
         except Exception:
             logger.exception("Building the confirmation preview for %s failed", tool)
             return _refused(_PREVIEW_FAILED)
-        if preview is None:
-            return await call_next(stripped)
         if token is not None:
             preview = f"{_TOKEN_MISMATCH}\n\n{preview}"
 

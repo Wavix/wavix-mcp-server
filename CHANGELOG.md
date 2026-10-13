@@ -11,28 +11,22 @@ Entries are derived from the commit history, which follows
 
 ### Added
 
-- Tools that place calls, stream call audio, register call webhooks, send
-  messages or one-time passwords, buy or release numbers, or change or delete
-  SIP trunks, sub-accounts and 10DLC brands or campaigns run in two steps: the
-  first call does nothing and returns a preview with a single-use
-  `confirmation_token` valid for 5 minutes; the action runs only when the tool
-  is called again with the same arguments and that token, after the user has
-  seen the preview and approved it in a later message; repeating that
-  confirmed call returns the first result instead of acting again. Covers
-  `call_control_create`, `voice_campaigns_create`,
-  `call_control_streams_create`, `call_control_answer` (with `stream_url`),
-  `call_webhooks_create`, `my_numbers_delete`, `sip_trunks_delete`,
-  `sip_trunks_update`, `sub_accounts_update`, `ten_dlc_brands_delete`,
-  `ten_dlc_brand_campaigns_delete`, `sms_and_mms_messages_send`,
-  `whatsapp_messages_send`, `two_fa_verification_create`,
-  `two_fa_verification_resend` and `cart_checkout`.
+- Every tool annotated with `destructiveHint`, plus `call_webhooks_create`,
+  `sip_trunks_update` and `sub_accounts_update`, runs in two steps: the first
+  call does nothing and returns a preview with a single-use `confirmation_token`
+  valid for 5 minutes; the action runs only when the tool is called again with
+  the same arguments and that token, after the user has seen the preview and
+  approved it in a later message; repeating that confirmed call returns the
+  first result instead of acting again. The preview lists the arguments and,
+  for tools that act on an existing call, recording, trunk, key, Sender ID,
+  10DLC brand, campaign or evidence file, names it; releasing numbers lists the
+  numbers, checkout states the total, and SIP trunk and sub-account updates list
+  the settings that change.
 
 ### Changed
 
 - **Breaking:** the tools above no longer act on the first call; a client
-  must call them again with the `confirmation_token` from the preview. Phone
-  numbers for calls and one-time passwords must be E.164 digits, with an
-  optional leading `+`, without spaces or punctuation.
+  must call them again with the `confirmation_token` from the preview.
 - The tools above no longer publish an output schema, so a preview returns as a
   normal result.
 - Requires `fastmcp>=3.4.8`; `anyio`, `mcp` and `pydantic` are declared dependencies.

@@ -19,12 +19,16 @@ from mcp.types import CallToolRequestParams
 
 from wavix_mcp import confirmation, scope_filter, server
 from wavix_mcp.confirmation import (
-    CONFIRMATIONS,
+    ALWAYS_CONFIRMED,
+    CUSTOM_PREVIEWS,
+    DETAILS,
     MAX_LISTED_NUMBERS,
     TOKEN_PARAMETER,
     TOKEN_TTL_S,
     ConfirmationInputError,
     ConfirmationMiddleware,
+    ConfirmedTool,
+    preview_builders,
 )
 from wavix_mcp.scope_filter import ScopeFilterMiddleware
 
@@ -40,15 +44,15 @@ _UUID_RESPONSE = {
 }
 
 
-def _post(operation_id: str, properties: dict) -> dict:
+def _post(operation_id: str, properties: dict, summary: str, required: tuple = ()) -> dict:
+    schema = {"type": "object", "properties": properties, "required": list(required)}
     return {
         "post": {
             "operationId": operation_id,
+            "summary": summary,
             "requestBody": {
                 "required": True,
-                "content": {
-                    "application/json": {"schema": {"type": "object", "properties": properties}}
-                },
+                "content": {"application/json": {"schema": schema}},
             },
             "responses": {
                 "200": {
@@ -71,6 +75,8 @@ _SPEC = {
                 "to": {"type": "string"},
                 "callback_url": {"type": "string"},
             },
+            "Start a call",
+            ("from", "to"),
         ),
         "/v1/voice-campaigns": _post(
             "voice_campaigns_create",
@@ -84,12 +90,27 @@ _SPEC = {
                     },
                 }
             },
+            "Trigger a scenario",
+            ("voice_campaign",),
         ),
         "/v1/calls/{id}/answer": {
             "post": {
-                **_post("call_control_answer", {"stream_url": {"type": "string"}})["post"],
+                **_post("call_control_answer", {"stream_url": {"type": "string"}}, "Answer a call")[
+                    "post"
+                ],
                 "parameters": [
                     {"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}
+                ],
+            }
+        },
+        "/v1/trunks/{id}": {
+            "put": {
+                **_post("sip_trunks_update", {"label": {"type": "string"}}, "Update a SIP trunk")[
+                    "post"
+                ],
+                "x-mcp": {"destructive": False},
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "integer"}}
                 ],
             }
         },
@@ -106,6 +127,9 @@ _SPEC = {
         },
     },
 }
+
+
+_BUILDERS = preview_builders({"call_control_create": ConfirmedTool("Start a call", ("from", "to"))})
 
 
 class _Api:
@@ -145,10 +169,13 @@ class _Clock:
 @pytest.fixture
 def isolated_routes():
     routes = dict(server._TOOL_ROUTES)
+    confirmed = dict(server._CONFIRMED_TOOLS)
     unannotated = list(server._UNANNOTATED)
     yield
     server._TOOL_ROUTES.clear()
     server._TOOL_ROUTES.update(routes)
+    server._CONFIRMED_TOOLS.clear()
+    server._CONFIRMED_TOOLS.update(confirmed)
     server._UNANNOTATED[:] = unannotated
 
 
@@ -167,7 +194,8 @@ def _server(api: _Api, clock: _Clock | None = None, *, with_scope_filter: bool =
     )
     if with_scope_filter:
         mcp.add_middleware(ScopeFilterMiddleware(dict(server._TOOL_ROUTES)))
-    mcp.add_middleware(ConfirmationMiddleware(CONFIRMATIONS, client, clock=clock or _Clock()))
+    builders = preview_builders(server._CONFIRMED_TOOLS)
+    mcp.add_middleware(ConfirmationMiddleware(builders, client, clock=clock or _Clock()))
     return mcp
 
 
@@ -206,12 +234,17 @@ def test_first_call_returns_a_preview_and_dials_nothing(isolated_routes, anonymo
     assert api.dials == 0
     assert not preview.is_error
     lines = _text(preview).splitlines()
-    assert lines[0] == "This will place a billable call from +15550100 to +15550199."
+    assert lines[:4] == [
+        'This will run "Start a call":',
+        "• from: +15550100",
+        "• to: +15550199",
+        "• callback_url: https://cb.test/x",
+    ]
     assert re.fullmatch(
         "Show this preview to the user and wait for their reply. "
         rf'Call this tool again with {TOKEN_PARAMETER}="[\w-]+" only after the user '
         "approves it in a later message; approval given before this preview does not count\\.",
-        lines[1],
+        lines[4],
     )
 
 
@@ -271,7 +304,7 @@ def test_retry_during_the_confirmed_call_waits_for_its_result(anonymous):
         await anyio.sleep(0.1)
         return ToolResult(structured_content={"uuid": "call-1"})
 
-    middleware = ConfirmationMiddleware(CONFIRMATIONS, httpx.AsyncClient())
+    middleware = ConfirmationMiddleware(_BUILDERS, httpx.AsyncClient())
 
     async def run():
         preview = await middleware.on_call_tool(_direct(middleware, CALL), call_next)
@@ -395,7 +428,7 @@ def test_cancelled_client_does_not_abort_the_confirmed_call(anonymous):
         dials.append(1)
         return ToolResult(structured_content={"uuid": "call-1"})
 
-    middleware = ConfirmationMiddleware(CONFIRMATIONS, httpx.AsyncClient())
+    middleware = ConfirmationMiddleware(_BUILDERS, httpx.AsyncClient())
 
     def context(arguments):
         return MiddlewareContext(
@@ -413,10 +446,11 @@ def test_cancelled_client_does_not_abort_the_confirmed_call(anonymous):
     assert dials == [1]
 
 
-def test_answer_without_stream_runs_at_once(isolated_routes, anonymous):
+def test_answer_without_stream_needs_the_token(isolated_routes, anonymous):
     api = _Api()
     [result] = asyncio.run(_calls(_server(api), ("call_control_answer", {"id": "c1"})))
-    assert not result.is_error and api.dials == 1
+    assert not result.is_error and api.dials == 0
+    assert _text(result).startswith('This will run "Answer a call":\n• id: c1')
 
 
 def test_answer_with_stream_needs_the_token(isolated_routes, anonymous):
@@ -424,11 +458,17 @@ def test_answer_with_stream_needs_the_token(isolated_routes, anonymous):
     arguments = {"id": "c1", "stream_url": "wss://agent.test/s"}
     preview, done = _confirm(_server(api), "call_control_answer", arguments)
     assert _text(preview).startswith(
-        "This will answer call c1 and stream its live audio, "
-        "including the caller's voice, to wss://agent.test/s."
+        'This will run "Answer a call":\n• id: c1\n• stream_url: wss://agent.test/s'
     )
     assert not done.is_error and api.dials == 1
     assert json.loads(api.posts[0].content) == {"stream_url": "wss://agent.test/s"}
+
+
+def test_hint_free_tool_named_by_the_review_is_confirmed(isolated_routes, anonymous):
+    api = _Api()
+    [result] = asyncio.run(_calls(_server(api), ("sip_trunks_update", {"id": 7, "label": "A"})))
+    assert api.requests[-1].method == "GET" and not [r for r in api.requests if r.method == "PUT"]
+    assert _text(result).startswith("This will change SIP trunk 7:")
 
 
 def test_gated_tools_take_a_token_and_drop_output_schema(isolated_routes, anonymous):
@@ -467,10 +507,7 @@ def test_scope_denial_precedes_the_preview(isolated_routes, anonymous, monkeypat
     [
         ("call_control_create", {"from": "+15550100"}, "to"),
         ("call_control_create", {"from": "+15550100", "to": "  "}, "to"),
-        ("call_control_create", {"from": 15550100, "to": "+15550199"}, "from"),
-        ("call_control_create", {"from": "+15550100", "to": " +15550199"}, "to"),
         ("voice_campaigns_create", {}, "voice_campaign"),
-        ("voice_campaigns_create", {"voice_campaign": {"callflow_id": True}}, "callflow_id"),
     ],
 )
 def test_missing_argument_fails_closed(isolated_routes, anonymous, tool, arguments, field):
@@ -499,73 +536,72 @@ def test_failure_while_building_the_preview_fails_closed(monkeypatch, anonymous)
     assert result.is_error and dials == []
 
 
-def _preview(tool: str, arguments: dict, lookups: dict | None = None) -> str:
+def _preview(tool: str, arguments: dict, lookups: dict | None = None, title: str = "Act") -> str:
     api = httpx.AsyncClient(
         base_url="http://api.test", transport=httpx.MockTransport(_Api(lookups=lookups))
     )
-    result = asyncio.run(CONFIRMATIONS[tool](arguments, api))
-    assert result is not None
-    return result
+    build = preview_builders({tool: ConfirmedTool(title)})[tool]
+    return asyncio.run(build(arguments, api))
 
 
-@pytest.mark.parametrize(
-    ("tool", "arguments", "expected"),
-    [
-        (
-            "voice_campaigns_create",
-            CAMPAIGN,
-            "This will launch call flow 3212: a billable call from 13123310912 to 16729923812.",
-        ),
-        (
-            "call_control_streams_create",
-            {"call_id": "c1", "stream_url": "wss://x.test/a"},
-            "This will stream the live audio of call c1, including the other party's voice, "
-            "to wss://x.test/a.",
-        ),
-        (
-            "call_webhooks_create",
-            {"url": "https://hook.test/a", "event_type": "on-call"},
-            "This will send call metadata for every on-call event to https://hook.test/a.",
-        ),
-        (
-            "sms_and_mms_messages_send",
-            {"from": "Wavix", "to": "15550199", "message_body": {"text": "Hi there"}},
-            'This will send a billable message from Wavix to 15550199: "Hi there"',
-        ),
-        (
-            "sms_and_mms_messages_send",
-            {
-                "from": "Wavix",
-                "to": "15550199",
-                "message_body": {"text": None, "media": ["https://m.test/1.png"]},
-            },
-            "This will send a billable message from Wavix to 15550199.\n"
-            "• media: https://m.test/1.png",
-        ),
-        (
-            "whatsapp_messages_send",
-            {
-                "from": "15550100",
-                "to": "15550199",
-                "template": {"name": "otp", "language": "en", "placeholders": ["1234"]},
-            },
-            "This will send a billable message from 15550100 to 15550199: "
-            'template "otp" (en), values: 1234.',
-        ),
-        (
-            "two_fa_verification_create",
-            {"service_id": "s", "to": "15550199", "channel": "sms"},
-            "This will send a billable verification code by sms to 15550199 from 2FA service s.",
-        ),
-        (
-            "two_fa_verification_resend",
-            {"session_id": "abc", "channel": "voice"},
-            "This will resend a billable verification code by voice for verification abc.",
-        ),
-    ],
-)
-def test_preview_text(tool, arguments, expected):
-    assert _preview(tool, arguments) == expected
+def test_template_lists_the_arguments_hiding_secrets_and_skipping_nulls():
+    arguments = {
+        "voice_campaign": {"callflow_id": 3212, "caller_id": "13123310912", "contact": None},
+        "password": "secret",
+        "countries": ["US", "CA"],
+        "mock": False,
+    }
+    text = _preview("some_tool", arguments, title="Trigger a scenario")
+    assert text == (
+        'This will run "Trigger a scenario":\n'
+        "• voice_campaign.callflow_id: 3212\n"
+        "• voice_campaign.caller_id: 13123310912\n"
+        "• password: (hidden)\n"
+        "• countries: US, CA\n"
+        "• mock: false"
+    )
+
+
+def test_template_without_arguments_is_one_line():
+    assert _preview("some_tool", {}, title="Stop audio playback") == (
+        'This will run "Stop audio playback".'
+    )
+
+
+def test_line_breaks_and_direction_marks_cannot_forge_preview_lines():
+    arguments = {"to": "\u202e9910555", "callback_url": "https://a\n• to: 15550199"}
+    assert _preview("call_control_create", arguments, title="Start a call") == (
+        'This will run "Start a call":\n'
+        "• to: \\u202e9910555\n"
+        "• callback_url: https://a\\n• to: 15550199"
+    )
+
+
+def test_line_break_in_a_looked_up_name_stays_in_the_heading():
+    lookups = {"/v1/trunks/7": {"label": "Office\n• password: unchanged"}}
+    text = _preview("sip_trunks_update", {"id": 7, "label": "A"}, lookups)
+    assert text.splitlines()[0] == "This will change SIP trunk Office\\n• password: unchanged:"
+
+
+def test_empty_list_is_left_out():
+    arguments = {"to": "15550199", "message_body": {"text": "Hi", "media": []}}
+    assert _preview("sms_and_mms_messages_send", arguments, title="Send a message") == (
+        'This will run "Send a message":\n• to: 15550199\n• message_body.text: Hi'
+    )
+
+
+def test_long_message_is_cut_in_the_preview():
+    text = "x" * (confirmation.MESSAGE_PREVIEW_CHARS + 20)
+    arguments = {"from": "Wavix", "to": "15550199", "message_body": {"text": text}}
+    preview = _preview("sms_and_mms_messages_send", arguments)
+    assert preview.endswith(
+        "• message_body.text: " + "x" * confirmation.MESSAGE_PREVIEW_CHARS + "…"
+    )
+
+
+def test_long_url_is_not_cut():
+    url = "wss://agent.test/" + "a" * confirmation.MESSAGE_PREVIEW_CHARS
+    assert _preview("call_control_streams_create", {"stream_url": url}).endswith(url)
 
 
 def test_release_numbers_by_id_names_each_number():
@@ -671,29 +707,116 @@ def test_sub_account_update_compares_nested_destinations():
     )
 
 
-def test_trunk_delete_names_the_trunk():
-    lookups = {"/v1/trunks/7": {"label": "Office", "callerid": "15550100"}}
-    assert _preview("sip_trunks_delete", {"id": 7}, lookups) == (
-        "This will delete SIP trunk Office with Caller ID 15550100 (irreversible)."
-    )
-    assert (
-        _preview("sip_trunks_delete", {"id": 8}) == "This will delete SIP trunk 8 (irreversible)."
+@pytest.mark.parametrize(
+    ("tool", "arguments", "lookups", "detail"),
+    [
+        (
+            "call_control_delete",
+            {"id": "c1"},
+            {"/v1/calls/c1": {"call": {"from": "15550100", "to": "15550199"}}},
+            "call: 15550100 → 15550199",
+        ),
+        (
+            "call_control_streams_delete",
+            {"call_id": "c1", "id": "s1"},
+            {"/v1/calls/c1": {"call": {"from": "15550100", "to": "15550199"}}},
+            "call: 15550100 → 15550199",
+        ),
+        (
+            "call_recording_delete",
+            {"id": 5},
+            {
+                "/v1/recordings/5": {
+                    "from": "15550100",
+                    "to": "15550199",
+                    "created_at": "2026-10-12T10:00:00Z",
+                    "duration": 41,
+                }
+            },
+            "recording: 15550100 → 15550199, 2026-10-12, 41 s",
+        ),
+        (
+            "sip_trunks_delete",
+            {"id": 7},
+            {"/v1/trunks/7": {"label": "Office", "callerid": "15550100"}},
+            "SIP trunk: Office, Caller ID 15550100",
+        ),
+        (
+            "ten_dlc_brands_delete",
+            {"brand_id": "BABC123"},
+            {"/v3/10dlc/brands/BABC123": {"dba_name": "Acme"}},
+            "brand: Acme",
+        ),
+        (
+            "ten_dlc_campaign_numbers_unlink",
+            {"brand_id": "B1", "campaign_id": "C9", "number": "15550100"},
+            {"/v3/10dlc/brands/B1/campaigns/C9": {"name": "Alerts"}},
+            "campaign: Alerts",
+        ),
+        (
+            "sms_and_mms_sender_ids_delete",
+            {"id": "s1"},
+            {"/v3/messages/sender-ids/s1": {"sender_id": "Wavix", "type": "alphanumeric"}},
+            "Sender ID: Wavix (alphanumeric)",
+        ),
+        (
+            "webrtc_tokens_delete",
+            {"id": "t1"},
+            {"/v2/webrtc/tokens/t1": {"sip_trunk": "Office"}},
+            "SIP trunk: Office",
+        ),
+        (
+            "api_keys_delete",
+            {"id": 2},
+            {"/v1/api-keys": [{"id": 1, "label": "Old"}, {"id": 2, "label": "CI", "value": "k"}]},
+            "API key: CI",
+        ),
+        (
+            "call_webhooks_delete",
+            {"event_type": "post-call"},
+            {"/v1/calls/webhooks": [{"event_type": "post-call", "url": "https://hook.test/a"}]},
+            "current URL: https://hook.test/a",
+        ),
+        (
+            "ten_dlc_subscriptions_delete",
+            {"subscription_category": "BRAND"},
+            {"/v3/10dlc/subscriptions": [{"subscription_category": "BRAND", "url": "https://s"}]},
+            "current URL: https://s",
+        ),
+        (
+            "ten_dlc_brand_evidence_delete",
+            {"brand_id": "B1", "id": "u1"},
+            {"/v3/10dlc/brands/B1/evidence": {"items": [{"uuid": "u1", "file_name": "ein.pdf"}]}},
+            "file: ein.pdf",
+        ),
+    ],
+)
+def test_deletes_by_id_name_what_they_act_on(tool, arguments, lookups, detail):
+    lines = _preview(tool, arguments, lookups).splitlines()
+    assert lines[-1] == f"• {detail}"
+    assert len(lines) == len(arguments) + 2
+
+
+def test_failed_lookup_leaves_only_the_arguments():
+    assert _preview("sip_trunks_delete", {"id": 8}, title="Delete a SIP trunk") == (
+        'This will run "Delete a SIP trunk":\n• id: 8'
     )
 
 
-def test_ten_dlc_deletes_name_the_brand_and_campaign():
+def test_campaign_delete_lists_the_numbers_that_stop_sending():
     lookups = {
-        "/v3/10dlc/brands/BABC123": {"dba_name": "Acme"},
-        "/v3/10dlc/brands/BABC123/campaigns/C9": {"name": "Alerts"},
+        "/v3/10dlc/brands/BABC123/campaigns/C9": {
+            "name": "Alerts",
+            "phone_numbers": ["15550100", "15550101"],
+        }
     }
-    assert _preview("ten_dlc_brands_delete", {"brand_id": "BABC123"}, lookups) == (
-        "This will delete 10DLC brand Acme (BABC123) (irreversible)."
-    )
-    assert _preview(
-        "ten_dlc_brand_campaigns_delete", {"brand_id": "BABC123", "campaign_id": "C9"}, lookups
-    ) == ("This will delete 10DLC campaign Alerts (C9) (irreversible).")
-    assert _preview("ten_dlc_brands_delete", {"brand_id": "BXYZ999"}) == (
-        "This will delete 10DLC brand BXYZ999 (irreversible)."
+    arguments = {"brand_id": "BABC123", "campaign_id": "C9"}
+    assert _preview("ten_dlc_brand_campaigns_delete", arguments, lookups) == (
+        'This will run "Act":\n'
+        "• brand_id: BABC123\n"
+        "• campaign_id: C9\n"
+        "• campaign: Alerts\n"
+        "• numbers that stop sending: 15550100, 15550101"
     )
 
 
@@ -733,114 +856,59 @@ def test_checkout_without_cart_omits_the_total():
     )
 
 
-def test_every_gated_tool_has_a_preview_builder_in_the_real_tool_set():
-    expected = {
-        "call_control_create",
-        "voice_campaigns_create",
-        "call_control_streams_create",
-        "call_control_answer",
-        "call_webhooks_create",
-        "my_numbers_delete",
-        "sip_trunks_delete",
-        "sip_trunks_update",
-        "sub_accounts_update",
-        "ten_dlc_brands_delete",
-        "ten_dlc_brand_campaigns_delete",
-        "sms_and_mms_messages_send",
-        "whatsapp_messages_send",
-        "two_fa_verification_create",
-        "two_fa_verification_resend",
-        "cart_checkout",
-    }
-    assert set(CONFIRMATIONS) == expected
+@pytest.fixture(scope="module")
+def real_tools():
+    routes = dict(server._TOOL_ROUTES)
+    confirmed = dict(server._CONFIRMED_TOOLS)
+    tools = asyncio.run(server.build_server().list_tools())
+    gated = dict(server._CONFIRMED_TOOLS)
+    server._TOOL_ROUTES.clear()
+    server._TOOL_ROUTES.update(routes)
+    server._CONFIRMED_TOOLS.clear()
+    server._CONFIRMED_TOOLS.update(confirmed)
+    return tools, gated
 
 
-def test_gated_tool_missing_from_routes_fails_startup():
-    routes = {name: ("POST", "/v1/x") for name in CONFIRMATIONS}
-    server._require_gated_tools(routes)
-    del routes["voice_campaigns_create"]
-    with pytest.raises(RuntimeError, match="voice_campaigns_create"):
-        server._require_gated_tools(routes)
+def test_every_destructive_tool_and_the_named_ones_are_confirmed(real_tools):
+    tools, gated = real_tools
+    destructive = {t.name for t in tools if t.annotations and t.annotations.destructiveHint}
+    assert set(gated) == destructive | ALWAYS_CONFIRMED
+    assert set(DETAILS) | set(CUSTOM_PREVIEWS) <= set(gated)
+    for tool in tools:
+        takes_token = TOKEN_PARAMETER in tool.parameters.get("properties", {})
+        assert takes_token == (tool.name in gated), tool.name
+
+
+def test_gated_tool_missing_from_the_spec_fails_startup():
+    confirmed = {name: ConfirmedTool(name) for name in ALWAYS_CONFIRMED}
+    server._require_gated_tools(confirmed)
+    del confirmed["cart_checkout"]
+    with pytest.raises(RuntimeError, match="cart_checkout"):
+        server._require_gated_tools(confirmed)
 
 
 def test_build_server_fails_when_a_gated_tool_is_not_in_the_spec(isolated_routes, monkeypatch):
-    spec = copy.deepcopy(_SPEC)
-    del spec["paths"]["/v1/calls"]
-    monkeypatch.setattr(server, "load_spec", lambda: spec)
-    with pytest.raises(RuntimeError, match="call_control_create"):
+    monkeypatch.setattr(server, "load_spec", lambda: copy.deepcopy(_SPEC))
+    with pytest.raises(RuntimeError, match="cart_checkout"):
         server.build_server()
 
 
-def test_gated_descriptions_describe_the_two_steps():
+def test_gated_descriptions_describe_the_two_steps(real_tools):
+    _tools, gated = real_tools
     overlay = yaml.safe_load(
         (importlib.resources.files("wavix_mcp") / "tool_descriptions.yaml").read_text("utf-8")
     )
-    for key in CONFIRMATIONS:
+    for key in gated:
         assert "has confirmed" not in overlay[key], key
         assert "`confirmation_token`" in overlay[key], key
-    assert "run in two steps" in server.INSTRUCTIONS
+    assert "runs in two steps" in server.INSTRUCTIONS
 
 
 def test_build_server_registers_confirmation_inside_scope_filter(isolated_routes, monkeypatch):
-    in_spec = ("call_control_create", "voice_campaigns_create", "call_control_answer")
-    monkeypatch.setattr(server, "CONFIRMATIONS", {k: CONFIRMATIONS[k] for k in in_spec})
+    monkeypatch.setattr(server, "ALWAYS_CONFIRMED", frozenset())
     monkeypatch.setattr(server, "load_spec", lambda: copy.deepcopy(_SPEC))
     names = [type(m).__name__ for m in server.build_server().middleware]
     assert names.index("ScopeFilterMiddleware") < names.index("ConfirmationMiddleware")
-
-
-@pytest.mark.parametrize(
-    ("stream", "expected"),
-    [
-        (
-            {"stream_type": "oneway", "stream_channel": "both"},
-            "This will stream the live audio of call c1, including the other party's voice, "
-            "to wss://x.test/a.",
-        ),
-        (
-            {"stream_type": "oneway", "stream_channel": "outbound"},
-            "This will stream the live audio of call c1, including the other party's voice, "
-            "to wss://x.test/a.",
-        ),
-        (
-            {"stream_type": "twoway", "stream_channel": "outbound"},
-            "This will stream the live audio of call c1, including the other party's voice, "
-            "to wss://x.test/a. The destination can also play audio into the call.",
-        ),
-    ],
-)
-def test_stream_preview_names_the_voice_and_two_way_talk_back(stream, expected):
-    arguments = {"call_id": "c1", "stream_url": "wss://x.test/a", **stream}
-    assert _preview("call_control_streams_create", arguments) == expected
-
-
-def test_recorded_call_says_so():
-    assert _preview("call_control_create", {**CALL, "recording": True}) == (
-        "This will place a billable call from +15550100 to +15550199. The call will be recorded."
-    )
-
-
-def test_campaign_delete_lists_the_numbers_that_stop_sending():
-    lookups = {
-        "/v3/10dlc/brands/BABC123/campaigns/C9": {
-            "name": "Alerts",
-            "phone_numbers": ["15550100", "15550101"],
-        }
-    }
-    arguments = {"brand_id": "BABC123", "campaign_id": "C9"}
-    assert _preview("ten_dlc_brand_campaigns_delete", arguments, lookups) == (
-        "This will delete 10DLC campaign Alerts (C9) (irreversible).\n"
-        "These numbers will stop sending through it:\n"
-        "• 15550100\n"
-        "• 15550101"
-    )
-
-
-def test_long_message_is_cut_in_the_preview():
-    text = "x" * (confirmation.MESSAGE_PREVIEW_CHARS + 20)
-    arguments = {"from": "Wavix", "to": "15550199", "message_body": {"text": text}}
-    preview = _preview("sms_and_mms_messages_send", arguments)
-    assert preview.endswith('"' + "x" * confirmation.MESSAGE_PREVIEW_CHARS + '…"')
 
 
 def test_numeric_looking_text_change_is_shown():
@@ -857,7 +925,7 @@ def test_empty_token_counts_as_a_first_call(isolated_routes, anonymous):
         _calls(_server(api), ("call_control_create", {**CALL, TOKEN_PARAMETER: ""}))
     )
     assert api.dials == 0
-    assert _text(result).startswith("This will place a billable call")
+    assert _text(result).startswith('This will run "Start a call":')
 
 
 def test_pending_tokens_are_capped_per_caller(monkeypatch, anonymous):
@@ -866,7 +934,7 @@ def test_pending_tokens_are_capped_per_caller(monkeypatch, anonymous):
     async def call_next(_context):
         return ToolResult(content="ok")
 
-    middleware = ConfirmationMiddleware(CONFIRMATIONS, httpx.AsyncClient())
+    middleware = ConfirmationMiddleware(_BUILDERS, httpx.AsyncClient())
 
     async def run():
         other = await middleware.on_call_tool(_direct(middleware, CALL, "s2"), call_next)
@@ -885,7 +953,7 @@ def test_expired_tokens_of_idle_callers_are_swept(anonymous):
     async def call_next(_context):
         return ToolResult(content="ok")
 
-    middleware = ConfirmationMiddleware(CONFIRMATIONS, httpx.AsyncClient(), clock=clock)
+    middleware = ConfirmationMiddleware(_BUILDERS, httpx.AsyncClient(), clock=clock)
 
     async def run():
         await middleware.on_call_tool(_direct(middleware, CALL, "idle"), call_next)
@@ -903,43 +971,13 @@ def test_anonymous_caller_without_a_session_is_refused(anonymous):
         dials.append(1)
         return ToolResult(content="ok")
 
-    middleware = ConfirmationMiddleware(CONFIRMATIONS, httpx.AsyncClient())
+    middleware = ConfirmationMiddleware(_BUILDERS, httpx.AsyncClient())
     context = MiddlewareContext(
         message=CallToolRequestParams(name="call_control_create", arguments=CALL),
         fastmcp_context=SimpleNamespace(),
     )
     result = asyncio.run(middleware.on_call_tool(context, call_next))
     assert result.is_error and dials == [] and middleware._pending == {}
-
-
-def test_sms_to_a_short_code_is_previewed():
-    arguments = {"from": "Wavix", "to": "12345", "message_body": {"text": "STOP"}}
-    assert _preview("sms_and_mms_messages_send", arguments) == (
-        'This will send a billable message from Wavix to 12345: "STOP"'
-    )
-
-
-def test_whatsapp_preview_shows_header_and_buttons():
-    arguments = {
-        "from": "15550100",
-        "to": "15550199",
-        "template": {
-            "name": "order",
-            "language": "en",
-            "header": {
-                "type": "document",
-                "media_url": "https://m.test/a.pdf",
-                "filename": "a.pdf",
-            },
-            "buttons": [{"type": "url", "parameter": "track/42"}, {"type": "quick_reply"}],
-        },
-    }
-    assert _preview("whatsapp_messages_send", arguments) == (
-        'This will send a billable message from 15550100 to 15550199: template "order" (en).\n'
-        "• header (document): https://m.test/a.pdf, a.pdf\n"
-        "• button (url): track/42\n"
-        "• button (quick_reply)"
-    )
 
 
 def test_instructions_state_the_token_lifetime():
@@ -950,7 +988,7 @@ def test_failed_confirm_drops_the_token_from_memory(anonymous):
     async def call_next(_context):
         return ToolResult(content="rejected", is_error=True)
 
-    middleware = ConfirmationMiddleware(CONFIRMATIONS, httpx.AsyncClient())
+    middleware = ConfirmationMiddleware(_BUILDERS, httpx.AsyncClient())
 
     async def run():
         preview = await middleware.on_call_tool(_direct(middleware, CALL), call_next)

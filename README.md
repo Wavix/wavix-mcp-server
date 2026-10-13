@@ -370,7 +370,7 @@ In either case, review `billing_transactions_list` and `cdrs_list` for unexpecte
 ## Compatibility & limits
 
 - Compatible with any MCP client supporting **Streamable HTTP** transport (Claude Desktop / Web / Code, Cursor 2.4+, VS Code, Windsurf, custom MCP SDKs) and any agent framework with an MCP client adapter.
-- Tools that place calls, stream call audio, send messages, buy or release numbers, or change or delete account resources run in two steps: the first call returns a preview and a single-use `confirmation_token` (valid 5 minutes), and the action runs only when the tool is called again with the same arguments and that token. Any MCP client can do this; no client-side confirmation support is needed.
+- Every tool annotated with `destructiveHint`, plus `call_webhooks_create`, `sip_trunks_update` and `sub_accounts_update`, runs in two steps: the first call returns a preview and a single-use `confirmation_token` (valid 5 minutes), and the action runs only when the tool is called again with the same arguments and that token. Any MCP client can do this; no client-side confirmation support is needed.
 - Older clients may enforce a per-server tool cap; upgrade to a recent version to access the full catalogue.
 - Rate limits and usage charges follow your Wavix account plan. See [Wavix pricing](https://wavix.com/pricing).
 
