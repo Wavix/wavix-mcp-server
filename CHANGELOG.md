@@ -11,18 +11,24 @@ Entries are derived from the commit history, which follows
 
 ### Added
 
-- `call_control_create` and `voice_campaigns_create` ask the user to confirm the
-  caller ID and destination through the MCP client (elicitation) and dial only
-  after the user accepts.
+- Every tool annotated with `destructiveHint`, plus `call_webhooks_create`,
+  `sip_trunks_update` and `sub_accounts_update`, runs in two steps: the first
+  call does nothing and returns a preview with a single-use `confirmation_token`
+  valid for 5 minutes; the action runs only when the tool is called again with
+  the same arguments and that token, after the user has seen the preview and
+  approved it in a later message; repeating that confirmed call returns the
+  first result instead of acting again. The preview lists the arguments and,
+  for tools that act on an existing call, recording, trunk, key, Sender ID,
+  10DLC brand, campaign or evidence file, names it; releasing numbers lists the
+  numbers, checkout states the total, and SIP trunk and sub-account updates list
+  the settings that change.
 
 ### Changed
 
-- **Breaking:** clients without form elicitation can no longer place calls with
-  `call_control_create` and `voice_campaigns_create`; they get an error pointing
-  to the Wavix portal. Phone numbers must be E.164 digits, with an optional
-  leading `+`, without spaces or punctuation.
-- `call_control_create` and `voice_campaigns_create` no longer publish an output
-  schema, so a declined call returns as a normal result.
+- **Breaking:** the tools above no longer act on the first call; a client
+  must call them again with the `confirmation_token` from the preview.
+- The tools above no longer publish an output schema, so a preview returns as a
+  normal result.
 - Requires `fastmcp>=3.4.8`; `anyio`, `mcp` and `pydantic` are declared dependencies.
 
 ### Fixed

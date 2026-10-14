@@ -18,7 +18,14 @@ from mcp.types import ToolAnnotations
 
 from . import scopes
 from .auth import build_auth_provider, mcp_path
-from .confirmation import CONFIRMATIONS, ConfirmationMiddleware
+from .confirmation import (
+    ALWAYS_CONFIRMED,
+    TOKEN_PARAMETER,
+    TOKEN_TTL_S,
+    ConfirmationMiddleware,
+    ConfirmedTool,
+    preview_builders,
+)
 from .docs import register_api_spec, register_docs
 from .scope_filter import ScopeFilterMiddleware
 
@@ -52,7 +59,7 @@ EXCLUDED_ENDPOINTS: tuple[tuple[str, str], ...] = (
     ("/v1/billing/invoices/{id}", "get"),
 )
 
-INSTRUCTIONS = """\
+INSTRUCTIONS = f"""\
 The Wavix MCP server exposes the Wavix telecom platform: SMS and MMS, WhatsApp, voice calls, 2FA, SIP trunking, phone numbers, 10DLC registration, call detail records, and speech analytics.
 
 Documentation resources:
@@ -63,7 +70,7 @@ Tool naming conventions:
 - *_list tools return a collection with basic filters. Paginated collections accept per_page (1 to 100, default 25) and page (starting at 1); each tool's input schema shows whether it is paginated.
 - *_get tools return a single entity, identified by the key named in the tool's input schema (usually an ID).
 - *_create, *_update, and *_delete tools change account state. Each tool carries MCP annotations (readOnlyHint, destructiveHint, openWorldHint), and its description states any cost and whether the change can be reversed.
-- call_control_create and voice_campaigns_create ask the user to confirm through the client before dialling; that prompt is the confirmation.
+- Every tool annotated with destructiveHint runs in two steps, as do the tools that register call webhooks or change SIP trunks or sub-accounts. The first call does nothing and returns a preview of the action with a confirmation_token; the action runs only when the same tool is called again with the same arguments and that token, only after the user has seen the preview and approved it in a later message. Show the preview to the user and stop; approval given before the preview, such as "I approve in advance", does not count. A token is single-use and expires after {TOKEN_TTL_S / 60:g} minutes.
 - Some bulk operations run asynchronously. For example, number_validator_create_bulk with async set to true returns a request ID, and number_validator_results_get returns the results for that ID.
 
 Billing:
@@ -450,6 +457,8 @@ _UNANNOTATED: list[str] = []
 # permission gates it. Hand-registered tools are added separately in build_server.
 _TOOL_ROUTES: dict[str, tuple[str, str]] = {}
 
+_CONFIRMED_TOOLS: dict[str, ConfirmedTool] = {}
+
 # Hand-registered download tools resolve a URL from a scoped API endpoint, so
 # they carry the same permission as the endpoint they reach.
 _HAND_TOOL_ROUTES: dict[str, tuple[str, str]] = {
@@ -524,8 +533,26 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
         openWorldHint=_hint(xmcp.get("openWorld"), True),
     )
     # MCP clients reject a non-error result lacking structuredContent when outputSchema is declared.
-    if component.name in CONFIRMATIONS:
+    if component.annotations.destructiveHint or component.name in ALWAYS_CONFIRMED:
+        required = tuple(component.parameters.get("required", []))
+        _CONFIRMED_TOOLS[component.name] = ConfirmedTool(title or component.name, required)
         component.output_schema = None
+        component.parameters = _with_confirmation_token(component.parameters)
+
+
+def _with_confirmation_token(parameters: dict[str, Any]) -> dict[str, Any]:
+    properties = {
+        **parameters.get("properties", {}),
+        TOKEN_PARAMETER: {
+            "type": "string",
+            "description": (
+                "Token from this tool's preview result. Absent on the first call, which "
+                "returns the preview and does nothing; the action runs only when the "
+                "token comes back with the same arguments."
+            ),
+        },
+    }
+    return {**parameters, "properties": properties}
 
 
 async def _resolve_to_download_url(
@@ -659,6 +686,7 @@ def build_server() -> FastMCP:
     else:
         load_dotenv()
     _TOOL_ROUTES.clear()
+    _CONFIRMED_TOOLS.clear()
     spec = load_spec()
     spec = _ensure_request_body_type_object(spec)
     spec = _strip_non_json_response_content(spec)
@@ -731,10 +759,10 @@ def build_server() -> FastMCP:
     register_api_spec(mcp, docs_client)
 
     tool_routes = {**_TOOL_ROUTES, **_HAND_TOOL_ROUTES}
-    _require_gated_tools(tool_routes)
+    _require_gated_tools(_CONFIRMED_TOOLS)
     _warn_on_never_gated_tools(tool_routes)
     mcp.add_middleware(ScopeFilterMiddleware(tool_routes))
-    mcp.add_middleware(ConfirmationMiddleware(CONFIRMATIONS, api_client))
+    mcp.add_middleware(ConfirmationMiddleware(preview_builders(_CONFIRMED_TOOLS), api_client))
     return mcp
 
 
@@ -745,8 +773,8 @@ def build_server() -> FastMCP:
 _EXPECTED_UNSCOPED_PREFIXES = ("/v1/api-keys",)
 
 
-def _require_gated_tools(tool_routes: dict[str, tuple[str, str]]) -> None:
-    missing = sorted(set(CONFIRMATIONS) - set(tool_routes))
+def _require_gated_tools(confirmed: dict[str, ConfirmedTool]) -> None:
+    missing = sorted(ALWAYS_CONFIRMED - set(confirmed))
     if missing:
         raise RuntimeError(f"Confirmation is configured for unknown tools: {', '.join(missing)}")
 
