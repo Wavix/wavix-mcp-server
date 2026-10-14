@@ -42,8 +42,11 @@ Entries are derived from the commit history, which follows
   fields change; omitted fields no longer revert to their defaults.
   `sip_trunks_update` also says that new `allowed_ips` entries are added to the
   list and that trial accounts get the trial limits on every update.
-- `cdrs_retranscribe` can transcribe an already transcribed call again; the new
-  transcription replaces the earlier one.
+- `cdrs_retranscribe` asks for confirmation like the other destructive tools.
+  It can transcribe an already transcribed call again; the new transcription
+  replaces the earlier one.
+- `whatsapp_senders_get` no longer mentions a messaging limit tier; the
+  messaging limit is on the WhatsApp Business Account (`whatsapp_wabas_get`).
 - `sub_accounts_create` and `sub_accounts_update` limit `name` to 75 characters.
 
 ### Fixed
