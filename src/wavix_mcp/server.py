@@ -76,6 +76,9 @@ Tool naming conventions:
 Billing:
 - Number purchases, calls, messages, and one-time passwords are charged to the account's prepaid Wavix balance.
 
+Calls:
+- Whenever a call is automated or handled by AI, the Wavix Terms of Service require the customer to disclose this at the start of the call.
+
 Authentication:
 - Tools authenticate with the credential the MCP client supplies: an OAuth access token from Wavix account sign-in, or a Wavix API key sent as a Bearer token. With account sign-in, the available tools are limited to the scopes granted at consent.
 """

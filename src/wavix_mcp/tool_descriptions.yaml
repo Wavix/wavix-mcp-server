@@ -107,8 +107,9 @@ call_control_audio_play: >-
   only when the tool is called again with the same arguments and that token after
   the user has seen the preview and approved it in a later message. Streams the
   given `audio_file` into the live call so the remote party hears it immediately.
-  Requires the `calls:write` scope, the call's `id` (`uuid`), and an `audio_file`
-  URL to play.
+  On outbound calls, the customer must disclose at the start of the call that it is
+  automated; this is an obligation under the Wavix Terms of Service. Requires the
+  `calls:write` scope, the call's `id` (`uuid`), and an `audio_file` URL to play.
 
 call_control_audio_stop: >-
   Stops audio playback in the active call identified by `id`. Use to cut off a
@@ -125,7 +126,10 @@ call_control_collect: >-
   optionally playing a `prompt` first. Use to gather digits from the caller, such
   as a menu selection or PIN, on a connected call. Plays the prompt and waits for
   the caller to enter digits on the live call; collection ends on the termination
-  character, the digit limit, or the timeout. Requires the `calls:write` scope and
+  character, the digit limit, or the timeout. This tool speaks synthesized text to
+  the other party. On outbound calls, the customer must disclose at the start of
+  the call that it is automated; this is an obligation under the Wavix Terms of
+  Service. Requires the `calls:write` scope and
   the call's `id` (`uuid`); `max_digits` accepts 1 to 20 and `timeout` 1 to 60
   seconds.
 
@@ -137,10 +141,14 @@ call_control_create: >-
   `confirmation_token`; the call is placed only when the tool is called again with
   the same arguments and that token after the user has seen the preview and approved
   it in a later message. Billable to the account balance; the call is placed on the
-  live PSTN network as soon as the confirmed request runs. Requires the
-  `calls:write` scope, a `from` Caller ID that is an active or verified number on
-  the account, a `to` number in E.164 format, and a `callback_url` for call status
-  updates.
+  live PSTN network as soon as the confirmed request runs. What the called party
+  hears depends on what the customer connects to the call: audio playback,
+  synthesized prompts, or a media stream to an AI agent or to live agents. Whenever
+  the call is automated or handled by AI, the customer must disclose this to the
+  called party at the start of the call; this is an obligation under the Wavix
+  Terms of Service. Requires the `calls:write` scope, a `from` Caller ID that is an
+  active or verified number on the account, a `to` number in E.164 format, and a
+  `callback_url` for call status updates.
 
 call_control_delete: >-
   Ends the active call identified by `id` by hanging up. Use when the user asks to
@@ -172,9 +180,11 @@ call_control_streams_create: >-
   with the same arguments and that token after the user has seen the preview and
   approved it in a later message. Begins sending the live call's audio, including
   the remote party's voice, to the given `stream_url`; with `stream_type` `twoway`
-  the destination can also play audio into the call. Requires the `calls:write`
-  scope, the call's `call_id` (`uuid`), a `stream_url` WebSocket URL, and the
-  `stream_type` and `stream_channel` values.
+  the destination can also play audio into the call. On outbound calls that are
+  automated or handled by AI, the customer must disclose this to the called party at
+  the start of the call; this is an obligation under the Wavix Terms of Service.
+  Requires the `calls:write` scope, the call's `call_id` (`uuid`), a `stream_url`
+  WebSocket URL, and the `stream_type` and `stream_channel` values.
 
 call_control_streams_delete: >-
   Stops the media stream identified by `id` on the call identified by `call_id`. Use
@@ -683,9 +693,11 @@ voice_campaigns_create: >-
   when the tool is called again with the same arguments and that token after the
   user has seen the preview and approved it in a later message. Billable and
   irreversible: a real outbound call is placed once the campaign launches, and it
-  fails with `422` when the account has insufficient funds. Requires the
-  `campaigns:write` scope and a `voice_campaign` with `callflow_id` (a pre-approved
-  call flow), plus `caller_id` and `contact` in E.164 format.
+  fails with `422` when the account has insufficient funds. The customer must
+  disclose at the start of the call that it is automated; this is an obligation
+  under the Wavix Terms of Service. Requires the `campaigns:write` scope and a
+  `voice_campaign` with `callflow_id` (a pre-approved call flow), plus `caller_id`
+  and `contact` in E.164 format.
 
 voice_campaigns_get: >-
   Returns the voice campaign identified by `id`, including its current status.
