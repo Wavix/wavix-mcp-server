@@ -1,6 +1,10 @@
+import base64
+import binascii
 import json
 import logging
 import os
+import time
+from typing import Any
 from urllib.parse import urlparse
 
 from fastmcp.server.auth.auth import AccessToken, RemoteAuthProvider, TokenVerifier
@@ -134,22 +138,50 @@ class _ApiKeyPassthroughVerifier(TokenVerifier):
     existed.
 
     A request carrying **no** token still gets the RFC 9728 challenge, which is
-    what lets a new client discover the authorization server. Set
+    what lets a new client discover the authorization server. So does an
+    expired token from our issuer: only a 401 makes the client renew it. Set
     ``OAUTH_API_KEY_PASSTHROUGH=false`` to drop the fallback once API-key access
     to MCP is retired.
     """
 
-    def __init__(self, jwt_verifier: TokenVerifier) -> None:
+    def __init__(self, jwt_verifier: TokenVerifier, *, issuer: str) -> None:
         super().__init__(required_scopes=jwt_verifier.required_scopes)
         self._jwt_verifier = jwt_verifier
+        self._issuer = issuer
 
     async def verify_token(self, token: str) -> AccessToken | None:
         verified = await self._jwt_verifier.verify_token(token)
         if verified is not None:
             return verified
 
+        if _is_expired_token_from(self._issuer, token):
+            logger.info("Expired OAuth access token; challenging the client to renew it")
+            return None
+
         logger.debug("Bearer token is not a valid OAuth JWT; forwarding it upstream")
         return AccessToken(token=token, client_id=PASSTHROUGH_CLIENT_ID, scopes=[])
+
+
+def _unverified_claims(token: str) -> dict[str, Any] | None:
+    parts = token.split(".")
+    if len(parts) != 3:
+        return None
+    payload = parts[1]
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    except (ValueError, binascii.Error):
+        return None
+    return claims if isinstance(claims, dict) else None
+
+
+def _is_expired_token_from(issuer: str, token: str) -> bool:
+    claims = _unverified_claims(token)
+    if claims is None or claims.get("iss") != issuer:
+        return False
+    exp = claims.get("exp")
+    if isinstance(exp, bool) or not isinstance(exp, (int, float)):
+        return False
+    return exp < time.time()
 
 
 class _RFC8414RemoteAuthProvider(RemoteAuthProvider):
@@ -192,7 +224,7 @@ def build_auth_provider() -> RemoteAuthProvider | None:
         audience=audience,
     )
     if passthrough:
-        verifier = _ApiKeyPassthroughVerifier(verifier)
+        verifier = _ApiKeyPassthroughVerifier(verifier, issuer=issuer)
 
     return _RFC8414RemoteAuthProvider(
         token_verifier=verifier,
