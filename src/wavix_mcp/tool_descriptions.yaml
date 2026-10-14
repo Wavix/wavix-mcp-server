@@ -415,12 +415,15 @@ cdrs_retranscribe: >-
   Transcribes the recording of the call identified by `call_id`; transcription is
   asynchronous, so poll the transcription endpoint for the result. Use when the
   user wants a transcript of a recorded call, or wants an already transcribed call
-  transcribed again. Billed per minute at the account's call-transcription rate,
-  and fails with an insufficient-funds error when the balance cannot cover it;
-  when it completes, the new transcription replaces any earlier one that the
-  transcription endpoints return. Requires the `calls:write` scope and the call's
-  `call_id`; optionally set the transcription `language` and a `webhook_url` to
-  receive the result.
+  transcribed again. The first call starts nothing and returns a preview listing
+  the arguments with a `confirmation_token`; transcription starts only when the
+  tool is called again with the same arguments and that token after the user has
+  seen the preview and approved it in a later message. Billed per minute at the
+  account's call-transcription rate, and fails with an insufficient-funds error
+  when the balance cannot cover it; when it completes, the new transcription
+  replaces any earlier one that the transcription endpoints return. Requires the
+  `calls:write` scope and the call's `call_id`; optionally set the transcription
+  `language` and a `webhook_url` to receive the result.
 
 cdrs_search: >-
   Searches the account's call transcriptions for the given keywords or phrases
@@ -1002,6 +1005,25 @@ sub_accounts_update: >-
   sub-organization's `id`; `name` may be up to 75 characters, and `status` accepts
   `enabled` or `disabled`.
 
+whatsapp_wabas_list: >-
+  Lists the WhatsApp Business Accounts linked to the account, newest first, each
+  with its ID, name, messaging limit, and number of senders. Use to discover
+  which WhatsApp Business Accounts the account has, to get a `waba_id` for
+  filtering senders and templates, or to check how many unique customers each
+  account can start conversations with in a rolling 24 hours. Read-only, no side
+  effects. Requires the `whatsapp:read` scope and the WhatsApp channel enabled;
+  results are paginated with `per_page` from 1 to 100 (default 25) and `page`
+  starting at 1.
+
+whatsapp_wabas_get: >-
+  Retrieves a single WhatsApp Business Account linked to the account by its ID,
+  returning its name, messaging limit, and number of senders. Use to check how
+  many unique customers the account can start conversations with in a rolling 24
+  hours, for example when one of its senders is `restricted` after reaching that
+  limit. Read-only, no side effects. Requires the `whatsapp:read` scope, the
+  WhatsApp channel enabled, and a `waba_id` linked to the account, as returned by
+  whatsapp_wabas_list or in `waba.id` on senders and templates.
+
 whatsapp_senders_list: >-
   Lists the WhatsApp senders on the account's WhatsApp Business Accounts, newest
   first, each with its registration status and its WhatsApp Business Account.
@@ -1014,8 +1036,8 @@ whatsapp_senders_list: >-
 whatsapp_senders_get: >-
   Retrieves a single WhatsApp sender registered to the account, resolved by its
   phone number, returning its display name, provider registration status,
-  quality rating, and messaging limit tier. Use to check whether a number is a
-  usable WhatsApp sender and what state it is in before listing templates or
+  quality rating, and WhatsApp Business Account. Use to check whether a number is
+  a usable WhatsApp sender and what state it is in before listing templates or
   sending. Read-only, no side effects. Requires the `whatsapp:read` scope, the
   WhatsApp channel enabled on the account, and a number that is a sender on the
   caller's account.

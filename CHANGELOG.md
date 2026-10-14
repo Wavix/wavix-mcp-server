@@ -9,6 +9,8 @@ Entries are derived from the commit history, which follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-14
+
 ### Added
 
 - Every tool annotated with `destructiveHint`, plus `call_webhooks_create`,
@@ -22,14 +24,30 @@ Entries are derived from the commit history, which follows
   10DLC brand, campaign or evidence file, names it; releasing numbers lists the
   numbers, checkout states the total, and SIP trunk and sub-account updates list
   the settings that change.
+- `whatsapp_wabas_list` and `whatsapp_wabas_get` tools.
 
 ### Changed
 
-- **Breaking:** the tools above no longer act on the first call; a client
-  must call them again with the `confirmation_token` from the preview.
+- The tools above no longer act on the first call; a client must call them
+  again with the `confirmation_token` from the preview.
 - The tools above no longer publish an output schema, so a preview returns as a
   normal result.
 - Requires `fastmcp>=3.4.8`; `anyio`, `mcp` and `pydantic` are declared dependencies.
+- Call tools (`call_control_create`, `voice_campaigns_create`,
+  `call_control_audio_play`, `call_control_collect`,
+  `call_control_streams_create`) and the server instructions say that the
+  Wavix Terms of Service require the customer to disclose an automated or
+  AI-handled call at the start of the call.
+- `sip_trunks_update` and `sub_accounts_update` say that only the provided
+  fields change; omitted fields no longer revert to their defaults.
+  `sip_trunks_update` also says that new `allowed_ips` entries are added to the
+  list and that trial accounts get the trial limits on every update.
+- `cdrs_retranscribe` asks for confirmation like the other destructive tools.
+  It can transcribe an already transcribed call again; the new transcription
+  replaces the earlier one.
+- `whatsapp_senders_get` no longer mentions a messaging limit tier; the
+  messaging limit is on the WhatsApp Business Account (`whatsapp_wabas_get`).
+- `sub_accounts_create` and `sub_accounts_update` limit `name` to 75 characters.
 
 ### Fixed
 
@@ -73,6 +91,7 @@ Entries are derived from the commit history, which follows
 - Invoice download and 10DLC evidence upload are excluded from the tool surface.
 - The OAuth issuer is advertised without an RFC 8414-breaking trailing slash.
 
-[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.0.0...v1.1.0
