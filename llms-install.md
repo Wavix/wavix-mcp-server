@@ -141,7 +141,7 @@ List available resources via `resources/list` and read on demand. Resources are 
 
 ## Safety guidance for agents
 
-- Confirm with the user before calling destructive tools: `*_delete`, `my_numbers_delete` (releases numbers), `cart_checkout` (charges the account), `sms_and_mms_messages_send` to unverified recipients.
+- Confirm with the user before calling destructive tools: `*_delete`, `my_numbers_delete` (releases numbers), `cart_checkout` (charges the account), `sip_trunks_update` and `sub_accounts_update` (overwrite settings), `cdrs_retranscribe` and `speech_analytics_retranscribe` (replace the transcript), `sms_and_mms_messages_send` to unverified recipients.
 - Default to small page sizes (`per_page=10` … `25`) on `*_list` tools to keep context manageable.
 - For bulk validation or large exports, prefer asynchronous variants (e.g. `number_validator_create_bulk` with `async=true`) and poll for results.
 - Quote behavior from `wavix://docs/*` rather than inferring it — Wavix-specific semantics may differ from generic telecom assumptions.
