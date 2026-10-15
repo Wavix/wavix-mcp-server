@@ -9,11 +9,11 @@
 # precedence over any x-mcp.description still in the spec). An entry whose
 # operationId is absent from the loaded spec is reported at startup.
 #
-# Format per entry: {What it does}. {When to use it}. {Side effects, cost,
+# Format per entry: {What it does}. {When it applies}. {Side effects, cost,
 # irreversibility}. {Preconditions}. See the mcp-tool-descriptions skill.
 
 sms_and_mms_messages_send: >-
-  Sends an SMS or MMS message to a single recipient. Use when the user asks to send
+  Sends an SMS or MMS message to a single recipient. Applies when the user asks to send
   a text or multimedia message. The first call sends nothing and returns a preview
   naming the Sender ID, the recipient number and the start of the message with a
   `confirmation_token`; the message is sent only when the tool is called again with
@@ -45,7 +45,7 @@ sms_and_mms_sender_ids_list: >-
 
 sms_and_mms_sender_ids_create: >-
   Registers a new Sender ID for the account so it can be used as a message `from`
-  value. Use when the user wants to add an alphanumeric or numeric sender. The first
+  value. Applies when the user wants to add an alphanumeric or numeric sender. The first
   call registers nothing and returns a preview listing the Sender ID details with a
   `confirmation_token`; the Sender ID is registered only when the tool is called
   again with the same arguments and that token after the user has seen the preview
@@ -60,7 +60,7 @@ sms_and_mms_sender_ids_get: >-
   and the Sender ID's `id`.
 
 sms_and_mms_sender_ids_delete: >-
-  Deletes a registered Sender ID by its ID. Use when the user wants to remove a
+  Deletes a registered Sender ID by its ID. Applies when the user wants to remove a
   Sender ID they no longer need. The first call deletes nothing and returns a
   preview naming the Sender ID with a `confirmation_token`; the Sender ID is deleted
   only when the tool is called again with the same arguments and that token after
@@ -88,7 +88,7 @@ sms_and_mms_opt_outs_create: >-
 call_control_answer: >-
   Answers the inbound call identified by `id`, optionally starting call recording,
   post-call transcription, or live media streaming to a WebSocket `stream_url` on
-  answer. Use when an inbound call must be picked up before audio can be played,
+  answer. Applies when an inbound call must be picked up before audio can be played,
   input collected, or its media streamed. The first call answers nothing and returns
   a preview naming the call and any `stream_url` that would receive its audio,
   including the caller's voice, with a `confirmation_token`; the call is answered
@@ -101,10 +101,10 @@ call_control_answer: >-
 
 call_control_audio_play: >-
   Plays an audio prompt into the active call identified by `id`, audible to the
-  remote party in real time. Use to play a message, announcement, or prompt to the
-  caller on a connected call. The first call plays nothing and returns a preview
-  naming the call and the `audio_file` with a `confirmation_token`; playback starts
-  only when the tool is called again with the same arguments and that token after
+  remote party in real time. Applies when a message, announcement, or prompt is to be
+  played to the caller on a connected call. The first call plays nothing and returns a
+  preview naming the call and the `audio_file` with a `confirmation_token`; playback
+  starts only when the tool is called again with the same arguments and that token after
   the user has seen the preview and approved it in a later message. Streams the
   given `audio_file` into the live call so the remote party hears it immediately.
   On outbound calls, the customer must disclose at the start of the call that it is
@@ -112,8 +112,8 @@ call_control_audio_play: >-
   `calls:write` scope, the call's `id` (`uuid`), and an `audio_file` URL to play.
 
 call_control_audio_stop: >-
-  Stops audio playback in the active call identified by `id`. Use to cut off a
-  prompt or announcement currently playing on the call, for example before
+  Stops audio playback in the active call identified by `id`. Applies when a prompt or
+  announcement currently playing on the call has to be cut off, for example before
   transferring the call or collecting input. The first call stops nothing and
   returns a preview naming the call with a `confirmation_token`; playback stops only
   when the tool is called again with the same arguments and that token after the
@@ -135,7 +135,7 @@ call_control_collect: >-
 
 call_control_create: >-
   Places a real, billable outbound PSTN call from `from` to `to`, returning the
-  call's `uuid` for tracking and control. Use when the user asks to start an
+  call's `uuid` for tracking and control. Applies when the user asks to start an
   outbound phone call. The first call dials nothing and returns a preview naming the
   caller ID, the destination and whether the call is recorded with a
   `confirmation_token`; the call is placed only when the tool is called again with
@@ -151,7 +151,7 @@ call_control_create: >-
   `callback_url` for call status updates.
 
 call_control_delete: >-
-  Ends the active call identified by `id` by hanging up. Use when the user asks to
+  Ends the active call identified by `id` by hanging up. Applies when the user asks to
   end or drop a call in progress. The first call ends nothing and returns a preview
   naming the call with a `confirmation_token`; the call is ended only when the tool
   is called again with the same arguments and that token after the user has seen the
@@ -172,23 +172,23 @@ call_control_list: >-
 call_control_streams_create: >-
   Starts streaming the audio of the call identified by `call_id` to the WebSocket
   `stream_url` you supply, in the audio direction (`stream_type`) and channel
-  (`stream_channel`) you configure, returning the `stream_id`. Use to forward a live
-  call's audio to an external real-time consumer, such as a transcription or AI
-  service. The first call streams nothing and returns a preview naming the call and
-  the `stream_url` that would receive its audio, including the other party's voice,
-  with a `confirmation_token`; streaming starts only when the tool is called again
-  with the same arguments and that token after the user has seen the preview and
-  approved it in a later message. Begins sending the live call's audio, including
-  the remote party's voice, to the given `stream_url`; with `stream_type` `twoway`
-  the destination can also play audio into the call. On outbound calls that are
+  (`stream_channel`) you configure, returning the `stream_id`. Applies when a live
+  call's audio is to be forwarded to an external real-time consumer, such as a
+  transcription or AI service. The first call streams nothing and returns a preview
+  naming the call and the `stream_url` that would receive its audio, including the other
+  party's voice, with a `confirmation_token`; streaming starts only when the tool is
+  called again with the same arguments and that token after the user has seen the
+  preview and approved it in a later message. Begins sending the live call's audio,
+  including the remote party's voice, to the given `stream_url`; with `stream_type`
+  `twoway` the destination can also play audio into the call. On outbound calls that are
   automated or handled by AI, the customer must disclose this to the called party at
   the start of the call; this is an obligation under the Wavix Terms of Service.
   Requires the `calls:write` scope, the call's `call_id` (`uuid`), a `stream_url`
   WebSocket URL, and the `stream_type` and `stream_channel` values.
 
 call_control_streams_delete: >-
-  Stops the media stream identified by `id` on the call identified by `call_id`. Use
-  to end one audio stream started for a call while leaving the call itself
+  Stops the media stream identified by `id` on the call identified by `call_id`. Applies
+  when one audio stream started for a call is to end while the call itself stays
   connected. The first call stops nothing and returns a preview naming the call and
   the media stream with a `confirmation_token`; the stream stops only when the tool
   is called again with the same arguments and that token after the user has seen the
@@ -205,19 +205,19 @@ call_control_update: >-
 
 call_webhooks_create: >-
   Registers a callback URL for the `on-call` or `post-call` event so Wavix sends a
-  POST callback with call metadata to the URL when the event occurs. Use to set up
-  delivery of real-time or after-call status updates to your own endpoint. The first
-  call registers nothing and returns a preview naming the `url` and the event type
-  with a `confirmation_token`; the webhook is registered only when the tool is
-  called again with the same arguments and that token after the user has seen the
-  preview and approved it in a later message. Creates persistent configuration that
+  POST callback with call metadata to the URL when the event occurs. Applies when
+  real-time or after-call status updates are to be delivered to the customer's own
+  endpoint. The first call registers nothing and returns a preview naming the `url` and
+  the event type with a `confirmation_token`; the webhook is registered only when the
+  tool is called again with the same arguments and that token after the user has seen
+  the preview and approved it in a later message. Creates persistent configuration that
   sends call metadata to the URL, outside Wavix, on every matching call until the
   webhook is deleted. Requires the `webhooks:write` scope, a `url` to receive
   callbacks, and an `event_type` of `on-call` or `post-call`.
 
 call_webhooks_delete: >-
   Removes the call webhook for the given event type, stopping Wavix from sending
-  further callbacks for it. Use when the user no longer wants `on-call` or
+  further callbacks for it. Applies when the user no longer wants `on-call` or
   `post-call` callbacks delivered. The first call removes nothing and returns a
   preview naming the event type and its current URL with a `confirmation_token`; the
   webhook is removed only when the tool is called again with the same arguments and
@@ -246,7 +246,7 @@ my_numbers_bulk_update: >-
 
 my_numbers_delete: >-
   Releases the listed phone numbers back to stock, selected by either their record
-  `ids` or their `dids` (the phone numbers themselves), but not both. Use when the
+  `ids` or their `dids` (the phone numbers themselves), but not both. Applies when the
   user wants to give up one or more owned numbers. The first call releases nothing
   and returns a preview listing the numbers with a `confirmation_token`; the numbers
   are released only when the tool is called again with the same arguments and that
@@ -367,7 +367,7 @@ cart_add: >-
 
 cart_checkout: >-
   Purchases the phone numbers (DIDs) listed from the cart, provisioning them to the
-  account. Use as the final step of buying numbers, after staging them in the cart.
+  account. It is the final step of buying numbers, after they are staged in the cart.
   The first call buys nothing and returns a preview listing the numbers and the
   total of their activation and monthly fees with a `confirmation_token`; the
   purchase runs only when the tool is called again with the same arguments and that
@@ -384,10 +384,10 @@ cart_get: >-
   no side effects. Requires the `numbers:read` scope.
 
 cart_remove: >-
-  Removes the listed phone numbers (DIDs) from the purchase cart. Use to drop
-  numbers the user no longer wants to buy before checkout. The first call removes
-  nothing and returns a preview listing the numbers with a `confirmation_token`; the
-  numbers are removed from the cart only when the tool is called again with the same
+  Removes the listed phone numbers (DIDs) from the purchase cart. Applies when the user
+  no longer wants to buy some of the staged numbers, before checkout. The first call
+  removes nothing and returns a preview listing the numbers with a `confirmation_token`;
+  the numbers are removed from the cart only when the tool is called again with the same
   arguments and that token after the user has seen the preview and approved it in a
   later message. Modifies the cart by removing the given numbers; the numbers
   themselves are unaffected and can be added again. Requires the `numbers:write`
@@ -413,17 +413,17 @@ cdrs_list: >-
 
 cdrs_retranscribe: >-
   Transcribes the recording of the call identified by `call_id`; transcription is
-  asynchronous, so poll the transcription endpoint for the result. Use when the
-  user wants a transcript of a recorded call, or wants an already transcribed call
-  transcribed again. The first call starts nothing and returns a preview listing
-  the arguments with a `confirmation_token`; transcription starts only when the
-  tool is called again with the same arguments and that token after the user has
-  seen the preview and approved it in a later message. Billed per minute at the
+  asynchronous, and the result is available from the transcription endpoint once it
+  completes. Applies when the user wants a transcript of a recorded call, or wants an
+  already transcribed call transcribed again. The first call starts nothing and returns
+  a preview listing the arguments with a `confirmation_token`; transcription starts only
+  when the tool is called again with the same arguments and that token after the user
+  has seen the preview and approved it in a later message. Billed per minute at the
   account's call-transcription rate, and fails with an insufficient-funds error
   when the balance cannot cover it; when it completes, the new transcription
   replaces any earlier one that the transcription endpoints return. Requires the
-  `calls:write` scope and the call's `call_id`; optionally set the transcription
-  `language` and a `webhook_url` to receive the result.
+  `calls:write` scope and the call's `call_id`; the transcription `language` and a
+  `webhook_url` to receive the result are optional.
 
 cdrs_search: >-
   Searches the account's call transcriptions for the given keywords or phrases
@@ -442,7 +442,7 @@ cdrs_transcriptions: >-
   Requires the `calls:read` scope and the call's `call_id`.
 
 call_recording_delete: >-
-  Deletes the call recording identified by `id`. Use when the user wants to remove a
+  Deletes the call recording identified by `id`. Applies when the user wants to remove a
   call recording they no longer need. The first call deletes nothing and returns a
   preview naming the recording's parties, date and duration with a
   `confirmation_token`; the recording is deleted only when the tool is called again
@@ -475,7 +475,7 @@ speech_analytics_get: >-
 speech_analytics_retranscribe: >-
   Re-runs transcription on the speech-analytics file identified by `request_id`,
   replacing the existing transcript, and optionally enabling insights generation.
-  Use when the user wants to regenerate the transcript for an already-uploaded file.
+  Applies when the user wants to regenerate the transcript for an already-uploaded file.
   The first call starts nothing and returns a preview naming the `request_id` with a
   `confirmation_token`; transcription runs again only when the tool is called again
   with the same arguments and that token after the user has seen the preview and
@@ -495,7 +495,7 @@ sip_trunks_create: >-
   `ip_restrict` is `true`.
 
 sip_trunks_delete: >-
-  Deletes the SIP trunk identified by `id`. Use when the user wants to remove a SIP
+  Deletes the SIP trunk identified by `id`. Applies when the user wants to remove a SIP
   trunk they no longer need. The first call deletes nothing and returns a preview
   naming the trunk and its Caller ID with a `confirmation_token`; the trunk is
   deleted only when the tool is called again with the same arguments and that token
@@ -516,7 +516,7 @@ sip_trunks_list: >-
 
 sip_trunks_update: >-
   Updates the SIP trunk identified by `id`; only the fields provided in the
-  request change. Use when the user wants to change one or more settings of an
+  request change. Applies when the user wants to change one or more settings of an
   existing SIP trunk, such as its label, password, Caller ID, or call limits. The
   first call changes nothing and returns a preview listing the settings that would
   change with a `confirmation_token`; the update is applied only when the tool is
@@ -528,9 +528,9 @@ sip_trunks_update: >-
   addresses already on it are kept; on trial accounts every update also applies the
   trial limits, a `call_limit` of at most 300 seconds (300 when omitted) and one
   concurrent call. Requires the `trunks:write` scope and the SIP trunk's `id`; on
-  trial accounts, send the current `call_limit` to keep it and do not send
-  `host_request`; a `callerid` must be an active or verified number on the
-  account; set `ip_restrict` to `true` only when the trunk has at least one
+  trial accounts, an omitted `call_limit` resets to 300 seconds and `host_request` is
+  not supported; a `callerid` must be an active or verified number on the account;
+  `ip_restrict` can be `true` only when the trunk has at least one
   allowed IP address, stored or sent in `allowed_ips`.
 
 api_keys_create: >-
@@ -543,7 +543,7 @@ api_keys_create: >-
   permissions.
 
 api_keys_delete: >-
-  Deletes the API key identified by `id`. Use when the user wants to revoke an API
+  Deletes the API key identified by `id`. Applies when the user wants to revoke an API
   key. The first call deletes nothing and returns a preview naming the API key with
   a `confirmation_token`; the key is deleted only when the tool is called again with
   the same arguments and that token after the user has seen the preview and approved
@@ -612,7 +612,7 @@ two_fa_sessions_list: >-
   dates in `YYYY-MM-DD` format (inclusive).
 
 two_fa_verification_cancel: >-
-  Cancels the 2FA verification identified by `session_id`. Use when the user wants
+  Cancels the 2FA verification identified by `session_id`. Applies when the user wants
   to abandon an in-progress verification so no further codes are sent. The first
   call cancels nothing and returns a preview naming the `session_id` with a
   `confirmation_token`; the verification is cancelled only when the tool is called
@@ -625,7 +625,7 @@ two_fa_verification_cancel: >-
 two_fa_verification_check: >-
   Validates the one-time password (OTP) submitted by the end user against the 2FA
   verification identified by `session_id`, confirming whether the code is correct.
-  Use when the user has entered the code they received and it must be checked. The
+  Applies when the user has entered the code they received and it must be checked. The
   first call checks nothing and returns a preview naming the `session_id` and the
   code with a `confirmation_token`; the code is checked only when the tool is called
   again with the same arguments and that token after the user has seen the preview
@@ -637,7 +637,7 @@ two_fa_verification_check: >-
 
 two_fa_verification_create: >-
   Creates a 2FA verification and sends a real one-time password (OTP) to the
-  destination number over the selected channel. Use when the user asks to start
+  destination number over the selected channel. Applies when the user asks to start
   phone verification. The first call sends nothing and returns a preview naming the
   destination number, the channel and the 2FA service with a `confirmation_token`;
   the OTP is sent only when the tool is called again with the same arguments and
@@ -650,7 +650,7 @@ two_fa_verification_create: >-
 two_fa_verification_resend: >-
   Resends the one-time password (OTP) for the 2FA verification identified by
   `session_id` over the specified channel, invalidating any previously sent codes.
-  Use when the end user did not receive the earlier code and asks for it to be sent
+  Applies when the end user did not receive the earlier code and asks for it to be sent
   again. The first call sends nothing and returns a preview naming the channel and
   the `session_id` with a `confirmation_token`; the OTP is resent only when the tool
   is called again with the same arguments and that token after the user has seen the
@@ -668,7 +668,7 @@ webrtc_tokens_create: >-
   `ttl` in seconds (minimum 1, default 3600; pass `null` for no expiration).
 
 webrtc_tokens_delete: >-
-  Deletes the Wavix Embeddable widget token identified by `id`. Use when the user
+  Deletes the Wavix Embeddable widget token identified by `id`. Applies when the user
   wants to revoke a widget token they no longer need or that may be compromised. The
   first call deletes nothing and returns a preview naming the token and its SIP
   trunk with a `confirmation_token`; the token is deleted only when the tool is
@@ -698,7 +698,7 @@ webrtc_tokens_update: >-
 
 voice_campaigns_create: >-
   Launches a voice campaign that places a real outbound call running a pre-approved
-  call flow, returning a voice campaign `id` to track progress. Use when the user
+  call flow, returning a voice campaign `id` to track progress. Applies when the user
   asks to trigger a voice scenario. The first call launches nothing and returns a
   preview naming the call flow (`callflow_id`), the Caller ID (`caller_id`) and the
   destination (`contact`) with a `confirmation_token`; the campaign launches only
@@ -734,7 +734,7 @@ ten_dlc_brand_appeals_list: >-
   no side effects. Requires the `campaigns:read` scope and the Brand's `brand_id`.
 
 ten_dlc_brand_evidence_delete: >-
-  Deletes a Brand evidence file from a 10DLC Brand by its evidence `id`. Use when
+  Deletes a Brand evidence file from a 10DLC Brand by its evidence `id`. Applies when
   the user wants to remove a previously uploaded evidence file. The first call
   deletes nothing and returns a preview naming the evidence file with a
   `confirmation_token`; the file is deleted only when the tool is called again with
@@ -773,7 +773,7 @@ ten_dlc_brand_vetting_appeals_list: >-
 
 ten_dlc_brand_vettings_create: >-
   Requests external vetting for a 10DLC Brand from a vetting provider (`AEGIS`,
-  `CV`, or `WMC`) at a `vetting_class` of `STANDARD` or `ENHANCED`. Use when the
+  `CV`, or `WMC`) at a `vetting_class` of `STANDARD` or `ENHANCED`. Applies when the
   user wants third-party vetting to raise a Brand's trust standing. The first call
   requests nothing and returns a preview naming the Brand, the provider and the
   vetting class with a `confirmation_token`; vetting is requested only when the tool
@@ -799,7 +799,7 @@ ten_dlc_brands_create: >-
   Registers a 10DLC Brand, submitting the company's legal identity data —
   `ein_taxid` (EIN/Tax ID), legal company name, `entity_type`, `vertical`, and
   business contact and address — to The Campaign Registry (TCR) for identity
-  verification. Use when the user wants to register a Brand as the first step toward
+  verification. Applies when the user wants to register a Brand as the first step toward
   running 10DLC Campaigns. The first call registers nothing and returns a preview
   listing the Brand details with a `confirmation_token`; the Brand is registered
   only when the tool is called again with the same arguments and that token after
@@ -810,7 +810,7 @@ ten_dlc_brands_create: >-
   status can go on to register 10DLC Campaigns.
 
 ten_dlc_brands_delete: >-
-  Deletes the 10DLC Brand identified by `brand_id`. Use when the user wants to
+  Deletes the 10DLC Brand identified by `brand_id`. Applies when the user wants to
   remove a Brand the account no longer needs. The first call deletes nothing and
   returns a preview naming the Brand with a `confirmation_token`; the Brand is
   deleted only when the tool is called again with the same arguments and that token
@@ -844,19 +844,19 @@ ten_dlc_brands_update: >-
 ten_dlc_brand_campaigns_create: >-
   Registers a new 10DLC Campaign under the 10DLC Brand identified by `brand_id`,
   with its use case, message samples, opt-in/opt-out/help keywords, and content
-  flags. Use when the user wants to create a 10DLC Campaign for A2P messaging under
+  flags. Applies when the user wants to create a 10DLC Campaign for A2P messaging under
   an existing Brand. The first call registers nothing and returns a preview listing
   the Campaign details with a `confirmation_token`; the Campaign is registered only
   when the tool is called again with the same arguments and that token after the
   user has seen the preview and approved it in a later message. Creates a new 10DLC
-  Campaign under the Brand; set `mock` to `true` to create a test Campaign that
+  Campaign under the Brand; with `mock` set to `true`, it is a test Campaign that
   cannot send production traffic. Requires the `campaigns:write` scope, the 10DLC
   feature enabled for the account, and a `brand_id` whose Brand has a verified
   identity status.
 
 ten_dlc_brand_campaigns_delete: >-
   Deletes the 10DLC Campaign identified by `campaign_id` under the 10DLC Brand
-  `brand_id`. Use when the user wants to remove a 10DLC Campaign they no longer
+  `brand_id`. Applies when the user wants to remove a 10DLC Campaign they no longer
   need. The first call deletes nothing and returns a preview naming the Campaign and
   the numbers that stop sending through it with a `confirmation_token`; the Campaign
   is deleted only when the tool is called again with the same arguments and that
@@ -908,7 +908,7 @@ ten_dlc_campaign_numbers_list: >-
 
 ten_dlc_campaign_numbers_unlink: >-
   Unlinks a phone number, in E.164 format, from the 10DLC Campaign identified by
-  `campaign_id` under the 10DLC Brand `brand_id`. Use when the user wants to remove
+  `campaign_id` under the 10DLC Brand `brand_id`. Applies when the user wants to remove
   a number from a Campaign. The first call unlinks nothing and returns a preview
   naming the number and the Campaign with a `confirmation_token`; the number is
   unlinked only when the tool is called again with the same arguments and that token
@@ -946,7 +946,7 @@ ten_dlc_subscriptions_create: >-
   a `subscription_category` of `brand`, `campaign`, or `number`.
 
 ten_dlc_subscriptions_delete: >-
-  Deletes the 10DLC event subscription for the specified event category. Use when
+  Deletes the 10DLC event subscription for the specified event category. Applies when
   the user wants to stop receiving 10DLC webhook notifications for that category.
   The first call deletes nothing and returns a preview naming the event category and
   its current URL with a `confirmation_token`; the subscription is deleted only when
@@ -994,7 +994,7 @@ sub_accounts_transactions_list: >-
 
 sub_accounts_update: >-
   Updates the sub-organization identified by `id`; only the fields provided in the
-  request change, and omitted fields keep their current values. Use when the user
+  request change, and omitted fields keep their current values. Applies when the user
   wants to rename a sub-organization, enable or disable it, or change its default
   webhook destinations. The first call changes nothing and returns a preview
   listing the settings that would change with a `confirmation_token`; the update is
@@ -1076,18 +1076,19 @@ whatsapp_templates_create: >-
 whatsapp_messages_send: >-
   Sends an approved WhatsApp template message from one of the account's senders to a
   single recipient, substituting the template's placeholders, header, and buttons.
-  Use when the user asks to send a WhatsApp message. The first call sends nothing
+  Applies when the user asks to send a WhatsApp message. The first call sends nothing
   and returns a preview naming the sender, the recipient, the template and its
   placeholder values with a `confirmation_token`; the message is sent only when the
   tool is called again with the same arguments and that token after the user has
   seen the preview and approved it in a later message. Billable to the account
   balance and irreversible once accepted; the provider may still reject or defer
   delivery. Requires the `whatsapp:write` scope, the WhatsApp channel enabled, the
-  account's `sending` capability, and a registered sender as `from`. Use a template
-  that is approved for that sender. Pass `idempotency_key` (up to 128 characters,
-  unique per account) to make retries safe: a repeated send with the same key
+  account's `sending` capability, and a registered sender as `from`. The template must
+  be approved for that sender. An `idempotency_key` (up to 128 characters, unique per
+  account) makes retries safe: a repeated send with the same key
   returns the original message and sends nothing, and the rest of the request is not
-  compared, so reuse a key only for the same send.
+  compared, so a key reused for a different send returns the original message and sends
+  nothing new.
 
 whatsapp_messages_list: >-
   Lists the account's WhatsApp messages, filterable by direction, delivery
