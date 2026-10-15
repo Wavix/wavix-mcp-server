@@ -32,6 +32,11 @@ from wavix_mcp.confirmation import (
 )
 from wavix_mcp.scope_filter import ScopeFilterMiddleware
 
+from .test_instructions import imperative_violations
+
+APPROVAL_AFTER_PREVIEW = (
+    "a call meant to follow the user's approval of the preview in a later message"
+)
 CALL = {"from": "+15550100", "to": "+15550199", "callback_url": "https://cb.test/x"}
 CAMPAIGN = {
     "voice_campaign": {"callflow_id": 3212, "caller_id": "13123310912", "contact": "16729923812"}
@@ -241,11 +246,13 @@ def test_first_call_returns_a_preview_and_dials_nothing(isolated_routes, anonymo
         "• callback_url: https://cb.test/x",
     ]
     assert re.fullmatch(
-        "Show this preview to the user and wait for their reply. "
-        rf'Call this tool again with {TOKEN_PARAMETER}="[\w-]+" only after the user '
-        "approves it in a later message; approval given before this preview does not count\\.",
+        "This preview is meant for the user. The action runs when this tool "
+        rf'is called again with {TOKEN_PARAMETER}="[\w-]+"; that call is meant to follow '
+        "the user's approval in a later message, and approval given before this preview "
+        "is not approval of it\\.",
         lines[4],
     )
+    assert imperative_violations(lines[4]) == []
 
 
 def test_token_runs_the_action_once_without_forwarding_the_token(isolated_routes, anonymous):
@@ -877,6 +884,27 @@ def test_every_destructive_tool_and_the_named_ones_are_confirmed(real_tools):
     for tool in tools:
         takes_token = TOKEN_PARAMETER in tool.parameters.get("properties", {})
         assert takes_token == (tool.name in gated), tool.name
+
+
+def test_tool_descriptions_carry_no_assistant_imperatives(real_tools):
+    tools, _gated = real_tools
+    violations = {
+        tool.name: found
+        for tool in tools
+        if (found := imperative_violations(tool.description or ""))
+    }
+    assert violations == {}
+
+
+def test_gated_tool_descriptions_state_that_approval_follows_the_preview(real_tools):
+    tools, gated = real_tools
+    missing = [
+        tool.name
+        for tool in tools
+        if tool.name in gated
+        and APPROVAL_AFTER_PREVIEW not in " ".join((tool.description or "").split())
+    ]
+    assert missing == []
 
 
 def test_gated_tool_missing_from_the_spec_fails_startup():

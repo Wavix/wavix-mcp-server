@@ -14,6 +14,14 @@ Entries are derived from the commit history, which follows
 - `README.md` and `TOOLS.md` no longer state a tool count, total or per group;
   they explain that the tools shown depend on the permissions approved at
   sign-in and the features enabled on the account.
+- The server instructions, the descriptions of the tools that run in two steps
+  and the confirmation preview state how the confirmation works instead of
+  telling the assistant what to do. The confirmed call is meant to follow the
+  user's approval in a message sent after the preview, and an approval given in
+  advance is not an approval of that preview; the server checks only that the
+  token matches the arguments and has not expired. A test rejects these texts
+  when a sentence or clause opens with a common imperative such as "Use",
+  "Show", "Pass", "Set" or "Poll".
 
 ### Fixed
 

@@ -70,7 +70,7 @@ Tool naming conventions:
 - *_list tools return a collection with basic filters. Paginated collections accept per_page (1 to 100, default 25) and page (starting at 1); each tool's input schema shows whether it is paginated.
 - *_get tools return a single entity, identified by the key named in the tool's input schema (usually an ID).
 - *_create, *_update, and *_delete tools change account state. Each tool carries MCP annotations (readOnlyHint, destructiveHint, openWorldHint), and its description states any cost and whether the change can be reversed.
-- Every tool annotated with destructiveHint runs in two steps, as do the tools that register call webhooks or change SIP trunks or sub-accounts. The first call does nothing and returns a preview of the action with a confirmation_token; the action runs only when the same tool is called again with the same arguments and that token, only after the user has seen the preview and approved it in a later message. Show the preview to the user and stop; approval given before the preview, such as "I approve in advance", does not count. A token is single-use and expires after {TOKEN_TTL_S / 60:g} minutes.
+- Every tool annotated with destructiveHint runs in two steps, as do the tools that register call webhooks or change SIP trunks or sub-accounts. The first call does nothing and returns a preview of the action with a confirmation_token; the action runs when the same tool is called again with the same arguments and that token. The preview is meant for the user to read and approve; the confirmed call is meant to follow an approval the user gives in a message sent after the preview, and an approval given in advance is not an approval of that preview. The server checks only that the token matches the arguments and has not expired; it does not see the conversation. A token is single-use and expires after {TOKEN_TTL_S / 60:g} minutes.
 - Some bulk operations run asynchronously. For example, number_validator_create_bulk with async set to true returns a request ID, and number_validator_results_get returns the results for that ID.
 
 Billing:
@@ -614,10 +614,10 @@ def _register_binary_redirect_tools(
         annotations=_download_url_annotations("Get call recording download URL"),
     )
     async def call_recording_get_by_call(call_id: str) -> dict[str, Any]:
-        """Get a download URL for a call recording audio file by call ID.
+        """Returns a download URL for a call recording audio file by call ID.
 
         Returns ``{download_url, content_type, status_code, note}`` instead of the
-        binary audio stream. Fetch ``download_url`` to obtain the MP3.
+        binary audio stream; ``download_url`` serves the MP3.
         """
         return await _resolve_to_download_url(api_client, base_url, f"/v1/recordings/{call_id}")
 
@@ -627,10 +627,10 @@ def _register_binary_redirect_tools(
         annotations=_download_url_annotations("Get speech analytics file URL"),
     )
     async def speech_analytics_file_get(request_id: str) -> dict[str, Any]:
-        """Get a download URL for a speech-analytics audio file.
+        """Returns a download URL for a speech-analytics audio file.
 
         Returns ``{download_url, content_type, status_code, note}`` instead of the
-        binary audio stream (WAV/MP3/MP4). Fetch ``download_url`` to obtain the file.
+        binary audio stream (WAV/MP3/MP4); ``download_url`` serves the file.
         """
         return await _resolve_to_download_url(
             api_client, base_url, f"/v1/speech-analytics/{request_id}/file"
@@ -642,10 +642,10 @@ def _register_binary_redirect_tools(
         annotations=_download_url_annotations("Get 10DLC brand evidence URL"),
     )
     async def ten_dlc_brand_evidence_get(brand_id: str, id: str) -> dict[str, Any]:
-        """Get a download URL for a 10DLC brand evidence file.
+        """Returns a download URL for a 10DLC brand evidence file.
 
         Returns ``{download_url, content_type, status_code, note}`` instead of the
-        binary file stream. Fetch ``download_url`` to obtain the file.
+        binary file stream; ``download_url`` serves the file.
         """
         return await _resolve_to_download_url(
             api_client, base_url, f"/v3/10dlc/brands/{brand_id}/evidence/{id}"
