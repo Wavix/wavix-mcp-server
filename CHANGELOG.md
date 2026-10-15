@@ -9,18 +9,6 @@ Entries are derived from the commit history, which follows
 
 ## [Unreleased]
 
-### Changed
-
-- `README.md` and `TOOLS.md` no longer state a tool count, total or per group;
-  they explain that the tools shown depend on the permissions approved at
-  sign-in and the features enabled on the account.
-
-### Fixed
-
-- `TOOLS.md` lists exactly the tools the server registers: the generator takes
-  the tool set from the built server, so `cdrs_transcription_get`, which the
-  spec marks as not exposed, is no longer listed.
-
 ## [1.3.0] - 2026-10-14
 
 ### Added
