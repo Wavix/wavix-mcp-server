@@ -163,7 +163,7 @@ async def _number_by_did(api: httpx.AsyncClient, did: str) -> str:
 async def _release_numbers(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
     ids, dids = arguments.get("ids"), arguments.get("dids")
     if (ids is None) == (dids is None):
-        raise ConfirmationInputError("Pass exactly one of ids or dids")
+        raise ConfirmationInputError("Exactly one of ids or dids is required")
     if ids is not None:
         if not isinstance(ids, list) or not ids:
             raise _invalid("ids")
@@ -588,8 +588,9 @@ class ConfirmationMiddleware(Middleware):
         return ToolResult(
             content=(
                 f"{preview}\nThis preview is meant for the user. The action runs when this tool "
-                f'is called again with {TOKEN_PARAMETER}="{issued}" after the user approves it '
-                "in a later message; approval given before this preview has no effect."
+                f'is called again with {TOKEN_PARAMETER}="{issued}"; that call is meant to follow '
+                "the user's approval in a later message, and approval given before this preview "
+                "is not approval of it."
             )
         )
 

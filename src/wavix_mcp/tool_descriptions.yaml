@@ -528,9 +528,9 @@ sip_trunks_update: >-
   addresses already on it are kept; on trial accounts every update also applies the
   trial limits, a `call_limit` of at most 300 seconds (300 when omitted) and one
   concurrent call. Requires the `trunks:write` scope and the SIP trunk's `id`; on
-  trial accounts, an omitted `call_limit` resets to 300 seconds and `host_request` is
-  not supported; a `callerid` must be an active or verified number on the account;
-  `ip_restrict` can be `true` only when the trunk has at least one
+  trial accounts, the current `call_limit` is kept only when it is sent again, and
+  `host_request` is not supported; a `callerid` must be an active or verified number
+  on the account; `ip_restrict` can be `true` only when the trunk has at least one
   allowed IP address, stored or sent in `allowed_ips`.
 
 api_keys_create: >-
@@ -1085,10 +1085,9 @@ whatsapp_messages_send: >-
   delivery. Requires the `whatsapp:write` scope, the WhatsApp channel enabled, the
   account's `sending` capability, and a registered sender as `from`. The template must
   be approved for that sender. An `idempotency_key` (up to 128 characters, unique per
-  account) makes retries safe: a repeated send with the same key
-  returns the original message and sends nothing, and the rest of the request is not
-  compared, so a key reused for a different send returns the original message and sends
-  nothing new.
+  account) makes retries safe: a repeated send with the same key returns the original
+  message and sends nothing, and the rest of the request is not compared, so a key is
+  safe to reuse only for the same send.
 
 whatsapp_messages_list: >-
   Lists the account's WhatsApp messages, filterable by direction, delivery

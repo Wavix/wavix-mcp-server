@@ -34,6 +34,7 @@ from wavix_mcp.scope_filter import ScopeFilterMiddleware
 
 from .test_instructions import imperative_violations
 
+APPROVAL_AFTER_PREVIEW = "after the user has seen the preview and approved it in a later message"
 CALL = {"from": "+15550100", "to": "+15550199", "callback_url": "https://cb.test/x"}
 CAMPAIGN = {
     "voice_campaign": {"callflow_id": 3212, "caller_id": "13123310912", "contact": "16729923812"}
@@ -244,8 +245,9 @@ def test_first_call_returns_a_preview_and_dials_nothing(isolated_routes, anonymo
     ]
     assert re.fullmatch(
         "This preview is meant for the user. The action runs when this tool "
-        rf'is called again with {TOKEN_PARAMETER}="[\w-]+" after the user approves it '
-        "in a later message; approval given before this preview has no effect\\.",
+        rf'is called again with {TOKEN_PARAMETER}="[\w-]+"; that call is meant to follow '
+        "the user's approval in a later message, and approval given before this preview "
+        "is not approval of it\\.",
         lines[4],
     )
     assert imperative_violations(lines[4]) == []
@@ -890,6 +892,17 @@ def test_gated_tool_descriptions_carry_no_assistant_imperatives(real_tools):
         if tool.name in gated and (found := imperative_violations(tool.description or ""))
     }
     assert violations == {}
+
+
+def test_gated_tool_descriptions_state_that_approval_follows_the_preview(real_tools):
+    tools, gated = real_tools
+    missing = [
+        tool.name
+        for tool in tools
+        if tool.name in gated
+        and APPROVAL_AFTER_PREVIEW not in " ".join((tool.description or "").split())
+    ]
+    assert missing == []
 
 
 def test_gated_tool_missing_from_the_spec_fails_startup():
