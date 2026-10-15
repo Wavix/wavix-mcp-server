@@ -12,13 +12,14 @@ import pytest
 from wavix_mcp.server import INSTRUCTIONS
 
 CLAUSE_START = (
-    r"(?:^[ \t]*(?:[-*]|\d+[.)])?[ \t]*"
-    r"|[.;:!?][ \t]+"
-    r"|\b(?:so|then|optionally|please|and|only|first)\s+)"
+    r"(?:(?:^[ \t]*(?:[-*]|\d+[.)])?[ \t]*|[.;:!?][ \t]+)(?:(?:first|then|please|only|optionally)\s+)?"
+    r"|,\s+(?:and|so|then)\s+"
+    r"|\b(?:so|then|optionally|please)\s+)"
 )
+CALL_NOUNS = r"recordings?|detail|records?|logs?|metadata|flows?|history|status|ids?"
 IMPERATIVE_VERB = (
     r"(?:use|read|do\s+not|don't|never|always|confirm|prefer|default\s+to|quote|ask|show|stop"
-    r"|wait|tell|present|call\s+(?:this|the|it|again)|pass|send|set|poll|reuse|keep"
+    rf"|wait|tell|present|call(?!\s+(?:{CALL_NOUNS})\b)|pass|send|set|poll|reuse|keep"
     r"|make\s+sure|ensure|avoid|retry)\b(?!-)"
 )
 IMPERATIVE = re.compile(CLAUSE_START + IMPERATIVE_VERB, re.IGNORECASE | re.MULTILINE)
@@ -34,6 +35,10 @@ def imperative_violations(text: str) -> list[str]:
 
 def test_instructions_carry_no_assistant_imperatives():
     assert imperative_violations(INSTRUCTIONS) == []
+
+
+def test_instructions_state_that_the_server_does_not_see_the_conversation():
+    assert "it does not see the conversation" in INSTRUCTIONS
 
 
 @pytest.mark.parametrize(
@@ -56,6 +61,8 @@ def test_instructions_carry_no_assistant_imperatives():
         "Only call this tool again after the user replies.",
         "First show the preview.",
         "Present it to the user and stop.",
+        "Call `number_validator_results_get` for the results.",
+        "Lists templates, then call `whatsapp_templates_get` for one.",
     ],
 )
 def test_guard_catches_planted_imperative(planted):
@@ -70,6 +77,10 @@ def test_guard_catches_planted_imperative(planted):
         "It covers SMS, voice calls, 10DLC registration, call detail records.",
         "The first call sends nothing and returns a preview.",
         "Overwrites the provided settings; setting `status` to `disabled` suspends it.",
+        "Requires the call ID; call recording is optional.",
+        "Messages carry delivery and read receipts.",
+        "A trial account can only send to verified numbers.",
+        "The first call the server receives returns a preview.",
     ],
 )
 def test_guard_passes_descriptive_text(descriptive):

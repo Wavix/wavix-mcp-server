@@ -34,7 +34,9 @@ from wavix_mcp.scope_filter import ScopeFilterMiddleware
 
 from .test_instructions import imperative_violations
 
-APPROVAL_AFTER_PREVIEW = "after the user has seen the preview and approved it in a later message"
+APPROVAL_AFTER_PREVIEW = (
+    "a call meant to follow the user's approval of the preview in a later message"
+)
 CALL = {"from": "+15550100", "to": "+15550199", "callback_url": "https://cb.test/x"}
 CAMPAIGN = {
     "voice_campaign": {"callflow_id": 3212, "caller_id": "13123310912", "contact": "16729923812"}
