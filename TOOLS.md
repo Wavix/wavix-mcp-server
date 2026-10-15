@@ -1,6 +1,6 @@
 # Wavix MCP Tools — full catalogue
 
-126 tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi) via [`FastMCP.from_openapi()`](https://github.com/jlowin/fastmcp). Arguments mirror request path / query / body fields.
+Generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi) via [`FastMCP.from_openapi()`](https://github.com/jlowin/fastmcp). Arguments mirror request path / query / body fields. The tools shown depend on the permissions you approve at sign-in and the features enabled on your account.
 
 If a tool listed here is missing from your client, refresh the connection: the live catalogue tracks the OpenAPI spec as it evolves.
 
@@ -66,7 +66,6 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 - `cdrs_list` — List CDRs
 - `cdrs_search` — Search transcriptions
 - `cdrs_retranscribe` — Transcribe a call recording
-- `cdrs_transcription_get` — Retrieve a transcription
 - `cdrs_transcriptions` — Retrieve a transcription
 - `cdrs_get` — Retrieve a CDR
 
