@@ -19,7 +19,7 @@ CLAUSE_START = (
 CALL_NOUNS = r"recordings?|detail|records?|logs?|metadata|flows?|history|status|ids?"
 IMPERATIVE_VERB = (
     r"(?:use(?!\s+cases?\b)|read|do\s+not|don't|never|always|confirm|prefer|default\s+to|quote|ask|show|stop"
-    rf"|wait|tell|present|get|fetch|call(?!\s+(?:{CALL_NOUNS})\b)|pass|send|set|poll|reuse|keep"
+    rf"|wait|tell|present|(?-i:[Gg]et)|fetch|call(?!\s+(?:{CALL_NOUNS})\b)|pass|send|set|poll|reuse|keep"
     r"|make\s+sure|ensure|avoid|retry)\b(?!-)"
 )
 IMPERATIVE = re.compile(CLAUSE_START + IMPERATIVE_VERB, re.IGNORECASE | re.MULTILINE)
@@ -87,6 +87,7 @@ def test_guard_catches_planted_imperative(planted):
         "A trial account can only send to verified numbers.",
         "The first call the server receives returns a preview.",
         "Lists each Sender ID with its type, use case, and allowlisted countries.",
+        "Permission level: `read`: GET only.",
     ],
 )
 def test_guard_passes_descriptive_text(descriptive):
