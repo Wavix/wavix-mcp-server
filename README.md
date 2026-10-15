@@ -262,32 +262,32 @@ The agent calls `billing_transactions_list` filtered by type and date, then `bil
 ## Tools
 
 <!-- tools:start -->
-126 tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi). Arguments mirror request parameters and body fields.
+Generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi). Arguments mirror request parameters and body fields. The tools shown depend on the permissions you approve at sign-in and the features enabled on your account.
 
-| Group | # | Coverage |
-| --- | ---: | --- |
-| [SMS and MMS](TOOLS.md#sms-and-mms) | 9 | Send, list, retrieve messages; sender IDs; opt-outs |
-| [WhatsApp](TOOLS.md#whatsapp) | 10 | Business Accounts; senders; templates; send / list / retrieve messages |
-| [Call control](TOOLS.md#call-control) | 9 | Start / answer / end calls; play audio; collect DTMF |
-| [Call recording](TOOLS.md#call-recording) | 4 | List, download (pre-signed URL), delete |
-| [Call streaming](TOOLS.md#call-streaming) | 2 | Start / stop media stream |
-| [Call webhooks](TOOLS.md#call-webhooks) | 3 | List, create, delete |
-| [CDRs](TOOLS.md#cdrs) | 6 | List, retrieve; transcription search and retranscribe |
-| [Speech Analytics](TOOLS.md#speech-analytics) | 3 | Transcribe, retrieve original file |
-| [2FA](TOOLS.md#2fa) | 6 | Create / check / cancel / resend verification; events |
-| [My numbers](TOOLS.md#my-numbers) | 5 | List, update, release; SMS / voice routing |
-| [Buy](TOOLS.md#buy) | 5 | Countries, regions, cities; available number search |
-| [Cart](TOOLS.md#cart) | 4 | Add, remove, retrieve, checkout |
-| [Number validator](TOOLS.md#number-validator) | 3 | Single and bulk validation |
-| [SIP trunks](TOOLS.md#sip-trunks) | 5 | Full CRUD |
-| [10DLC](TOOLS.md#10dlc) | 29 | Brands, campaigns, vetting, evidence, event subscriptions |
-| [Profile](TOOLS.md#profile) | 3 | Get / update profile; account config |
-| [API Keys](TOOLS.md#api-keys) | 4 | List, create, update, delete |
-| [Sub-accounts](TOOLS.md#sub-accounts) | 5 | List, create, get, update; transactions |
-| [Billing](TOOLS.md#billing) | 2 | Transactions; list invoices / statements |
-| [Voice campaigns](TOOLS.md#voice-campaigns) | 2 | Trigger and retrieve |
-| [Wavix Embeddable (WebRTC)](TOOLS.md#wavix-embeddable-webrtc) | 5 | Widget tokens CRUD |
-| [Link shortener](TOOLS.md#link-shortener) | 2 | Create short links; metrics |
+| Group | Coverage |
+| --- | --- |
+| [SMS and MMS](TOOLS.md#sms-and-mms) | Send, list, retrieve messages; sender IDs; opt-outs |
+| [WhatsApp](TOOLS.md#whatsapp) | Business Accounts; senders; templates; send / list / retrieve messages |
+| [Call control](TOOLS.md#call-control) | Start / answer / end calls; play audio; collect DTMF |
+| [Call recording](TOOLS.md#call-recording) | List, download (pre-signed URL), delete |
+| [Call streaming](TOOLS.md#call-streaming) | Start / stop media stream |
+| [Call webhooks](TOOLS.md#call-webhooks) | List, create, delete |
+| [CDRs](TOOLS.md#cdrs) | List, retrieve; transcription search and retranscribe |
+| [Speech Analytics](TOOLS.md#speech-analytics) | Transcribe, retrieve original file |
+| [2FA](TOOLS.md#2fa) | Create / check / cancel / resend verification; events |
+| [My numbers](TOOLS.md#my-numbers) | List, update, release; SMS / voice routing |
+| [Buy](TOOLS.md#buy) | Countries, regions, cities; available number search |
+| [Cart](TOOLS.md#cart) | Add, remove, retrieve, checkout |
+| [Number validator](TOOLS.md#number-validator) | Single and bulk validation |
+| [SIP trunks](TOOLS.md#sip-trunks) | Full CRUD |
+| [10DLC](TOOLS.md#10dlc) | Brands, campaigns, vetting, evidence, event subscriptions |
+| [Profile](TOOLS.md#profile) | Get / update profile; account config |
+| [API Keys](TOOLS.md#api-keys) | List, create, update, delete |
+| [Sub-accounts](TOOLS.md#sub-accounts) | List, create, get, update; transactions |
+| [Billing](TOOLS.md#billing) | Transactions; list invoices / statements |
+| [Voice campaigns](TOOLS.md#voice-campaigns) | Trigger and retrieve |
+| [Wavix Embeddable (WebRTC)](TOOLS.md#wavix-embeddable-webrtc) | Widget tokens CRUD |
+| [Link shortener](TOOLS.md#link-shortener) | Create short links; metrics |
 
 <!-- tools:end -->
 
@@ -360,7 +360,7 @@ In either case, review `billing_transactions_list` and `cdrs_list` for unexpecte
 | --- | --- |
 | `401 Unauthorized` from any tool | Authentication failed. With an API key: the `Authorization: Bearer …` header is missing, or the key is invalid or inactive — verify it in the Wavix Console. With account sign-in: your session/token expired or was revoked, or sign-in never completed — reconnect and sign in again. |
 | Tool returns a `download_url`, not the file itself | Expected. Recording, speech-analytics, and 10DLC evidence endpoints return pre-signed URLs (see [Authentication](#authentication)). Fetch the URL directly without the `Authorization` header. |
-| Client only shows ~40 tools, not the full catalogue | Older clients enforce a per-server tool cap. Upgrade (Cursor 2.4+, latest VS Code, latest Claude). |
+| Client shows only part of the catalogue | Older clients enforce a per-server tool cap. Upgrade (Cursor 2.4+, latest VS Code, latest Claude). |
 | Fewer tools available after signing in with a Wavix account | Expected. Account sign-in is scope-filtered — you get the tools your approved scopes and account role allow, not the full catalogue. An API-key connection sees the full tool surface. To widen the set, approve more scopes at sign-in (subject to your role) or connect with an API key that carries them. |
 | `Tool not found` for a tool listed in this README | The local client may be caching an old tool list. Restart the client, or remove and re-add the server. |
 | 4xx with an `errors` array | Validation error from Wavix API. Inspect `errors`; cross-reference the relevant `wavix://docs/*` page or the OpenAPI spec. |

@@ -11,6 +11,9 @@ Entries are derived from the commit history, which follows
 
 ### Changed
 
+- `README.md` and `TOOLS.md` no longer state a tool count, total or per group;
+  they explain that the tools shown depend on the permissions approved at
+  sign-in and the features enabled on the account.
 - The server instructions, the descriptions of the tools that run in two steps
   and the confirmation preview state how the confirmation works instead of
   telling the assistant what to do. The confirmed call is meant to follow the
@@ -19,6 +22,12 @@ Entries are derived from the commit history, which follows
   token matches the arguments and has not expired. A test rejects these texts
   when a sentence or clause opens with a common imperative such as "Use",
   "Show", "Pass", "Set" or "Poll".
+
+### Fixed
+
+- `TOOLS.md` lists exactly the tools the server registers: the generator takes
+  the tool set from the built server, so `cdrs_transcription_get`, which the
+  spec marks as not exposed, is no longer listed.
 
 ## [1.3.0] - 2026-10-14
 
