@@ -13,12 +13,12 @@ from wavix_mcp.server import INSTRUCTIONS
 
 CLAUSE_START = (
     r"(?:(?:^[ \t]*(?:[-*]|\d+[.)])?[ \t]*|[.;:!?][ \t]+)(?:(?:first|then|please|only|optionally)\s+)?"
-    r"|,\s+(?:and|so|then)\s+"
+    r"|,\s+(?:(?:and|so|then)\s+)?"
     r"|\b(?:so|then|optionally|please)\s+)"
 )
 CALL_NOUNS = r"recordings?|detail|records?|logs?|metadata|flows?|history|status|ids?"
 IMPERATIVE_VERB = (
-    r"(?:use|read|do\s+not|don't|never|always|confirm|prefer|default\s+to|quote|ask|show|stop"
+    r"(?:use(?!\s+cases?\b)|read|do\s+not|don't|never|always|confirm|prefer|default\s+to|quote|ask|show|stop"
     rf"|wait|tell|present|call(?!\s+(?:{CALL_NOUNS})\b)|pass|send|set|poll|reuse|keep"
     r"|make\s+sure|ensure|avoid|retry)\b(?!-)"
 )
@@ -63,6 +63,10 @@ def test_instructions_state_that_the_server_does_not_see_the_conversation():
         "Present it to the user and stop.",
         "Call `number_validator_results_get` for the results.",
         "Lists templates, then call `whatsapp_templates_get` for one.",
+        "If the user approves, call the tool again with the token.",
+        "Once approved, send the request again.",
+        "First, show the preview to the user.",
+        "Optionally, set the `language`.",
     ],
 )
 def test_guard_catches_planted_imperative(planted):
@@ -81,6 +85,7 @@ def test_guard_catches_planted_imperative(planted):
         "Messages carry delivery and read receipts.",
         "A trial account can only send to verified numbers.",
         "The first call the server receives returns a preview.",
+        "Lists each Sender ID with its type, use case, and allowlisted countries.",
     ],
 )
 def test_guard_passes_descriptive_text(descriptive):
