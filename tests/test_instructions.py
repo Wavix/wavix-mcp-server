@@ -1,5 +1,5 @@
-"""Server instructions, gated tool descriptions and the confirmation preview
-describe what exists; they never address the assistant.
+"""Server instructions, tool descriptions and the confirmation preview describe
+what exists; they never address the assistant.
 
 Anthropic Directory Review: tool descriptions and server metadata "describe what
 exists and when it applies" and must not contain imperatives aimed at the assistant.
@@ -19,7 +19,7 @@ CLAUSE_START = (
 CALL_NOUNS = r"recordings?|detail|records?|logs?|metadata|flows?|history|status|ids?"
 IMPERATIVE_VERB = (
     r"(?:use(?!\s+cases?\b)|read|do\s+not|don't|never|always|confirm|prefer|default\s+to|quote|ask|show|stop"
-    rf"|wait|tell|present|call(?!\s+(?:{CALL_NOUNS})\b)|pass|send|set|poll|reuse|keep"
+    rf"|wait|tell|present|get|fetch|call(?!\s+(?:{CALL_NOUNS})\b)|pass|send|set|poll|reuse|keep"
     r"|make\s+sure|ensure|avoid|retry)\b(?!-)"
 )
 IMPERATIVE = re.compile(CLAUSE_START + IMPERATIVE_VERB, re.IGNORECASE | re.MULTILINE)
@@ -67,6 +67,7 @@ def test_instructions_state_that_the_server_does_not_see_the_conversation():
         "Once approved, send the request again.",
         "First, show the preview to the user.",
         "Optionally, set the `language`.",
+        "Get a download URL for a call recording. Fetch `download_url` to obtain the MP3.",
     ],
 )
 def test_guard_catches_planted_imperative(planted):

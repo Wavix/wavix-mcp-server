@@ -614,10 +614,10 @@ def _register_binary_redirect_tools(
         annotations=_download_url_annotations("Get call recording download URL"),
     )
     async def call_recording_get_by_call(call_id: str) -> dict[str, Any]:
-        """Get a download URL for a call recording audio file by call ID.
+        """Returns a download URL for a call recording audio file by call ID.
 
         Returns ``{download_url, content_type, status_code, note}`` instead of the
-        binary audio stream. Fetch ``download_url`` to obtain the MP3.
+        binary audio stream; ``download_url`` serves the MP3.
         """
         return await _resolve_to_download_url(api_client, base_url, f"/v1/recordings/{call_id}")
 
@@ -627,10 +627,10 @@ def _register_binary_redirect_tools(
         annotations=_download_url_annotations("Get speech analytics file URL"),
     )
     async def speech_analytics_file_get(request_id: str) -> dict[str, Any]:
-        """Get a download URL for a speech-analytics audio file.
+        """Returns a download URL for a speech-analytics audio file.
 
         Returns ``{download_url, content_type, status_code, note}`` instead of the
-        binary audio stream (WAV/MP3/MP4). Fetch ``download_url`` to obtain the file.
+        binary audio stream (WAV/MP3/MP4); ``download_url`` serves the file.
         """
         return await _resolve_to_download_url(
             api_client, base_url, f"/v1/speech-analytics/{request_id}/file"
@@ -642,10 +642,10 @@ def _register_binary_redirect_tools(
         annotations=_download_url_annotations("Get 10DLC brand evidence URL"),
     )
     async def ten_dlc_brand_evidence_get(brand_id: str, id: str) -> dict[str, Any]:
-        """Get a download URL for a 10DLC brand evidence file.
+        """Returns a download URL for a 10DLC brand evidence file.
 
         Returns ``{download_url, content_type, status_code, note}`` instead of the
-        binary file stream. Fetch ``download_url`` to obtain the file.
+        binary file stream; ``download_url`` serves the file.
         """
         return await _resolve_to_download_url(
             api_client, base_url, f"/v3/10dlc/brands/{brand_id}/evidence/{id}"

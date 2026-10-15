@@ -886,12 +886,12 @@ def test_every_destructive_tool_and_the_named_ones_are_confirmed(real_tools):
         assert takes_token == (tool.name in gated), tool.name
 
 
-def test_gated_tool_descriptions_carry_no_assistant_imperatives(real_tools):
-    tools, gated = real_tools
+def test_tool_descriptions_carry_no_assistant_imperatives(real_tools):
+    tools, _gated = real_tools
     violations = {
         tool.name: found
         for tool in tools
-        if tool.name in gated and (found := imperative_violations(tool.description or ""))
+        if (found := imperative_violations(tool.description or ""))
     }
     assert violations == {}
 

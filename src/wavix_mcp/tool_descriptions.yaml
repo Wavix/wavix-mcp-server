@@ -25,22 +25,22 @@ sms_and_mms_messages_send: >-
 
 sms_and_mms_messages_list: >-
   Lists the account's SMS and MMS messages, filterable by direction, date,
-  Sender ID, recipient number, delivery status, tag, and message type. Use to
-  review message history or find messages matching criteria. Read-only; no side
+  Sender ID, recipient number, delivery status, tag, and message type. Applies to
+  reviewing message history or finding messages matching criteria. Read-only; no side
   effects. Requires the `messages:read` scope and the `type` filter (`inbound`
   or `outbound`); results are paginated with `per_page` from 1 to 100 (default
   25) and `page` starting at 1.
 
 sms_and_mms_messages_get: >-
   Retrieves a single SMS or MMS message by its ID, including its delivery
-  status, charge, and content. Use to check the status or content of one known
+  status, charge, and content. Applies to checking the status or content of one known
   message. Read-only; no side effects. Requires the `messages:read` scope and
   the message `id`.
 
 sms_and_mms_sender_ids_list: >-
   Lists the Sender IDs registered on the account, each with its Sender ID name,
-  type, use case, and allowlisted countries. Use to discover which `from` values
-  are available before sending a message, or to audit registered senders.
+  type, use case, and allowlisted countries. Applies to discovering which `from` values
+  are available before sending a message, or to auditing registered senders.
   Read-only; no side effects. Requires the `messages:read` scope.
 
 sms_and_mms_sender_ids_create: >-
@@ -55,7 +55,7 @@ sms_and_mms_sender_ids_create: >-
 
 sms_and_mms_sender_ids_get: >-
   Retrieves a single registered Sender ID by its ID, including its type, use
-  case, and allowlisted countries. Use to inspect one Sender ID the account
+  case, and allowlisted countries. Applies to inspecting one Sender ID the account
   already has. Read-only; no side effects. Requires the `messages:read` scope
   and the Sender ID's `id`.
 
@@ -70,15 +70,15 @@ sms_and_mms_sender_ids_delete: >-
 
 sms_and_mms_opt_outs_list: >-
   Lists the phone numbers that have opted out of receiving messages from the
-  account, filterable by Sender ID, 10DLC campaign, and creation date. Use to
-  check whether a recipient has opted out before sending, or to review the
+  account, filterable by Sender ID, 10DLC campaign, and creation date. Applies to
+  checking whether a recipient has opted out before sending, or to reviewing the
   opt-out list. Read-only; no side effects. Requires the `messages:read` scope;
   results are paginated with `per_page` from 1 to 100 (default 25) and `page`
   starting at 1.
 
 sms_and_mms_opt_outs_create: >-
   Adds a phone number to the account's opt-out list, either for a specific
-  Sender ID or for all outbound messages when no Sender ID is given. Use when a
+  Sender ID or for all outbound messages when no Sender ID is given. Applies when a
   recipient asks to stop receiving messages or to honor a suppression request.
   Once created, outbound messages to that number within the chosen scope are
   blocked. Requires the `messages:write` scope and the recipient phone number.
@@ -123,7 +123,7 @@ call_control_audio_stop: >-
 
 call_control_collect: >-
   Collects DTMF keypad input from the caller on the active call identified by `id`,
-  optionally playing a `prompt` first. Use to gather digits from the caller, such
+  optionally playing a `prompt` first. Applies to gathering digits from the caller, such
   as a menu selection or PIN, on a connected call. Plays the prompt and waits for
   the caller to enter digits on the live call; collection ends on the termination
   character, the digit limit, or the timeout. This tool speaks synthesized text to
@@ -161,12 +161,12 @@ call_control_delete: >-
 
 call_control_get: >-
   Returns the call identified by `id`, including its current event and timestamps.
-  Use to check the status or details of one known call. Read-only; no side effects.
-  Requires the `calls:read` scope and the call's `id` (`uuid`).
+  Applies to checking the status or details of one known call. Read-only; no side
+  effects. Requires the `calls:read` scope and the call's `id` (`uuid`).
 
 call_control_list: >-
-  Returns the calls currently in progress for the authenticated account. Use to
-  discover active calls or find a call's `uuid` before controlling it. Read-only;
+  Returns the calls currently in progress for the authenticated account. Applies to
+  discovering active calls or finding a call's `uuid` before controlling it. Read-only;
   no side effects. Requires the `calls:read` scope.
 
 call_control_streams_create: >-
@@ -198,7 +198,7 @@ call_control_streams_delete: >-
 
 call_control_update: >-
   Updates the active call identified by `id`; only the `tag` label can be changed.
-  Use to attach or change a user-defined tracking label on a call in progress.
+  Applies to attaching or changing a user-defined tracking label on a call in progress.
   Changes the call's `tag` metadata only; no effect on the call's audio or
   connection. Requires the `calls:write` scope, the call's `id` (`uuid`), and a
   `tag` value.
@@ -228,7 +228,7 @@ call_webhooks_delete: >-
 
 call_webhooks_list: >-
   Returns the call webhooks configured for the authenticated account for the
-  `on-call` and `post-call` events. Use to review which callback URLs are
+  `on-call` and `post-call` events. Applies to reviewing which callback URLs are
   registered before adding or removing one. Read-only; no side effects. Requires
   the `webhooks:read` scope.
 
@@ -238,8 +238,8 @@ my_numbers_bulk_update: >-
   Applies the same configuration changes to every owned phone number in the given
   `ids` list, updating only the fields provided — SMS enablement, inbound call
   routing destinations, the inbound-message callback URL, call recording,
-  transcription and its duration threshold, and the call-status callback URL. Use
-  to apply one routing or feature change across several owned numbers at once.
+  transcription and its duration threshold, and the call-status callback URL. Applies to
+  making one routing or feature change across several owned numbers at once.
   Changes the numbers' configuration; destination and SMS callback changes are
   applied asynchronously and may not appear in the response immediately. Requires
   the `numbers:write` scope and the `ids` list of numbers to update.
@@ -257,14 +257,14 @@ my_numbers_delete: >-
 
 my_numbers_get: >-
   Retrieves a single owned phone number by its `id`, including its inbound call
-  routing destinations, documents, and feature settings. Use to inspect the
+  routing destinations, documents, and feature settings. Applies to inspecting the
   configuration of one known number. Read-only; no side effects. Requires the
   `numbers:read` scope and the number's `id`.
 
 my_numbers_list: >-
   Lists the phone numbers owned by the account, filterable by city or rate center,
   full or partial phone number, and label (including whether a label is present).
-  Use to find owned numbers or to discover a number's `id` before retrieving or
+  Applies to finding owned numbers or discovering a number's `id` before retrieving or
   configuring it. Read-only; no side effects. Requires the `numbers:read` scope;
   results are paginated with `per_page` from 1 to 100 (default 25) and `page`
   starting at 1.
@@ -273,12 +273,12 @@ my_numbers_update: >-
   Updates the configuration of the owned phone number identified by `id`, changing
   only the fields provided — SMS enablement, inbound call routing destinations, the
   inbound-message callback URL, call recording, transcription and its duration
-  threshold, and the call-status callback URL. Use to change one number's routing
+  threshold, and the call-status callback URL. Applies to changing one number's routing
   or feature settings. Changes the number's configuration. Requires the
   `numbers:write` scope and the number's `id`.
 
 number_validator_create_bulk: >-
-  Validates a batch of phone numbers in a single request. Use when the user needs
+  Validates a batch of phone numbers in a single request. Applies when the user needs
   validation details for many numbers at once rather than checking them one at a
   time. Submits the batch for validation; when `async` is `true` it returns a
   `request_id` to poll for the results instead of returning the validation details
@@ -290,20 +290,20 @@ number_validator_get: >-
   and reachability details; the response's per-number `error_code` reports the
   outcome (`000` success, `013` internal error, `021` invalid format, `041` remote
   timeout, `042` remote query failed, `091` insufficient funds), distinct from the
-  HTTP status. Use to look up or verify one number before calling or messaging it.
-  Read-only; no side effects. Requires the `validator:read` scope, a `phone_number`
+  HTTP status. Applies to looking up or verifying one number before calling or messaging
+  it. Read-only; no side effects. Requires the `validator:read` scope, a `phone_number`
   in E.164 format (with or without the leading `+`), and a `type` giving the depth
   of validation to perform.
 
 number_validator_results_get: >-
   Retrieves the results of an asynchronous batch validation identified by
-  `request_id`. Use to fetch the outcome of a bulk validation submitted with
+  `request_id`. Applies to fetching the outcome of a bulk validation submitted with
   `async` set to `true`, once its `request_id` is available. Read-only; no side
   effects. Requires the `validator:read` scope and the `request_id` returned by the
   asynchronous bulk validation request.
 
 link_shortener_create: >-
-  Creates a short link that redirects to a target URL and tracks click metrics. Use
+  Creates a short link that redirects to a target URL and tracks click metrics. Applies
   when the user wants a trackable shortened URL, typically for a campaign message.
   Creates a new, publicly reachable short link pointing at the given target URL.
   Requires the `campaigns:write` scope and the destination URL (`link`); an
@@ -313,7 +313,7 @@ link_shortener_create: >-
 link_shortener_metrics_list: >-
   Lists per-click metrics for short links within a date range, including device,
   location, and campaign attribution, filterable by the phone number associated
-  with the click and by `utm_campaign`. Use to analyze how short links performed
+  with the click and by `utm_campaign`. Applies to analyzing how short links performed
   over a period. Read-only; no side effects. Requires the `campaigns:read` scope
   and a `from` and `to` date in `YYYY-MM-DD` format (both inclusive); results are
   paginated with `per_page` from 1 to 100 (default 25) and `page` starting at 1.
@@ -322,46 +322,46 @@ link_shortener_metrics_list: >-
 
 buy_cities_list: >-
   Lists the cities in a country where phone numbers are available for purchase,
-  for countries that have no regions (`has_provinces_or_states` is `false`). Use
-  to pick a city before listing available DIDs, once a country has been chosen;
-  for countries that have regions, use the region tools instead. Read-only; no
-  side effects. Requires the `numbers:read` scope and the `country_id`; pass
-  `text_enabled_only` to return only cities that offer text-enabled numbers.
+  for countries that have no regions (`has_provinces_or_states` is `false`). Applies to
+  picking a city before listing available DIDs, once a country has been chosen; for
+  countries that have regions, the region tools apply instead. Read-only; no side
+  effects. Requires the `numbers:read` scope and the `country_id`; with
+  `text_enabled_only`, it returns only cities that offer text-enabled numbers.
 
 buy_countries_list: >-
-  Lists the countries where phone numbers are available for purchase. Use as the
-  first step of buying a number, to choose a country before drilling into its
+  Lists the countries where phone numbers are available for purchase. It is the first
+  step of buying a number: choosing a country before drilling into its
   regions or cities and then adding DIDs to the cart. Read-only; no side effects.
-  Requires the `numbers:read` scope; pass `text_enabled_only` to return only
+  Requires the `numbers:read` scope; with `text_enabled_only`, it returns only
   countries that offer text-enabled phone numbers.
 
 buy_numbers_list: >-
-  Lists the phone numbers (DIDs) available for purchase in a city. Use after
-  selecting a country and city to find specific DIDs to add to the cart. Read-only;
+  Lists the phone numbers (DIDs) available for purchase in a city. Applies after a
+  country and city are selected, to find specific DIDs to add to the cart. Read-only;
   no side effects. Requires the `numbers:read` scope, the `country_id`, and the
-  `city_id`; pass `text_enabled_only` to return only text-enabled numbers; results
+  `city_id`; with `text_enabled_only`, it returns only text-enabled numbers; results
   are paginated with `per_page` from 1 to 100 (default 25) and `page` starting at 1.
 
 buy_region_cities_list: >-
   Lists the cities in a region (state or province) where phone numbers are
   available for purchase, for countries that have regions (`has_provinces_or_states`
-  is `true`). Use to pick a city within a chosen region before listing available
-  DIDs; for countries without regions, use the plain city tool instead. Read-only;
+  is `true`). Applies to picking a city within a chosen region before listing available
+  DIDs; for countries without regions, the plain city tool applies instead. Read-only;
   no side effects. Requires the `numbers:read` scope, the `country_id`, and the
-  `region_id`; pass `text_enabled_only` to return only cities that offer
+  `region_id`; with `text_enabled_only`, it returns only cities that offer
   text-enabled numbers.
 
 buy_regions_list: >-
   Lists the regions (states or provinces) of a country where phone numbers are
   available for purchase, for countries that have regions (`has_provinces_or_states`
-  is `true`). Use after choosing a country to pick a region before listing its
+  is `true`). Applies after a country is chosen, to pick a region before listing its
   cities. Read-only; no side effects. Requires the `numbers:read` scope and the
-  `country_id`; pass `text_enabled_only` to return only regions that offer
+  `country_id`; with `text_enabled_only`, it returns only regions that offer
   text-enabled numbers.
 
 cart_add: >-
-  Adds the listed phone numbers (DIDs) to the purchase cart. Use after finding
-  available numbers to stage them for purchase, before checking out. Modifies the
+  Adds the listed phone numbers (DIDs) to the purchase cart. Applies after available
+  numbers are found, to stage them for purchase before checking out. Modifies the
   cart by adding the given numbers; nothing is charged until checkout. Requires
   the `numbers:write` scope and an `ids` array of the phone numbers to add.
 
@@ -379,8 +379,8 @@ cart_checkout: >-
 
 cart_get: >-
   Retrieves the current purchase cart, including the phone numbers (DIDs) it
-  contains and the documents each one requires. Use to review what will be
-  purchased, or to check which documents are required, before checkout. Read-only;
+  contains and the documents each one requires. Applies to reviewing what will be
+  purchased, or checking which documents are required, before checkout. Read-only;
   no side effects. Requires the `numbers:read` scope.
 
 cart_remove: >-
@@ -397,7 +397,7 @@ cart_remove: >-
 
 cdrs_get: >-
   Returns the CDR for the call identified by `call_id`, optionally including the
-  call transcription when `show_transcription` is `true`. Use to look up the
+  call transcription when `show_transcription` is `true`. Applies to looking up the
   detail record of one known call, such as its direction, duration, disposition,
   and charge. Read-only; no side effects. Requires the `calls:read` scope and the
   call's `call_id`.
@@ -405,9 +405,9 @@ cdrs_get: >-
 cdrs_list: >-
   Lists the account's CDRs within a required date range, filterable by call
   direction, disposition, originating number, destination number, SIP trunk
-  login, and call ID. Use to review call history or find calls matching criteria
-  over a date range. Read-only; no side effects. Requires the `calls:read` scope
-  and the required `from` and `to` dates (`YYYY-MM-DD`, inclusive) and `type`
+  login, and call ID. Applies to reviewing call history or finding calls matching
+  criteria over a date range. Read-only; no side effects. Requires the `calls:read`
+  scope and the required `from` and `to` dates (`YYYY-MM-DD`, inclusive) and `type`
   filter (`placed` or `received`); results are paginated with `per_page` from 1
   to 100 (default 25) and `page` starting at 1.
 
@@ -429,15 +429,15 @@ cdrs_search: >-
   Searches the account's call transcriptions for the given keywords or phrases
   and returns the matching CDRs with their transcriptions, filterable by call
   direction, originating number, destination number, SIP trunk login, minimum
-  duration, and call ID. Use to find recorded calls whose transcription contains
+  duration, and call ID. Applies to finding recorded calls whose transcription contains
   specific words or phrases over a date range. Read-only; no side effects.
   Requires the `calls:read` scope and the required `type` filter (`placed` or
   `received`) and `from` and `to` dates (`YYYY-MM-DD`); results are paginated
   with `per_page` from 1 to 100 (default 25) and `page` starting at 1.
 
 cdrs_transcriptions: >-
-  Returns the transcription of the recorded call identified by `call_id`. Use to
-  retrieve the transcript of a call that has already been transcribed, for
+  Returns the transcription of the recorded call identified by `call_id`. Applies to
+  retrieving the transcript of a call that has already been transcribed, for
   example after `cdrs_retranscribe` completes. Read-only; no side effects.
   Requires the `calls:read` scope and the call's `call_id`.
 
@@ -453,21 +453,21 @@ call_recording_delete: >-
 
 call_recording_get: >-
   Returns the call recording identified by `id`, including its metadata and
-  download URL. Use to inspect one known recording's metadata or obtain its
+  download URL. Applies to inspecting one known recording's metadata or obtaining its
   download URL. Read-only; no side effects. Requires the `recordings:read` scope
   and the recording's `id`.
 
 call_recording_list: >-
   Lists the account's call recordings, filterable by date range, originating
-  number, destination number, call ID, and SIP trunk login. Use to browse
-  recordings or find those matching criteria. Read-only; no side effects.
+  number, destination number, call ID, and SIP trunk login. Applies to browsing
+  recordings or finding those matching criteria. Read-only; no side effects.
   Requires the `recordings:read` scope; results are paginated with `per_page`
   from 1 to 100 (default 25) and `page` starting at 1.
 
 speech_analytics_get: >-
   Returns the transcription for the speech-analytics request identified by
   `request_id`, including the transcript, speaker turns, and insights when
-  available. Use to retrieve the result of a speech-analytics request after the
+  available. Applies to retrieving the result of a speech-analytics request after the
   file has been uploaded and transcribed. Read-only; no side effects. Requires
   the `calls:read` scope and the `request_id` returned when the file was
   uploaded.
@@ -487,7 +487,7 @@ speech_analytics_retranscribe: >-
 
 sip_trunks_create: >-
   Creates a SIP trunk for routing inbound and outbound calls, returning the new
-  trunk with its generated `access_token`. Use when the user wants to provision a
+  trunk with its generated `access_token`. Applies when the user wants to provision a
   new SIP trunk and has confirmed its label, password, and Caller ID. Creates a
   new SIP trunk configuration on the account; supply IP-authentication and
   call-limit settings as needed. Requires the `trunks:write` scope, a `callerid`
@@ -504,12 +504,12 @@ sip_trunks_delete: >-
   `trunks:write` scope and the SIP trunk's `id`.
 
 sip_trunks_get: >-
-  Retrieves the SIP trunk identified by `id`, including its configuration. Use to
-  inspect one SIP trunk the account already has. Read-only; no side effects.
+  Retrieves the SIP trunk identified by `id`, including its configuration. Applies to
+  inspecting one SIP trunk the account already has. Read-only; no side effects.
   Requires the `trunks:read` scope and the SIP trunk's `id`.
 
 sip_trunks_list: >-
-  Lists the SIP trunks on the authenticated account. Use to discover which SIP
+  Lists the SIP trunks on the authenticated account. Applies to discovering which SIP
   trunks exist before retrieving, updating, or deleting one. Read-only; no side
   effects. Requires the `trunks:read` scope; results are paginated with
   `per_page` from 1 to 100 (default 25) and `page` starting at 1.
@@ -535,7 +535,7 @@ sip_trunks_update: >-
 
 api_keys_create: >-
   Creates an API key for the authenticated account, optionally restricting its
-  access to specific IP addresses. Use when the user wants to issue a new API key
+  access to specific IP addresses. Applies when the user wants to issue a new API key
   and has confirmed its label and any access restrictions. Creates a new API key
   that can authenticate against the account immediately. Requires a `label`; when
   `restricted` is `true`, `permitted_ips` must list the allowed IPv4 addresses,
@@ -552,12 +552,12 @@ api_keys_delete: >-
 
 api_keys_list: >-
   Lists the API keys belonging to the authenticated account, optionally filtered
-  by `label` (partial match). Use to discover which API keys exist or to find one
+  by `label` (partial match). Applies to discovering which API keys exist or finding one
   by name before updating or deleting it. Read-only; no side effects. Accepts an
   optional `label` filter.
 
 api_keys_update: >-
-  Updates the API key identified by `id`, changing only the fields provided. Use
+  Updates the API key identified by `id`, changing only the fields provided. Applies
   when the user wants to modify an existing API key's label, active state, IP
   restriction, or scope permissions and has confirmed the change. Modifies the
   API key's configuration on the account; unspecified fields are left unchanged.
@@ -565,33 +565,33 @@ api_keys_update: >-
 
 profile_config_get: >-
   Returns the account balance and the global limits configured for the
-  authenticated account. Use to check the current account balance or the
+  authenticated account. Applies to checking the current account balance or the
   account-wide limits before an action that depends on them. Read-only; no side
   effects. Requires the `account:read` scope.
 
 profile_get: >-
-  Returns the profile and billing details of the authenticated account. Use to
-  look up the account's profile information or billing details. Read-only; no
+  Returns the profile and billing details of the authenticated account. Applies to
+  looking up the account's profile information or billing details. Read-only; no
   side effects. Requires the `account:read` scope.
 
 profile_update: >-
-  Updates the profile and billing details of the authenticated account. Use when
+  Updates the profile and billing details of the authenticated account. Applies when
   the user wants to change their account profile or billing information and has
   confirmed the new values. Modifies the account's stored profile and billing
   details. Requires the `account:write` scope.
 
 billing_invoices_list: >-
   Lists the account's auto-generated financial statements (invoices), ordered by
-  billing period. Use to review the account's invoices or find a statement for a
-  given billing period. Read-only; no side effects. Requires the `billing:read`
+  billing period. Applies to reviewing the account's invoices or finding a statement for
+  a given billing period. Read-only; no side effects. Requires the `billing:read`
   scope; results are paginated with `per_page` from 1 to 100 (default 25) and
   `page` starting at 1.
 
 billing_transactions_list: >-
   Lists the account's billing transactions within a requested date range,
   filterable by transaction type, a substring of the transaction `details`, and
-  whether to return only account top-ups. Use to review account transactions or
-  reconcile charges and payments over a period. Read-only; no side effects.
+  whether to return only account top-ups. Applies to reviewing account transactions or
+  reconciling charges and payments over a period. Read-only; no side effects.
   Requires the `billing:read` scope and the required `from_date` and `to_date`
   range (inclusive, `YYYY-MM-DD`); results are paginated with `per_page` from 1
   to 100 (default 25) and `page` starting at 1.
@@ -600,14 +600,14 @@ billing_transactions_list: >-
 
 two_fa_events_list: >-
   Returns the lifecycle events of the 2FA verification identified by
-  `session_id`, such as number lookup and code delivery. Use to inspect the
-  timeline of a single verification after starting it. Read-only; no side
+  `session_id`, such as number lookup and code delivery. Applies to inspecting the
+  timeline of a single verification after it has started. Read-only; no side
   effects. Requires the `two_fa:read` scope and the verification's `session_id`.
 
 two_fa_sessions_list: >-
   Returns the 2FA verifications for the service identified by `service_id`
-  within the requested date range. Use to review 2FA verification history for a
-  service or find verifications in a given period. Read-only; no side effects.
+  within the requested date range. Applies to reviewing 2FA verification history for a
+  service or finding verifications in a given period. Read-only; no side effects.
   Requires the `two_fa:read` scope, the `service_id`, and both `from` and `to`
   dates in `YYYY-MM-DD` format (inclusive).
 
@@ -661,11 +661,11 @@ two_fa_verification_resend: >-
 
 webrtc_tokens_create: >-
   Creates a Wavix Embeddable widget token that authenticates a browser-based
-  softphone session against a SIP trunk. Use when the user needs a new widget
+  softphone session against a SIP trunk. Applies when the user needs a new widget
   credential to start a browser dialer session. Creates a token that grants
   softphone access until it expires. Requires the `embeddable:write` scope and a
   `sip_trunk` name, and optionally a `payload` of client-defined data and a
-  `ttl` in seconds (minimum 1, default 3600; pass `null` for no expiration).
+  `ttl` in seconds (minimum 1, default 3600; `null` means no expiration).
 
 webrtc_tokens_delete: >-
   Deletes the Wavix Embeddable widget token identified by `id`. Applies when the user
@@ -678,19 +678,19 @@ webrtc_tokens_delete: >-
   Requires the `embeddable:write` scope and the token's `id` (a UUID).
 
 webrtc_tokens_get: >-
-  Retrieves the Wavix Embeddable widget token identified by `id`. Use to inspect
+  Retrieves the Wavix Embeddable widget token identified by `id`. Applies to inspecting
   a single widget token the account already has. Read-only; no side effects.
   Requires the `embeddable:read` scope and the token's `id` (a UUID).
 
 webrtc_tokens_list: >-
-  Returns the Wavix Embeddable widget tokens for the authenticated account. Use
-  to discover which widget tokens exist or audit issued credentials. Read-only;
+  Returns the Wavix Embeddable widget tokens for the authenticated account. Applies to
+  discovering which widget tokens exist or auditing issued credentials. Read-only;
   no side effects. Requires the `embeddable:read` scope; results are paginated
   with `per_page` from 1 to 100 (default 25) and `page` starting at 1.
 
 webrtc_tokens_update: >-
   Updates the `payload` carried by the Wavix Embeddable widget token identified
-  by `id`, replacing the existing payload. Use when the user wants to change the
+  by `id`, replacing the existing payload. Applies when the user wants to change the
   client-defined data associated with a token. Overwrites the token's existing
   payload; the token itself and its authentication remain valid. Requires the
   `embeddable:write` scope, the token's `id` (a UUID), and the replacement
@@ -713,7 +713,7 @@ voice_campaigns_create: >-
 
 voice_campaigns_get: >-
   Returns the voice campaign identified by `id`, including its current status.
-  Use to check the progress or outcome of a campaign already launched.
+  Applies to checking the progress or outcome of a campaign already launched.
   Read-only; no side effects. Requires the `campaigns:read` scope and the
   campaign's `id`.
 
@@ -722,16 +722,17 @@ voice_campaigns_get: >-
 ten_dlc_brand_appeals_create: >-
   Submits an appeal of a 10DLC Brand's identity verification, with one or more
   `appeal_categories` (`VERIFY_TAX_ID`, `VERIFY_NON_PROFIT`, or `VERIFY_GOVERNMENT`)
-  plus supporting `evidence`. Use when a Brand is UNVERIFIED (or verified but missing
-  tax-exempt or government-entity status) and the user wants to contest the identity
-  result. Creates and submits an appeal for review. Requires the `campaigns:write`
-  scope, the Brand's `brand_id`, one or more `appeal_categories`, and `evidence`
-  supporting the appeal.
+  plus supporting `evidence`. Applies when a Brand is UNVERIFIED (or verified but
+  missing tax-exempt or government-entity status) and the user wants to contest the
+  identity result. Creates and submits an appeal for review. Requires the
+  `campaigns:write` scope, the Brand's `brand_id`, one or more `appeal_categories`, and
+  `evidence` supporting the appeal.
 
 ten_dlc_brand_appeals_list: >-
   Lists the identity verification appeals submitted for the 10DLC Brand identified by
-  `brand_id`. Use to review a Brand's appeal history or check appeal status. Read-only;
-  no side effects. Requires the `campaigns:read` scope and the Brand's `brand_id`.
+  `brand_id`. Applies to reviewing a Brand's appeal history or checking appeal status.
+  Read-only; no side effects. Requires the `campaigns:read` scope and the Brand's
+  `brand_id`.
 
 ten_dlc_brand_evidence_delete: >-
   Deletes a Brand evidence file from a 10DLC Brand by its evidence `id`. Applies when
@@ -744,32 +745,33 @@ ten_dlc_brand_evidence_delete: >-
   and the evidence file's `id`.
 
 ten_dlc_brand_evidence_list: >-
-  Lists the evidence files uploaded for the 10DLC Brand identified by `brand_id`. Use to
-  review which evidence files are attached to a Brand, for example before submitting an
-  appeal. Read-only; no side effects. Requires the `campaigns:read` scope and the Brand's
-  `brand_id`.
+  Lists the evidence files uploaded for the 10DLC Brand identified by `brand_id`.
+  Applies to reviewing which evidence files are attached to a Brand, for example before
+  submitting an appeal. Read-only; no side effects. Requires the `campaigns:read` scope
+  and the Brand's `brand_id`.
 
 ten_dlc_brand_usecase_qualify: >-
   Returns the qualification results for a 10DLC Brand and a named `use_case`, including
-  MNO-specific attributes, restrictions, and fees. Use to check whether a Brand qualifies
-  for a use case (such as `MARKETING`, `2FA`, or `CUSTOMER_CARE`) and at what fees before
-  registering a 10DLC Campaign. Read-only; no side effects. Requires the `campaigns:read`
-  scope, the Brand's `brand_id`, and a `use_case`; the Brand must already be scored and
-  submitted to TCR.
+  MNO-specific attributes, restrictions, and fees. Applies to checking whether a Brand
+  qualifies for a use case (such as `MARKETING`, `2FA`, or `CUSTOMER_CARE`) and at what
+  fees before registering a 10DLC Campaign. Read-only; no side effects. Requires the
+  `campaigns:read` scope, the Brand's `brand_id`, and a `use_case`; the Brand must
+  already be scored and submitted to TCR.
 
 ten_dlc_brand_vetting_appeals_create: >-
   Submits an appeal of a 10DLC Brand's external vetting, with one or more
   `appeal_categories` (`VERIFY_TAX_ID`, `VERIFY_NON_PROFIT`, `VERIFY_GOVERNMENT`, or
-  `LOW_SCORE`) and a list of supporting `evidence` IDs. Use when the user wants to
+  `LOW_SCORE`) and a list of supporting `evidence` IDs. Applies when the user wants to
   contest an external vetting result for a Brand. Creates and submits a vetting appeal
   for review. Requires the `campaigns:write` scope, the Brand's `brand_id`, the
   `appeal_categories`, and the `evidence` IDs; a `VETTED_VERIFIED` Brand cannot request
   the `VERIFY_TAX_ID` category.
 
 ten_dlc_brand_vetting_appeals_list: >-
-  Lists the external vetting appeals for the 10DLC Brand identified by `brand_id`. Use to
-  review a Brand's vetting-appeal history or check appeal status. Read-only; no side
-  effects. Requires the `campaigns:read` scope and the Brand's `brand_id`.
+  Lists the external vetting appeals for the 10DLC Brand identified by `brand_id`.
+  Applies to reviewing a Brand's vetting-appeal history or checking appeal status.
+  Read-only; no side effects. Requires the `campaigns:read` scope and the Brand's
+  `brand_id`.
 
 ten_dlc_brand_vettings_create: >-
   Requests external vetting for a 10DLC Brand from a vetting provider (`AEGIS`,
@@ -785,15 +787,15 @@ ten_dlc_brand_vettings_create: >-
 
 ten_dlc_brand_vettings_import: >-
   Imports an existing external vetting record into the 10DLC Brand identified by
-  `brand_id`. Use when the account already holds a vetting result from a provider and
-  wants to attach it to the Brand. Records the imported vetting against the Brand.
+  `brand_id`. Applies when the account already holds a vetting result from a provider
+  and wants to attach it to the Brand. Records the imported vetting against the Brand.
   Requires the `campaigns:write` scope, the Brand's `brand_id`, the provider `evp_id`,
   the `vetting_id`, and the `vetting_token`.
 
 ten_dlc_brand_vettings_list: >-
-  Lists the external vettings for the 10DLC Brand identified by `brand_id`. Use to review
-  which vettings a Brand has and their results. Read-only; no side effects. Requires the
-  `campaigns:read` scope and the Brand's `brand_id`.
+  Lists the external vettings for the 10DLC Brand identified by `brand_id`. Applies to
+  reviewing which vettings a Brand has and their results. Read-only; no side effects.
+  Requires the `campaigns:read` scope and the Brand's `brand_id`.
 
 ten_dlc_brands_create: >-
   Registers a 10DLC Brand, submitting the company's legal identity data —
@@ -821,19 +823,20 @@ ten_dlc_brands_delete: >-
 ten_dlc_brands_get: >-
   Retrieves the 10DLC Brand identified by `brand_id`, including its identity verification
   status and registration identity data (EIN/Tax ID, legal company name, and business
-  contact details). Use to inspect one Brand the account already has. Read-only; no side
-  effects. Requires the `campaigns:read` scope and the Brand's `brand_id`.
+  contact details). Applies to inspecting one Brand the account already has. Read-only;
+  no side effects. Requires the `campaigns:read` scope and the Brand's `brand_id`.
 
 ten_dlc_brands_list: >-
   Lists the account's 10DLC Brands, filterable by DBA name, legal company name, entity
   type, identity verification status, registration country, EIN/Tax ID, creation date,
-  and the mock and deleted flags. Use to find Brands or review their registration status.
-  Read-only; no side effects. Requires the `campaigns:read` scope; results are paginated
-  with `per_page` from 1 to 100 (default 25) and `page` starting at 1.
+  and the mock and deleted flags. Applies to finding Brands or reviewing their
+  registration status. Read-only; no side effects. Requires the `campaigns:read` scope;
+  results are paginated with `per_page` from 1 to 100 (default 25) and `page` starting
+  at 1.
 
 ten_dlc_brands_update: >-
-  Updates the 10DLC Brand identified by `brand_id`. Use to correct or change a Brand's
-  details before it is verified. Changing identity fields (`ein_taxid`,
+  Updates the 10DLC Brand identified by `brand_id`. Applies to correcting or changing a
+  Brand's details before it is verified. Changing identity fields (`ein_taxid`,
   `ein_taxid_country`, or `entity_type`) resets the Brand status to `UNVERIFIED` and
   triggers automatic re-submission to TCR. Requires the `campaigns:write` scope and the
   Brand's `brand_id`; a Brand in `VETTED_VERIFIED` status or with active 10DLC Campaigns
@@ -868,7 +871,7 @@ ten_dlc_brand_campaigns_delete: >-
 
 ten_dlc_brand_campaigns_get: >-
   Retrieves the 10DLC Campaign identified by `campaign_id` under the 10DLC Brand
-  `brand_id`, including its registration details and status. Use to inspect one
+  `brand_id`, including its registration details and status. Applies to inspecting one
   Campaign the account already has. Read-only; no side effects. Requires the
   `campaigns:read` scope, the 10DLC feature enabled for the account, and the
   `brand_id` and `campaign_id`.
@@ -876,14 +879,14 @@ ten_dlc_brand_campaigns_get: >-
 ten_dlc_brand_campaigns_list: >-
   Lists the 10DLC Campaigns registered under the 10DLC Brand identified by
   `brand_id`, filterable by name, use case, status, mock flag, and creation date.
-  Use to review or find Campaigns belonging to one specific Brand. Read-only; no
-  side effects. Requires the `campaigns:read` scope, the 10DLC feature enabled for
+  Applies to reviewing or finding Campaigns belonging to one specific Brand. Read-only;
+  no side effects. Requires the `campaigns:read` scope, the 10DLC feature enabled for
   the account, and the `brand_id`; results are paginated with `per_page` from 1
   to 100 (default 25) and `page` starting at 1.
 
 ten_dlc_brand_campaigns_update: >-
   Updates the 10DLC Campaign identified by `campaign_id` under the 10DLC Brand
-  `brand_id`; only the fields you supply are changed. Use when the user wants to
+  `brand_id`; only the fields you supply are changed. Applies when the user wants to
   modify an existing Campaign's details, such as its name, samples, or
   opt-in/opt-out settings. Changes the stored Campaign; only the provided fields
   are overwritten. Requires the `campaigns:write` scope, the 10DLC feature enabled
@@ -893,7 +896,7 @@ ten_dlc_brand_campaigns_update: >-
 
 ten_dlc_campaign_numbers_link: >-
   Links a phone number, in E.164 format, to the 10DLC Campaign identified by
-  `campaign_id` under the 10DLC Brand `brand_id`. Use when the user wants to
+  `campaign_id` under the 10DLC Brand `brand_id`. Applies when the user wants to
   associate a number with a Campaign so it can send A2P traffic. Links the number
   to the Campaign; Wavix automatically creates a Sender ID for it once the number
   is approved. Requires the `campaigns:write` scope, the 10DLC feature enabled for
@@ -901,7 +904,7 @@ ten_dlc_campaign_numbers_link: >-
 
 ten_dlc_campaign_numbers_list: >-
   Lists the phone numbers linked to the 10DLC Campaign identified by `campaign_id`
-  under the 10DLC Brand `brand_id`. Use to review which numbers are associated
+  under the 10DLC Brand `brand_id`. Applies to reviewing which numbers are associated
   with a Campaign. Read-only; no side effects. Requires the `campaigns:read`
   scope, the 10DLC feature enabled for the account, and the `brand_id` and
   `campaign_id`.
@@ -919,8 +922,8 @@ ten_dlc_campaign_numbers_unlink: >-
 
 ten_dlc_campaigns_list: >-
   Lists the 10DLC Campaigns across all 10DLC Brands on the authenticated account,
-  filterable by name, use case, status, mock flag, and creation date. Use to
-  review or find Campaigns account-wide, rather than under one specific Brand.
+  filterable by name, use case, status, mock flag, and creation date. Applies to
+  reviewing or finding Campaigns account-wide, rather than under one specific Brand.
   Read-only; no side effects. Requires the `campaigns:read` scope and the 10DLC
   feature enabled for the account; results are paginated with `per_page` from 1
   to 100 (default 25) and `page` starting at 1.
@@ -929,7 +932,7 @@ ten_dlc_campaigns_nudge: >-
   Requests carrier action on a pending or rejected 10DLC Campaign identified by
   `campaign_id` under the 10DLC Brand `brand_id`, using `nudge_intent` — `REVIEW`
   to request review of a pending Campaign or `APPEAL_REJECTION` to appeal a
-  rejected one. Use when a Campaign is stuck pending or was rejected and the user
+  rejected one. Applies when a Campaign is stuck pending or was rejected and the user
   wants to prompt another review. Submits the review or appeal request; no
   Campaign data is changed. Requires the `campaigns:write` scope, the 10DLC
   feature enabled for the account, the `brand_id` and `campaign_id`, and a
@@ -939,7 +942,7 @@ ten_dlc_campaigns_nudge: >-
 
 ten_dlc_subscriptions_create: >-
   Registers a webhook callback URL to receive Wavix 10DLC event notifications for
-  a chosen event category. Use when the user wants to be notified of 10DLC brand,
+  a chosen event category. Applies when the user wants to be notified of 10DLC brand,
   campaign, or number changes over a webhook. Creates a 10DLC event subscription
   delivering events in the chosen category to the given URL. Requires the
   `campaigns:write` scope, the 10DLC feature enabled for the account, a `url`, and
@@ -958,35 +961,35 @@ ten_dlc_subscriptions_delete: >-
 
 ten_dlc_subscriptions_list: >-
   Lists the 10DLC event subscriptions registered for the authenticated account,
-  each with its event category and callback URL. Use to review which 10DLC webhook
-  subscriptions are active. Read-only; no side effects. Requires the
+  each with its event category and callback URL. Applies to reviewing which 10DLC
+  webhook subscriptions are active. Read-only; no side effects. Requires the
   `campaigns:read` scope and the 10DLC feature enabled for the account.
 
 # --- Sub-organizations ---
 
 sub_accounts_create: >-
   Creates a new sub-organization under the authenticated master account and
-  returns it with a generated `api_key`. Use when the user wants to add a
+  returns it with a generated `api_key`. Applies when the user wants to add a
   sub-organization and has confirmed its name. Creates a persistent
   sub-organization and issues its `api_key`. Requires the `subaccounts:write`
   scope and a `name` of up to 75 characters; the optional `default_destinations`
   object sets default webhook URLs for inbound messages and delivery reports.
 
 sub_accounts_get: >-
-  Retrieves a single sub-organization by its `id`. Use to inspect one known
+  Retrieves a single sub-organization by its `id`. Applies to inspecting one known
   sub-organization the master account owns. Read-only; no side effects. Requires
   the `subaccounts:read` scope and the sub-organization's `id`.
 
 sub_accounts_list: >-
   Lists the sub-organizations under the authenticated master account, filterable
-  by status (`enabled` or `disabled`). Use to browse sub-organizations or find
+  by status (`enabled` or `disabled`). Applies to browsing sub-organizations or finding
   ones matching a status. Read-only; no side effects. Requires the
   `subaccounts:read` scope; results are paginated with `per_page` from 1 to 100
   (default 25) and `page` starting at 1.
 
 sub_accounts_transactions_list: >-
   Lists the billing transactions for the sub-organization identified by `id`
-  within a date range, filterable by transaction type. Use to review a
+  within a date range, filterable by transaction type. Applies to reviewing a
   sub-organization's billing history over a period. Read-only; no side effects.
   Requires the `subaccounts:read` scope, the sub-organization's `id`, and a
   `from_date` and `to_date` in `YYYY-MM-DD` format (both inclusive); results are
@@ -1007,9 +1010,9 @@ sub_accounts_update: >-
 
 whatsapp_wabas_list: >-
   Lists the WhatsApp Business Accounts linked to the account, newest first, each
-  with its ID, name, messaging limit, and number of senders. Use to discover
-  which WhatsApp Business Accounts the account has, to get a `waba_id` for
-  filtering senders and templates, or to check how many unique customers each
+  with its ID, name, messaging limit, and number of senders. Applies to discovering
+  which WhatsApp Business Accounts the account has, getting a `waba_id` for filtering
+  senders and templates, or checking how many unique customers each
   account can start conversations with in a rolling 24 hours. Read-only, no side
   effects. Requires the `whatsapp:read` scope and the WhatsApp channel enabled;
   results are paginated with `per_page` from 1 to 100 (default 25) and `page`
@@ -1017,7 +1020,7 @@ whatsapp_wabas_list: >-
 
 whatsapp_wabas_get: >-
   Retrieves a single WhatsApp Business Account linked to the account by its ID,
-  returning its name, messaging limit, and number of senders. Use to check how
+  returning its name, messaging limit, and number of senders. Applies to checking how
   many unique customers the account can start conversations with in a rolling 24
   hours, for example when one of its senders is `restricted` after reaching that
   limit. Read-only, no side effects. Requires the `whatsapp:read` scope, the
@@ -1027,7 +1030,7 @@ whatsapp_wabas_get: >-
 whatsapp_senders_list: >-
   Lists the WhatsApp senders on the account's WhatsApp Business Accounts, newest
   first, each with its registration status and its WhatsApp Business Account.
-  Use to discover which WhatsApp sender numbers the account has and what state
+  Applies to discovering which WhatsApp sender numbers the account has and what state
   they are in before listing templates or sending. Read-only, no side effects.
   Requires the `whatsapp:read` scope and the WhatsApp channel enabled;
   filterable by `status` and `waba_id`; results are paginated with `per_page`
@@ -1036,7 +1039,7 @@ whatsapp_senders_list: >-
 whatsapp_senders_get: >-
   Retrieves a single WhatsApp sender registered to the account, resolved by its
   phone number, returning its display name, provider registration status,
-  quality rating, and WhatsApp Business Account. Use to check whether a number is
+  quality rating, and WhatsApp Business Account. Applies to checking whether a number is
   a usable WhatsApp sender and what state it is in before listing templates or
   sending. Read-only, no side effects. Requires the `whatsapp:read` scope, the
   WhatsApp channel enabled on the account, and a number that is a sender on the
@@ -1046,7 +1049,7 @@ whatsapp_templates_list: >-
   Lists the WhatsApp message templates owned by the account's WhatsApp Business
   Accounts, each with its name, language, category, review status, and
   components, filterable by `waba_id`, `sender`, `status`, `name`, and
-  `language`. Use to discover which templates exist and which are approved for
+  `language`. Applies to discovering which templates exist and which are approved for
   sending before calling whatsapp_messages_send. Read-only, no side effects.
   Requires the `whatsapp:read` scope and the WhatsApp channel enabled; results
   are paginated with `per_page` from 1 to 100 (default 25) and `page` starting
@@ -1054,17 +1057,17 @@ whatsapp_templates_list: >-
 
 whatsapp_templates_get: >-
   Retrieves a single WhatsApp message template by its template ID, returning its
-  name, language, category, review status, quality rating, and components. Use to
-  inspect one template's current state after listing or creating it, for example
+  name, language, category, review status, quality rating, and components. Applies to
+  inspecting one template's current state after listing or creating it, for example
   to check whether it is approved for sending. Read-only, no side effects.
   Requires the `whatsapp:read` scope, the WhatsApp channel enabled, and a
   template ID that belongs to one of the account's WhatsApp Business Accounts.
 
 whatsapp_templates_create: >-
   Creates a WhatsApp message template in a WhatsApp Business Account and
-  submits it for review. Use when the user wants to register new template
-  content, then poll whatsapp_templates_get until the status is `approved` or
-  `rejected`; the template is not usable for sending until the provider
+  submits it for review. Applies when the user wants to register new template content;
+  its status then shows in whatsapp_templates_get until it is `approved` or `rejected`,
+  and the template is not usable for sending until the provider
   approves it. The API has no operation to withdraw a template, and a template
   whose name and language already exist in the WhatsApp Business Account is
   rejected with 409.
@@ -1091,15 +1094,15 @@ whatsapp_messages_send: >-
 
 whatsapp_messages_list: >-
   Lists the account's WhatsApp messages, filterable by direction, delivery
-  status, sender or recipient number, and date range. Use to review sent and
-  received WhatsApp messages or check delivery outcomes. Read-only, no side
+  status, sender or recipient number, and date range. Applies to reviewing sent and
+  received WhatsApp messages or checking delivery outcomes. Read-only, no side
   effects. Requires the `whatsapp:read` scope and the WhatsApp channel enabled;
   results are paginated with `per_page` from 1 to 100 (default 25) and `page`
   starting at 1.
 
 whatsapp_messages_get: >-
   Retrieves a single WhatsApp message by its UUID, including its direction,
-  delivery status, recipient, and timestamps. Use to inspect one message's
+  delivery status, recipient, and timestamps. Applies to inspecting one message's
   current state after listing or sending. Read-only, no side effects. Requires
   the `whatsapp:read` scope, the WhatsApp channel enabled, and a message UUID
   belonging to the caller's account.
