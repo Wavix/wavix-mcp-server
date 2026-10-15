@@ -16,7 +16,6 @@ Outputs (in place, relative to the repository root):
 
 from __future__ import annotations
 
-import asyncio
 import re
 import sys
 from collections import defaultdict
@@ -27,7 +26,7 @@ from pathlib import Path
 # resolve $ref / allOf identically, and pick up any preprocessing tweaks.
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "src"))
-from wavix_mcp.server import build_server, load_spec  # noqa: E402
+from wavix_mcp.server import EXCLUDED_ENDPOINTS, load_spec  # noqa: E402
 
 # Operations whose response is a pre-signed download URL rather than the JSON
 # body. Mirrors BINARY_STREAM_ENDPOINTS in src/wavix_mcp/server.py.
@@ -110,15 +109,10 @@ SUB_GROUPS: dict[str, list[tuple[str, Callable[[str], bool]]]] = {
 
 HTTP_METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
 
-SCOPE_SENTENCE = (
-    "The tools shown depend on the permissions you approve at sign-in "
-    "and the features enabled on your account."
-)
-
-TOOLS_HEADER = f"""\
+TOOLS_HEADER = """\
 # Wavix MCP Tools — full catalogue
 
-Generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi) via [`FastMCP.from_openapi()`](https://github.com/jlowin/fastmcp). Arguments mirror request path / query / body fields. {SCOPE_SENTENCE}
+{count} tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi) via [`FastMCP.from_openapi()`](https://github.com/jlowin/fastmcp). Arguments mirror request path / query / body fields.
 
 If a tool listed here is missing from your client, refresh the connection: the live catalogue tracks the OpenAPI spec as it evolves.
 
@@ -126,12 +120,12 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 
 """
 
-README_BLOCK_TEMPLATE = f"""\
-Generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi). Arguments mirror request parameters and body fields. {SCOPE_SENTENCE}
+README_BLOCK_TEMPLATE = """\
+{count} tools, generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi). Arguments mirror request parameters and body fields.
 
-| Group | Coverage |
-| --- | --- |
-{{rows}}\
+| Group | # | Coverage |
+| --- | ---: | --- |
+{rows}\
 """
 
 
@@ -150,30 +144,23 @@ def _format_tool_line(opid: str, summary: str) -> str:
     return line
 
 
-def _server_tool_names() -> set[str]:
-    tools = asyncio.run(build_server().list_tools())
-    return {tool.name for tool in tools}
-
-
-def _collect_groups(spec: dict, tool_names: set[str]) -> dict[str, list[tuple[str, str]]]:
+def _collect_groups(spec: dict) -> dict[str, list[tuple[str, str]]]:
     groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
-    for path_item in (spec.get("paths") or {}).values():
+    for path, path_item in (spec.get("paths") or {}).items():
         if not isinstance(path_item, dict):
             continue
         for method in HTTP_METHODS:
+            if (path, method) in EXCLUDED_ENDPOINTS:
+                continue
             op = path_item.get(method)
             if not isinstance(op, dict):
                 continue
             opid = op.get("operationId")
-            if opid not in tool_names:
+            if not opid:
                 continue
             summary = (op.get("summary") or "").strip()
             tag = (op.get("tags") or ["Other"])[0]
             groups[tag].append((opid, summary))
-    listed = {opid for ops in groups.values() for opid, _ in ops}
-    unlisted = sorted(tool_names - listed)
-    if unlisted:
-        raise SystemExit(f"server tools with no OpenAPI operation: {', '.join(unlisted)}")
     return groups
 
 
@@ -182,7 +169,8 @@ def _ordered_tags(groups: dict) -> list[str]:
 
 
 def _build_tools_md(groups: dict, ordered: list[str]) -> str:
-    out: list[str] = [TOOLS_HEADER]
+    total = sum(len(ops) for ops in groups.values())
+    out: list[str] = [TOOLS_HEADER.format(count=total)]
     for tag in ordered:
         display = TAG_DISPLAY.get(tag, tag)
         out.append(f"## {display}\n\n")
@@ -208,24 +196,26 @@ def _build_tools_md(groups: dict, ordered: list[str]) -> str:
 
 
 def _build_readme_block(groups: dict, ordered: list[str]) -> str:
+    total = sum(len(ops) for ops in groups.values())
     rows: list[str] = []
     missing_coverage: list[str] = []
     for tag in ordered:
         display = TAG_DISPLAY.get(tag, tag)
         anchor = _slugify(display)
+        count = len(groups[tag])
         coverage = COVERAGE.get(tag)
         if coverage is None:
             missing_coverage.append(tag)
             coverage = (
                 "TODO: add coverage description for this group in scripts/generate_tools_md.py"
             )
-        rows.append(f"| [{display}](TOOLS.md#{anchor}) | {coverage} |")
+        rows.append(f"| [{display}](TOOLS.md#{anchor}) | {count} | {coverage} |")
     if missing_coverage:
         print(
             f"warning: missing COVERAGE entries for: {', '.join(missing_coverage)}",
             file=sys.stderr,
         )
-    return README_BLOCK_TEMPLATE.format(rows="\n".join(rows) + "\n")
+    return README_BLOCK_TEMPLATE.format(count=total, rows="\n".join(rows) + "\n")
 
 
 def _patch_readme(path: Path, block: str) -> None:
@@ -248,7 +238,7 @@ def _patch_readme(path: Path, block: str) -> None:
 
 def main() -> None:
     spec = load_spec()
-    groups = _collect_groups(spec, _server_tool_names())
+    groups = _collect_groups(spec)
     ordered = _ordered_tags(groups)
     total = sum(len(ops) for ops in groups.values())
 
