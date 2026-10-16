@@ -9,19 +9,19 @@ Entries are derived from the commit history, which follows
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-16
+
 ### Changed
 
 - `README.md` and `TOOLS.md` no longer state a tool count, total or per group;
   they explain that the tools shown depend on the permissions approved at
   sign-in and the features enabled on the account.
-- The server instructions, the descriptions of the tools that run in two steps
-  and the confirmation preview state how the confirmation works instead of
-  telling the assistant what to do. The confirmed call is meant to follow the
-  user's approval in a message sent after the preview, and an approval given in
-  advance is not an approval of that preview; the server checks only that the
-  token matches the arguments and has not expired. A test rejects these texts
-  when a sentence or clause opens with a common imperative such as "Use",
-  "Show", "Pass", "Set" or "Poll".
+- The server instructions, every tool description and the confirmation preview
+  describe what each tool does and when it applies instead of telling the
+  assistant what to do. For the tools that run in two steps, the confirmed call
+  is meant to follow the user's approval in a message sent after the preview,
+  and an approval given in advance is not an approval of that preview; the
+  server checks only that the token matches the arguments and has not expired.
 
 ### Fixed
 
@@ -111,7 +111,8 @@ Entries are derived from the commit history, which follows
 - Invoice download and 10DLC evidence upload are excluded from the tool surface.
 - The OAuth issuer is advertised without an RFC 8414-breaking trailing slash.
 
-[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.0.0...v1.1.0
