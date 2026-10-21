@@ -1102,13 +1102,16 @@ whatsapp_webhooks_create: >-
   webhook is registered when the tool is called again with the same arguments
   and that token, a call meant to follow the user's approval of the preview in
   a later message. The response carries the signing `secret` once and no other
-  tool returns it, so the user stores it to verify signatures. Sends inbound
-  message content to the URL, outside Wavix, until the webhook is disabled or
-  deleted. The account has at most one WhatsApp webhook; a second is rejected
-  with 409. Requires the `whatsapp:write` scope, the WhatsApp channel enabled,
-  and an https `url` whose host resolves only to public addresses; `events` may
-  list `whatsapp.message.received` and `whatsapp.message.status`, and an
-  omitted or empty list receives every event type.
+  tool returns it, so the user stores it to verify signatures; when the stored
+  secret is lost, `whatsapp_webhooks_rotate_secret` issues a new one. Sends
+  inbound message content to the URL, outside Wavix, until the webhook is
+  disabled or deleted. The account has at most one WhatsApp webhook; a second
+  is rejected with 409. Requires the `whatsapp:write` scope, the WhatsApp
+  channel enabled, and an https `url` without credentials whose host resolves
+  only to public addresses; an address Wavix uses itself is refused, and a 503
+  `webhook-url-unverified` is a transient DNS failure that may be retried.
+  `events` may list `whatsapp.message.received` and `whatsapp.message.status`,
+  and an omitted or empty list receives every event type.
 
 whatsapp_webhooks_list: >-
   Returns the WhatsApp webhook of the connected Wavix account as a list of zero
@@ -1141,9 +1144,13 @@ whatsapp_webhooks_update: >-
   that token, a call meant to follow the user's approval of the preview in a
   later message. Pausing cancels deliveries still waiting, and events that
   occur while the webhook is paused are not sent, also not after it is
-  resumed. Requires the `whatsapp:write` scope; a new `url` must be https and
-  resolve only to public addresses, and changing `url` or `events` or resuming
-  requires the WhatsApp channel enabled.
+  resumed. Requires the `whatsapp:write` scope; a new `url` must be https
+  without credentials and resolve only to public addresses, an address Wavix
+  uses itself is refused, and a 503 `webhook-url-unverified` is a transient DNS
+  failure that may be retried; changing `url` or `events` or resuming requires
+  the WhatsApp channel enabled. An empty `events` list means every event type,
+  so stopping events is `enabled` false and not `events: []`; no field may be
+  null.
 
 whatsapp_webhooks_delete: >-
   Deletes the WhatsApp webhook of the connected Wavix account, so Wavix stops
@@ -1165,9 +1172,11 @@ whatsapp_webhooks_rotate_secret: >-
   which `whatsapp_webhooks_update` does. The first call changes nothing and
   returns a preview with a `confirmation_token`; the secret is replaced when
   the tool is called again with the same arguments and that token, a call
-  meant to follow the user's approval of the preview in a later message. Every
-  request from then on is signed with the new secret only, with no overlap, so
-  the receiver rejects events until it uses the new secret. Requires the
+  meant to follow the user's approval of the preview in a later message.
+  Requests signed after the rotation use only the new secret, with no overlap
+  window, so the receiver rejects events until it uses the new secret; a
+  request already in progress may carry the old signature for up to 10
+  seconds. Requires the
   `whatsapp:write` scope and the WhatsApp channel enabled.
 
 whatsapp_webhooks_send_test: >-
@@ -1176,9 +1185,12 @@ whatsapp_webhooks_send_test: >-
   HTTP status code and the time taken. Applies when the user wants to check
   that their endpoint receives and verifies Wavix events. Not for sending a
   WhatsApp message, which `whatsapp_messages_send` does. Sends a request to the
-  URL, outside Wavix; the receiver's answer, whatever its status, is the
-  result and not an error. Returns 409 when the webhook is disabled. Requires
-  the `whatsapp:write` scope and the WhatsApp channel enabled.
+  URL, outside Wavix; the test event ignores the webhook's `events` filter and
+  is sent once, with no retry. The receiver's answer, whatever its status, is
+  the result and not an error: `outcome` is `delivered` only for a 2xx status,
+  and an `http_error` outcome still comes back as a successful tool result.
+  Returns 409 when the webhook is disabled. Requires the `whatsapp:write` scope
+  and the WhatsApp channel enabled.
 
 whatsapp_messages_list: >-
   Lists the account's WhatsApp messages, filterable by direction, delivery

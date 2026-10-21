@@ -267,7 +267,7 @@ Generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi).
 | Group | Coverage |
 | --- | --- |
 | [SMS and MMS](TOOLS.md#sms-and-mms) | Send, list, retrieve messages; sender IDs; opt-outs |
-| [WhatsApp](TOOLS.md#whatsapp) | Business Accounts; senders; templates; send / list / retrieve messages |
+| [WhatsApp](TOOLS.md#whatsapp) | Business Accounts; senders; templates; send / list / retrieve messages; webhook registration and test |
 | [Call control](TOOLS.md#call-control) | Start / answer / end calls; play audio; collect DTMF |
 | [Call recording](TOOLS.md#call-recording) | List, download (pre-signed URL), delete |
 | [Call streaming](TOOLS.md#call-streaming) | Start / stop media stream |
