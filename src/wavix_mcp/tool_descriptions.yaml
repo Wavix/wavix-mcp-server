@@ -1144,7 +1144,9 @@ whatsapp_webhooks_update: >-
   that token, a call meant to follow the user's approval of the preview in a
   later message. Pausing cancels deliveries still waiting, and events that
   occur while the webhook is paused are not sent, also not after it is
-  resumed. Requires the `whatsapp:write` scope; a new `url` must be https
+  resumed. Another update restores the previous `url`, `events` or `enabled`
+  state, while events already sent to the new `url` are not recalled. Requires
+  the `whatsapp:write` scope; a new `url` must be https
   without credentials and resolve only to public addresses, an address Wavix
   uses itself is refused, and a 503 `webhook-url-unverified` is a transient DNS
   failure that may be retried; changing `url` or `events` or resuming requires
