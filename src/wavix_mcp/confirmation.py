@@ -492,7 +492,14 @@ DETAILS: Mapping[str, Details] = {
 }
 
 ALWAYS_CONFIRMED = frozenset(
-    {"call_webhooks_create", "sip_trunks_update", "sub_accounts_update", *CUSTOM_PREVIEWS}
+    {
+        "call_webhooks_create",
+        "sip_trunks_update",
+        "sub_accounts_update",
+        "whatsapp_webhooks_create",
+        "whatsapp_webhooks_update",
+        *CUSTOM_PREVIEWS,
+    }
 )
 
 

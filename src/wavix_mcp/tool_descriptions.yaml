@@ -1092,6 +1092,94 @@ whatsapp_messages_send: >-
   message and sends nothing, and the rest of the request is not compared, so a key is
   safe to reuse only for the same send.
 
+whatsapp_webhooks_create: >-
+  Registers the WhatsApp webhook of the connected Wavix account, an https URL
+  that Wavix sends signed POST requests to for inbound WhatsApp messages and
+  message status changes. Applies when the user wants WhatsApp events pushed to
+  their own endpoint instead of polling `whatsapp_messages_list`. Not for call
+  events; `call_webhooks_create` registers those. The first call registers
+  nothing and returns a preview of the request with a `confirmation_token`; the
+  webhook is registered when the tool is called again with the same arguments
+  and that token, a call meant to follow the user's approval of the preview in
+  a later message. The response carries the signing `secret` once and no other
+  tool returns it, so the user stores it to verify signatures. Sends inbound
+  message content to the URL, outside Wavix, until the webhook is disabled or
+  deleted. The account has at most one WhatsApp webhook; a second is rejected
+  with 409. Requires the `whatsapp:write` scope, the WhatsApp channel enabled,
+  and an https `url` whose host resolves only to public addresses; `events` may
+  list `whatsapp.message.received` and `whatsapp.message.status`, and an
+  omitted or empty list receives every event type.
+
+whatsapp_webhooks_list: >-
+  Returns the WhatsApp webhook of the connected Wavix account as a list of zero
+  or one item, with its URL, event types and whether it is enabled. Applies
+  when the user wants to know whether and where WhatsApp events are pushed, or
+  needs the webhook ID for the other WhatsApp webhook tools. Not for call
+  webhooks, which `call_webhooks_list` returns; `whatsapp_webhooks_get` returns
+  the same webhook by its ID. Read-only; no side effects. The signing secret is
+  not included. Requires the `whatsapp:read` scope and WhatsApp available for
+  the account.
+
+whatsapp_webhooks_get: >-
+  Returns the WhatsApp webhook of the connected Wavix account that has the
+  given ID, with its URL, event types and whether it is enabled. Applies when
+  the user asks about the webhook by an ID they already have. Not for finding
+  the webhook without its ID, which `whatsapp_webhooks_list` does, nor for call
+  webhooks, which `call_webhooks_list` returns. Read-only; no side effects.
+  The signing secret is not included. Returns 404 when no webhook with this ID
+  belongs to the account or it was deleted. Requires the `whatsapp:read` scope
+  and WhatsApp available for the account.
+
+whatsapp_webhooks_update: >-
+  Changes the `url`, `events` or `enabled` of the WhatsApp webhook of the
+  connected Wavix account; omitted fields stay as they are. Applies when the
+  user wants events sent to a new endpoint, a different set of event types, or
+  deliveries paused (`enabled` false) or resumed. Not for a new signing secret,
+  which `whatsapp_webhooks_rotate_secret` issues. The first call changes
+  nothing and returns a preview of the request with a `confirmation_token`;
+  the change is made when the tool is called again with the same arguments and
+  that token, a call meant to follow the user's approval of the preview in a
+  later message. Pausing cancels deliveries still waiting, and events that
+  occur while the webhook is paused are not sent, also not after it is
+  resumed. Requires the `whatsapp:write` scope; a new `url` must be https and
+  resolve only to public addresses, and changing `url` or `events` or resuming
+  requires the WhatsApp channel enabled.
+
+whatsapp_webhooks_delete: >-
+  Deletes the WhatsApp webhook of the connected Wavix account, so Wavix stops
+  sending events to it and cancels deliveries still waiting. Applies when the
+  user no longer wants WhatsApp events pushed. Not for pausing events, which
+  `whatsapp_webhooks_update` with `enabled` false does and can undo, nor for
+  call webhooks, which `call_webhooks_delete` removes. The first call deletes
+  nothing and returns a preview with a `confirmation_token`; the webhook is
+  deleted when the tool is called again with the same arguments and that
+  token, a call meant to follow the user's approval of the preview in a later
+  message. The deletion cannot be undone; a webhook created afterwards gets a
+  new ID and a new secret. Requires the `whatsapp:write` scope and WhatsApp
+  available for the account.
+
+whatsapp_webhooks_rotate_secret: >-
+  Replaces the signing secret of the WhatsApp webhook of the connected Wavix
+  account and returns the new secret once. Applies when the secret may have
+  leaked or is rotated on a schedule. Not for changing the URL or event types,
+  which `whatsapp_webhooks_update` does. The first call changes nothing and
+  returns a preview with a `confirmation_token`; the secret is replaced when
+  the tool is called again with the same arguments and that token, a call
+  meant to follow the user's approval of the preview in a later message. Every
+  request from then on is signed with the new secret only, with no overlap, so
+  the receiver rejects events until it uses the new secret. Requires the
+  `whatsapp:write` scope and the WhatsApp channel enabled.
+
+whatsapp_webhooks_send_test: >-
+  Sends one signed `test` event to the URL of the WhatsApp webhook of the
+  connected Wavix account right away and returns the outcome, the receiver's
+  HTTP status code and the time taken. Applies when the user wants to check
+  that their endpoint receives and verifies Wavix events. Not for sending a
+  WhatsApp message, which `whatsapp_messages_send` does. Sends a request to the
+  URL, outside Wavix; the receiver's answer, whatever its status, is the
+  result and not an error. Returns 409 when the webhook is disabled. Requires
+  the `whatsapp:write` scope and the WhatsApp channel enabled.
+
 whatsapp_messages_list: >-
   Lists the account's WhatsApp messages, filterable by direction, delivery
   status, sender or recipient number, and date range. Applies to reviewing sent and
