@@ -78,6 +78,8 @@ jobs:
               sys.exit(1)
           print("server.json valid")
           PY
+      - name: Version files and changelog agree
+        run: python scripts/release_check.py
 
   build-and-push-image:
     name: Build & Push Docker image to GHCR
@@ -117,3 +119,117 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [test, tools-drift, validate-server-json, build-and-push-image]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release the version on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MCP_PUBLISHER_VERSION: v1.8.1
+        run: |
+          set -euo pipefail
+          version=$(python scripts/release_check.py --version)
+          python scripts/release_check.py --notes > notes.md
+          git fetch --tags --force
+          mapfile -t tags < <(git tag -l 'v*')
+          rc=0
+          python scripts/release_check.py --newer "$version" "${tags[@]}" || rc=$?
+          case "$rc" in
+            0|3) ;;
+            *) echo "::error::release check refused $version"; exit 1 ;;
+          esac
+
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          has_image() {
+            local out
+            if out=$(docker buildx imagetools inspect "$image:$version" 2>&1); then return 0; fi
+            if grep -qE ': not found$|manifest unknown' <<<"$out"; then return 1; fi
+            echo "$out" >&2
+            echo "::error::cannot read $image:$version"
+            exit 1
+          }
+          image_revision() {
+            local out
+            out=$(docker buildx imagetools inspect "$image:$version" --format '{{ json .Image }}') || {
+              echo "::error::cannot read the labels of $image:$version" >&2
+              exit 1
+            }
+            python -c '
+          import json, sys
+          d = json.load(sys.stdin)
+          images = [d] if "config" in d else list(d.values())
+          revs = {(i.get("config", {}).get("Labels") or {}).get("org.opencontainers.image.revision", "") for i in images}
+          print(revs.pop() if len(revs) == 1 else "")
+          ' <<<"$out"
+          }
+          registry_has() {
+            local doc r=0
+            doc=$(curl -fsS "https://registry.modelcontextprotocol.io/v0/servers/io.github.Wavix%2Fmcp/versions") || {
+              echo "::error::cannot read the Registry"
+              exit 1
+            }
+            python scripts/release_check.py --registry-has "$version" <<<"$doc" || r=$?
+            case "$r" in 0) return 0 ;; 1) return 1 ;; *) echo "::error::cannot read the Registry"; exit 1 ;; esac
+          }
+
+          tagged=$(git rev-list -n 1 "v$version" 2>/dev/null || true)
+          if [ -n "$tagged" ] && [ "$tagged" != "$GITHUB_SHA" ]; then
+            missing=""
+            has_image || missing="$missing GHCR"
+            registry_has || missing="$missing Registry"
+            if [ -z "$missing" ]; then echo "release: v$version is already out"; exit 0; fi
+            echo "::error::v$version is tagged on $tagged but missing from:$missing"
+            exit 1
+          fi
+
+          if has_image; then
+            commit=$(image_revision)
+            if ! git cat-file -e "${commit:-none}^{commit}" 2>/dev/null; then
+              echo "::error::$image:$version has no usable revision label (${commit:-empty})"
+              exit 1
+            fi
+          else
+            docker buildx imagetools create -t "$image:$version" "$image:sha-${GITHUB_SHA::7}"
+            commit="$GITHUB_SHA"
+          fi
+
+          if ! registry_has; then
+            curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+            ./mcp-publisher login github-oidc
+            ./mcp-publisher publish
+          fi
+
+          if [ -z "$tagged" ]; then
+            git tag "v$version" "$commit"
+            git push origin "v$version"
+          fi
+          if ! gh release view "v$version" >/dev/null 2>&1; then
+            gh release create "v$version" --verify-tag --title "v$version" --notes-file notes.md
+          fi
