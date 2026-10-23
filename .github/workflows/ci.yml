@@ -78,6 +78,8 @@ jobs:
               sys.exit(1)
           print("server.json valid")
           PY
+      - name: Version files and changelog agree
+        run: python scripts/release_check.py
 
   build-and-push-image:
     name: Build & Push Docker image to GHCR
@@ -117,3 +119,49 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [test, tools-drift, validate-server-json, build-and-push-image]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release the version on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MCP_PUBLISHER_VERSION: v1.8.1
+        run: |
+          set -euo pipefail
+          version=$(python scripts/release_check.py --version)
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "release: v$version is already released"; exit 0
+          fi
+          python scripts/release_check.py --notes > notes.md
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          docker buildx imagetools create -t "$image:$version" "$image:sha-${GITHUB_SHA::7}"
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+          git tag "v$version"
+          git push origin "v$version"
+          gh release create "v$version" --verify-tag --title "v$version" --notes-file notes.md
