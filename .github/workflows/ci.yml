@@ -159,12 +159,9 @@ jobs:
           python scripts/release_check.py --notes > notes.md
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
           docker buildx imagetools create -t "$image:$version" "$image:sha-${GITHUB_SHA::7}"
-          if ! curl -fsS "https://registry.modelcontextprotocol.io/v0/servers/io.github.Wavix%2Fmcp/versions" \
-              | jq -e --arg v "$version" 'any(.servers[]; .server.version == $v)' >/dev/null; then
-            curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
-            ./mcp-publisher login github-oidc
-            ./mcp-publisher publish
-          fi
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
           git tag "v$version"
           git push origin "v$version"
           gh release create "v$version" --verify-tag --title "v$version" --notes-file notes.md
