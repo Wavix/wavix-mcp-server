@@ -1192,8 +1192,8 @@ whatsapp_webhooks_send_test: >-
   retried. The call always succeeds when the webhook exists: the receiver's
   answer, whatever its status, is the result and not an error, `outcome` is
   `delivered` only for a 2xx status, and `duration_ms` is 0 when Wavix did not
-  send the event because the host no longer resolves to an allowed address
-  (`blocked`). Requires the `whatsapp:write` scope, the WhatsApp channel
+  send the event, for example when the host no longer resolves to an allowed
+  address (`blocked`). Requires the `whatsapp:write` scope, the WhatsApp channel
   enabled and a subscription plan.
 
 whatsapp_events_list: >-
