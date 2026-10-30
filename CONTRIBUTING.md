@@ -8,6 +8,10 @@ This repository is **source-available** under the [MIT License](LICENSE), but it
 - **GitHub Issues and Discussions are disabled.** This keeps the repository as a read-only documentation surface.
 - **There is no public roadmap or backlog here.** Roadmap decisions are driven by the Wavix product team.
 
+## Changes made by maintainers
+
+A change to `src/`, `TOOLS.md` or `README.md` changes what users see, so it needs a bullet under `## [Unreleased]` in `CHANGELOG.md`, in the Added, Changed, Deprecated, Removed or Fixed subsection. Write it for an external reader and leave out internal ticket IDs. The `release-notes` CI job fails a pull request that lacks one; run `python scripts/release_check.py --notes-since <base>` locally to check.
+
 ## How to give feedback
 
 We genuinely want to hear about bugs, missing examples, unclear instructions, or feature requests. The single supported channel is:

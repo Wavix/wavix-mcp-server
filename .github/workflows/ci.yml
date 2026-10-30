@@ -81,6 +81,20 @@ jobs:
       - name: Version files and changelog agree
         run: python scripts/release_check.py
 
+  release-notes:
+    name: Release notes
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: User-visible changes have an [Unreleased] note
+        run: python scripts/release_check.py --notes-since HEAD^1
+
   build-and-push-image:
     name: Build & Push Docker image to GHCR
     runs-on: ubuntu-latest
@@ -154,7 +168,15 @@ jobs:
           set -euo pipefail
           version=$(python scripts/release_check.py --version)
           if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
-            echo "release: v$version is already released"; exit 0
+            echo "release: v$version is already released"
+            if gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$version" --jq .body > published.md 2> gh.err; then
+              python scripts/release_check.py --published published.md
+            elif grep -q 'HTTP 404' gh.err; then
+              echo "::warning::no GitHub release v$version yet"
+            else
+              cat gh.err >&2; exit 1
+            fi
+            exit 0
           fi
           python scripts/release_check.py --notes > notes.md
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
