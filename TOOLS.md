@@ -35,8 +35,8 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 - `whatsapp_webhooks_get` — Retrieve a WhatsApp webhook
 - `whatsapp_webhooks_update` — Update a WhatsApp webhook
 - `whatsapp_webhooks_delete` — Delete a WhatsApp webhook
-- `whatsapp_webhooks_rotate_secret` — Rotate a WhatsApp webhook secret
 - `whatsapp_webhooks_send_test` — Send a WhatsApp webhook test event
+- `whatsapp_events_list` — List WhatsApp events
 
 ## Call control
 

@@ -1093,106 +1093,127 @@ whatsapp_messages_send: >-
   safe to reuse only for the same send.
 
 whatsapp_webhooks_create: >-
-  Registers the WhatsApp webhook of the connected Wavix account, an https URL
-  that Wavix sends signed POST requests to for inbound WhatsApp messages and
-  message status changes. Applies when the user wants WhatsApp events pushed to
-  their own endpoint instead of polling `whatsapp_messages_list`. Not for call
-  events; `call_webhooks_create` registers those. The first call registers
-  nothing and returns a preview of the request with a `confirmation_token`; the
-  webhook is registered when the tool is called again with the same arguments
-  and that token, a call meant to follow the user's approval of the preview in
-  a later message. The response carries the signing `secret` once and no other
-  tool returns it, so the user stores it to verify signatures; when the stored
-  secret is lost, `whatsapp_webhooks_rotate_secret` issues a new one. Sends
-  inbound message content to the URL, outside Wavix, until the webhook is
-  disabled or deleted. The account has at most one WhatsApp webhook; a second
-  is rejected with 409. Requires the `whatsapp:write` scope, the WhatsApp
-  channel enabled, and an https `url` without credentials whose host resolves
-  only to public addresses; an address Wavix uses itself is refused, and a 503
-  `webhook-url-unverified` is a transient DNS failure that may be retried.
-  `events` may list `whatsapp.message.received` and `whatsapp.message.status`,
-  and an omitted or empty list receives every event type.
+  Registers a WhatsApp webhook for one `group` of event types (`messages`,
+  `templates`, `senders` or `wabas`) of the connected Wavix account: an https
+  URL that Wavix sends signed POST requests to for every event type of that
+  group, returned with its signing `secret`. Applies when the user wants a
+  group of WhatsApp events pushed to their own endpoint instead of reading
+  them with `whatsapp_events_list`. Not for call events; `call_webhooks_create`
+  registers those. The first call registers nothing and returns a preview of
+  the request with a `confirmation_token`; the webhook is registered when the
+  tool is called again with the same arguments and that token, a call meant to
+  follow the user's approval of the preview in a later message. The webhook
+  sends event content to the URL, outside Wavix, until it is disabled or
+  deleted, and only for events that occur after it is created. The response
+  carries the signing `secret` once and no other tool returns it; a secret
+  cannot be replaced, so a new one needs `whatsapp_webhooks_delete` for the
+  webhook and a new `whatsapp_webhooks_create`. The account can have one
+  webhook per group, up to four, and webhooks of different groups can share a
+  URL; a second webhook for a group is rejected with 409. Requires the
+  `whatsapp:write` scope, the WhatsApp channel enabled, a subscription plan and
+  an account that is not blocked or suspended; `url` must be https, without
+  credentials, up to 2048 characters, with a host that resolves only to public
+  addresses Wavix allows, otherwise 422, and a 503 can be a transient DNS
+  failure that may be retried.
 
 whatsapp_webhooks_list: >-
-  Returns the WhatsApp webhook of the connected Wavix account as a list of zero
-  or one item, with its URL, event types and whether it is enabled. Applies
-  when the user wants to know whether and where WhatsApp events are pushed, or
-  needs the webhook ID for the other WhatsApp webhook tools. Not for call
-  webhooks, which `call_webhooks_list` returns; `whatsapp_webhooks_get` returns
-  the same webhook by its ID. Read-only; no side effects. The signing secret is
-  not included. Requires the `whatsapp:read` scope and WhatsApp available for
-  the account.
+  Returns the WhatsApp webhooks of the connected Wavix account, at most one per
+  group and so up to four, each with its ID, URL, group, whether it is enabled
+  and the event types it receives. Applies when the user wants to know whether,
+  where and for which groups WhatsApp events are pushed, or needs the webhook
+  ID for the other WhatsApp webhook tools. Not for call webhooks, which
+  `call_webhooks_list` returns; `whatsapp_webhooks_get` returns one webhook by
+  its ID. Read-only; no side effects. The signing secrets are not included, and
+  the `webhooks` array is empty when the account has none. Requires the
+  `whatsapp:read` scope, WhatsApp available for the account and a subscription
+  plan.
 
 whatsapp_webhooks_get: >-
   Returns the WhatsApp webhook of the connected Wavix account that has the
-  given ID, with its URL, event types and whether it is enabled. Applies when
-  the user asks about the webhook by an ID they already have. Not for finding
-  the webhook without its ID, which `whatsapp_webhooks_list` does, nor for call
-  webhooks, which `call_webhooks_list` returns. Read-only; no side effects.
-  The signing secret is not included. Returns 404 when no webhook with this ID
-  belongs to the account or it was deleted. Requires the `whatsapp:read` scope
-  and WhatsApp available for the account.
+  given ID, with its URL, group, whether it is enabled and the event types it
+  receives. Applies when the user asks about one webhook by an ID they already
+  have. Not for finding a webhook without its ID, which
+  `whatsapp_webhooks_list` does, nor for call webhooks, which
+  `call_webhooks_list` returns. Read-only; no side effects. The signing secret
+  is not included. Returns 404 when no webhook with this ID belongs to the
+  account or it was deleted. Requires the `whatsapp:read` scope, WhatsApp
+  available for the account and a subscription plan.
 
 whatsapp_webhooks_update: >-
-  Changes the `url`, `events` or `enabled` of the WhatsApp webhook of the
-  connected Wavix account; omitted fields stay as they are. Applies when the
-  user wants events sent to a new endpoint, a different set of event types, or
-  deliveries paused (`enabled` false) or resumed. Not for a new signing secret,
-  which `whatsapp_webhooks_rotate_secret` issues. The first call changes
-  nothing and returns a preview of the request with a `confirmation_token`;
-  the change is made when the tool is called again with the same arguments and
-  that token, a call meant to follow the user's approval of the preview in a
-  later message. Pausing cancels deliveries still waiting, and events that
-  occur while the webhook is paused are not sent, also not after it is
-  resumed. Another update restores the previous `url`, `events` or `enabled`
-  state, while events already sent to the new `url` are not recalled. Requires
-  the `whatsapp:write` scope; a new `url` must be https
-  without credentials and resolve only to public addresses, an address Wavix
-  uses itself is refused, and a 503 `webhook-url-unverified` is a transient DNS
-  failure that may be retried; changing `url` or `events` or resuming requires
-  the WhatsApp channel enabled. An empty `events` list means every event type,
-  so stopping events is `enabled` false and not `events: []`; no field may be
-  null.
+  Changes the `url` or `enabled` of one WhatsApp webhook of the connected Wavix
+  account, returning the updated webhook; omitted fields stay as they are and
+  at least one field is needed. Applies when the user wants a webhook's events
+  sent to a new endpoint, or deliveries paused (`enabled` false) or resumed
+  while its ID and signing secret stay the same. Not for changing the group or
+  the signing secret, which a webhook keeps for its life; replacing either
+  means `whatsapp_webhooks_delete` and a new `whatsapp_webhooks_create`. The
+  first call changes nothing and returns a preview of the request with a
+  `confirmation_token`; the change is made when the tool is called again with
+  the same arguments and that token, a call meant to follow the user's approval
+  of the preview in a later message. Pausing cancels deliveries still waiting,
+  and events that occur while the webhook is paused are not sent later, though
+  `whatsapp_events_list` still returns them; a paused webhook still receives
+  the test event of `whatsapp_webhooks_send_test`. A new `url` gets the events
+  that occur from then on and the retries still waiting. Another update
+  restores the previous `url` or `enabled` state, while events already sent to
+  the new `url` are not recalled. Requires the `whatsapp:write` scope, the
+  WhatsApp channel enabled, a subscription plan and an account that is not
+  blocked or suspended; a new `url` must be https, without credentials, up to
+  2048 characters, with a host that resolves only to public addresses Wavix
+  allows, otherwise 422, and a 503 can be a transient DNS failure that may be
+  retried; no field may be null.
 
 whatsapp_webhooks_delete: >-
-  Deletes the WhatsApp webhook of the connected Wavix account, so Wavix stops
-  sending events to it and cancels deliveries still waiting. Applies when the
-  user no longer wants WhatsApp events pushed. Not for pausing events, which
+  Deletes one WhatsApp webhook of the connected Wavix account, so Wavix stops
+  sending its group of events to the URL and cancels deliveries still waiting.
+  Applies when the user no longer wants a group of WhatsApp events pushed, or
+  wants a webhook with a new signing secret, which a deletion followed by
+  `whatsapp_webhooks_create` gives. Not for pausing events, which
   `whatsapp_webhooks_update` with `enabled` false does and can undo, nor for
   call webhooks, which `call_webhooks_delete` removes. The first call deletes
   nothing and returns a preview with a `confirmation_token`; the webhook is
-  deleted when the tool is called again with the same arguments and that
-  token, a call meant to follow the user's approval of the preview in a later
-  message. The deletion cannot be undone; a webhook created afterwards gets a
-  new ID and a new secret. Requires the `whatsapp:write` scope and WhatsApp
-  available for the account.
-
-whatsapp_webhooks_rotate_secret: >-
-  Replaces the signing secret of the WhatsApp webhook of the connected Wavix
-  account and returns the new secret once. Applies when the secret may have
-  leaked or is rotated on a schedule. Not for changing the URL or event types,
-  which `whatsapp_webhooks_update` does. The first call changes nothing and
-  returns a preview with a `confirmation_token`; the secret is replaced when
-  the tool is called again with the same arguments and that token, a call
-  meant to follow the user's approval of the preview in a later message.
-  Requests signed after the rotation use only the new secret, with no overlap
-  window, so the receiver rejects events until it uses the new secret; a
-  request already in progress may carry the old signature for up to 10
-  seconds. Requires the
-  `whatsapp:write` scope and the WhatsApp channel enabled.
+  deleted when the tool is called again with the same arguments and that token,
+  a call meant to follow the user's approval of the preview in a later message.
+  The deletion cannot be undone; a webhook created afterwards for the group
+  gets a new ID and a new secret, and Wavix keeps recording the group's events
+  for `whatsapp_events_list`. Requires the `whatsapp:write` scope, WhatsApp
+  available for the account and a subscription plan.
 
 whatsapp_webhooks_send_test: >-
-  Sends one signed `test` event to the URL of the WhatsApp webhook of the
-  connected Wavix account right away and returns the outcome, the receiver's
-  HTTP status code and the time taken. Applies when the user wants to check
-  that their endpoint receives and verifies Wavix events. Not for sending a
-  WhatsApp message, which `whatsapp_messages_send` does. Sends a request to the
-  URL, outside Wavix; the test event ignores the webhook's `events` filter and
-  is sent once, with no retry. The receiver's answer, whatever its status, is
-  the result and not an error: `outcome` is `delivered` only for a 2xx status,
-  and an `http_error` outcome still comes back as a successful tool result.
-  Returns 409 when the webhook is disabled. Requires the `whatsapp:write` scope
-  and the WhatsApp channel enabled.
+  Sends one signed `test` event to the URL of one WhatsApp webhook of the
+  connected Wavix account right away and returns the outcome (`delivered`,
+  `http_error`, `timeout`, `connection_error`, `tls_error` or `blocked`), the
+  receiver's HTTP status code, null when no response arrived, and `duration_ms`.
+  Applies when the user wants to check that their endpoint receives and
+  verifies Wavix events. Not for sending a WhatsApp message, which
+  `whatsapp_messages_send` does. Sends a request to the URL, outside Wavix,
+  waiting up to 10 seconds for the answer; the event goes to the webhook
+  whatever its group and even when it is disabled, is sent once and is never
+  retried. The call always succeeds when the webhook exists: the receiver's
+  answer, whatever its status, is the result and not an error, `outcome` is
+  `delivered` only for a 2xx status, and `duration_ms` is 0 when Wavix did not
+  send the event because the host no longer resolves to an allowed address
+  (`blocked`). Requires the `whatsapp:write` scope, the WhatsApp channel
+  enabled and a subscription plan.
+
+whatsapp_events_list: >-
+  Lists the WhatsApp events of the connected Wavix account, the same events
+  Wavix posts to its webhooks, oldest first by the time Wavix recorded them,
+  with `events`, `next_cursor` and `has_more`. Applies when the user wants to
+  read WhatsApp events without a webhook, or to catch up on events a webhook
+  missed. Not for the messages themselves, which `whatsapp_messages_list`
+  returns, nor for registering a webhook, which `whatsapp_webhooks_create`
+  does. Read-only; no side effects. Test events never appear, each event has
+  the same `id` as in the webhook request, and the order can differ from the
+  events' `timestamp`. Requires the `whatsapp:read` scope, the WhatsApp channel
+  enabled and a subscription plan. Events are recorded for 30 days even when no
+  webhook exists for their group. Paging is by cursor: `limit` is 1 to 100
+  (default 25), without `after` the list starts at the oldest event kept, and
+  `after` takes the `next_cursor` of the previous page, which must be an
+  event of the account that is still kept, otherwise 400. A `has_more` of
+  false means the list has caught up, and the last `next_cursor`, null for an
+  empty page, returns later events when passed again. `type` and `group` filter
+  the events, and an event must match both when both are given.
 
 whatsapp_messages_list: >-
   Lists the account's WhatsApp messages, filterable by direction, delivery
