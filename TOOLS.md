@@ -195,6 +195,7 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 ## Wavix Embeddable (WebRTC)
 
 - `webrtc_tokens_list` — List widget tokens
+- `webrtc_tokens_create` — Create a widget token
 - `webrtc_tokens_get` — Retrieve a widget token
 - `webrtc_tokens_update` — Update a widget token
 - `webrtc_tokens_delete` — Delete a widget token

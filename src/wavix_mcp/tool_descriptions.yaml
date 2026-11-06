@@ -659,6 +659,14 @@ two_fa_verification_resend: >-
   Requires the `two_fa:write` scope, the verification's `session_id`, and a
   `channel` of `sms` (text message) or `voice` (call reading the code aloud).
 
+webrtc_tokens_create: >-
+  Creates a Wavix Embeddable widget token that authenticates a browser-based
+  softphone session against a SIP trunk. Applies when the user needs a new widget
+  credential to start a browser dialer session. Creates a token that grants
+  softphone access until it expires. Requires the `embeddable:write` scope and a
+  `sip_trunk` name, and optionally a `payload` of client-defined data and a
+  `ttl` in seconds (minimum 1, default 3600; `null` means no expiration).
+
 webrtc_tokens_delete: >-
   Deletes the Wavix Embeddable widget token identified by `id`. Applies when the user
   wants to revoke a widget token they no longer need or that may be compromised. The
