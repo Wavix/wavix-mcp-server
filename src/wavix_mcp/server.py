@@ -58,7 +58,6 @@ EXCLUDED_ENDPOINTS: tuple[tuple[str, str], ...] = (
     ("/v1/numbers/papers", "post"),
     ("/v3/10dlc/brands/{brand_id}/evidence", "post"),
     ("/v1/billing/invoices/{id}", "get"),
-    ("/v2/webrtc/tokens", "post"),
 )
 
 INSTRUCTIONS = f"""\

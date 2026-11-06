@@ -12,8 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sub-account and API key tools return each API key masked to its last 4
   characters, so the full key no longer reaches the assistant or the chat
   history.
-- `webrtc_tokens_create` is no longer offered: it returns a signed widget
-  token that the assistant would print in the chat.
 
 ## [1.3.1] - 2026-10-16
 
