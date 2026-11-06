@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-11-06
+
 ### Security
 
-- Sub-account and API key tools return each API key masked to its last 4
-  characters, so the full key no longer reaches the assistant or the chat
-  history.
+- Sub-account and API key tools return each API key masked to its last 4 characters, so the full key no longer reaches the assistant or the chat history.
 
 ## [1.3.1] - 2026-10-16
 
@@ -115,7 +115,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Invoice download and 10DLC evidence upload are excluded from the tool surface.
 - The OAuth issuer is advertised without an RFC 8414-breaking trailing slash.
 
-[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.1.0...v1.2.0
