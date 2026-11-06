@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Sub-account and API key tools return each API key masked to its last 4
+  characters, so the full key no longer reaches the assistant or the chat
+  history.
+
 ## [1.3.1] - 2026-10-16
 
 ### Changed
