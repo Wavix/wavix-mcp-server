@@ -28,6 +28,7 @@ from .confirmation import (
 )
 from .docs import register_api_spec, register_docs
 from .scope_filter import ScopeFilterMiddleware
+from .secret_masking import SecretMaskingMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ EXCLUDED_ENDPOINTS: tuple[tuple[str, str], ...] = (
     ("/v1/numbers/papers", "post"),
     ("/v3/10dlc/brands/{brand_id}/evidence", "post"),
     ("/v1/billing/invoices/{id}", "get"),
+    ("/v2/webrtc/tokens", "post"),
 )
 
 INSTRUCTIONS = f"""\
@@ -766,6 +768,7 @@ def build_server() -> FastMCP:
     _warn_on_never_gated_tools(tool_routes)
     mcp.add_middleware(ScopeFilterMiddleware(tool_routes))
     mcp.add_middleware(ConfirmationMiddleware(preview_builders(_CONFIRMED_TOOLS), api_client))
+    mcp.add_middleware(SecretMaskingMiddleware())
     return mcp
 
 
