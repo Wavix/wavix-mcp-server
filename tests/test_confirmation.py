@@ -37,6 +37,7 @@ from .test_instructions import imperative_violations
 APPROVAL_AFTER_PREVIEW = (
     "a call meant to follow the user's approval of the preview in a later message"
 )
+REDIRECT_TOOLS = ("my_numbers_update", "my_numbers_bulk_update", "profile_update")
 CALL = {"from": "+15550100", "to": "+15550199", "callback_url": "https://cb.test/x"}
 CAMPAIGN = {
     "voice_campaign": {"callflow_id": 3212, "caller_id": "13123310912", "contact": "16729923812"}
@@ -49,10 +50,17 @@ _UUID_RESPONSE = {
 }
 
 
-def _post(operation_id: str, properties: dict, summary: str, required: tuple = ()) -> dict:
+def _post(
+    operation_id: str,
+    properties: dict,
+    summary: str,
+    required: tuple = (),
+    method: str = "post",
+    x_mcp: dict | None = None,
+) -> dict:
     schema = {"type": "object", "properties": properties, "required": list(required)}
     return {
-        "post": {
+        method: {
             "operationId": operation_id,
             "summary": summary,
             "requestBody": {
@@ -65,6 +73,7 @@ def _post(operation_id: str, properties: dict, summary: str, required: tuple = (
                     "content": {"application/json": {"schema": _UUID_RESPONSE}},
                 }
             },
+            **({"x-mcp": x_mcp} if x_mcp else {}),
         }
     }
 
@@ -119,6 +128,62 @@ _SPEC = {
                 ],
             }
         },
+        "/v1/numbers/{id}": {
+            "patch": {
+                **_post(
+                    "my_numbers_update",
+                    {
+                        "sms_enabled": {"type": "boolean"},
+                        "sms_relay_url": {"type": "string"},
+                        "expected_sms_relay_url": {"type": "string"},
+                        "call_status_url": {"type": "string"},
+                        "call_recording_enabled": {"type": "boolean"},
+                        "transcription_enabled": {"type": "boolean"},
+                        "destinations": {"type": "array", "items": {"type": "object"}},
+                    },
+                    "Update a phone number",
+                    method="patch",
+                )["patch"],
+                "x-mcp": {"destructive": False},
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "integer"}}
+                ],
+            }
+        },
+        "/v1/numbers": _post(
+            "my_numbers_bulk_update",
+            {
+                "ids": {"type": "array", "items": {"type": "integer"}},
+                "sms_enabled": {"type": "boolean"},
+                "sms_relay_url": {"type": "string"},
+                "call_status_url": {"type": "string"},
+                "destinations": {"type": "array", "items": {"type": "object"}},
+            },
+            "Update phone numbers in bulk",
+            ("ids",),
+            method="patch",
+            x_mcp={"destructive": False},
+        ),
+        "/v1/profile": _post(
+            "profile_update",
+            {
+                "contacts": {"type": "string"},
+                "time_zone": {"type": "string"},
+                "sms_relay_url": {"type": "string"},
+                "dlr_relay_url": {"type": "string"},
+                "company_info": {
+                    "type": "object",
+                    "properties": {
+                        "billing_address": {"type": "string"},
+                        "country_code": {"type": "string"},
+                        "name": {"type": "string"},
+                    },
+                },
+            },
+            "Update a profile",
+            method="put",
+            x_mcp={"destructive": False},
+        ),
         "/v1/mydids": {
             "get": {
                 "operationId": "my_numbers_list",
@@ -714,6 +779,306 @@ def test_sub_account_update_compares_nested_destinations():
     )
 
 
+NUMBER_7 = {
+    "id": 7,
+    "number": "12125550101",
+    "city": "New York",
+    "country": "United States",
+    "sms_enabled": True,
+    "sms_relay_url": "https://old.test/sms",
+    "call_status_url": None,
+    "destination": [
+        {
+            "id": 1,
+            "destination": "+15550100",
+            "priority": 1,
+            "transport": "pstn",
+            "trunk_id": None,
+            "srtp": False,
+            "trunk_label": None,
+        }
+    ],
+}
+NUMBER_7_LOOKUP = {"/v1/numbers/7": NUMBER_7}
+
+
+def _number_update(arguments: dict, number: dict | None = None) -> str:
+    lookups = {"/v1/numbers/7": number if number is not None else NUMBER_7}
+    return _preview("my_numbers_update", {"id": 7, **arguments}, lookups)
+
+
+def test_number_update_lists_only_the_changes():
+    text = _number_update(
+        {
+            "sms_enabled": True,
+            "sms_relay_url": "https://new.test/sms",
+            "call_status_url": "https://status.test/cc",
+            "destinations": [{"destination": "+15550100", "priority": 1, "transport": "pstn"}],
+        }
+    )
+    assert text == (
+        "This will change phone number 12125550101:\n"
+        "• sms_relay_url: https://old.test/sms → https://new.test/sms\n"
+        "• call_status_url: null → https://status.test/cc"
+    )
+
+
+def test_number_update_shows_a_changed_destination_with_key_names():
+    text = _number_update(
+        {"destinations": [{"destination": "+15550100", "priority": 2, "transport": "pstn"}]}
+    )
+    assert text.splitlines()[1] == (
+        "• destinations: destination=+15550100, priority=1, transport=pstn, trunk_id=null"
+        " → destination=+15550100, priority=2, transport=pstn, trunk_id=null"
+    )
+
+
+def test_number_update_catches_swapped_priorities():
+    number = {
+        **NUMBER_7,
+        "destination": [
+            {"destination": "+15550100", "priority": 1, "transport": "pstn", "trunk_id": None},
+            {"destination": "sip:a@t.test", "priority": 2, "transport": "sip", "trunk_id": 5},
+        ],
+    }
+    text = _number_update(
+        {
+            "destinations": [
+                {"destination": "+15550100", "priority": 2, "transport": "pstn", "trunk_id": None},
+                {"destination": "sip:a@t.test", "priority": 1, "transport": "sip", "trunk_id": 5},
+            ]
+        },
+        number,
+    )
+    lines = [line for line in text.splitlines() if "destinations:" in line]
+    assert len(lines) == 1
+    old, new = lines[0].split(" → ")
+    assert re.findall(r"priority=\d", old) != re.findall(r"priority=\d", new)
+
+
+def test_number_update_shows_new_value_only_for_fields_the_number_omits():
+    text = _number_update({"call_recording_enabled": True, "transcription_enabled": False})
+    assert text == (
+        "This will change phone number 12125550101:\n"
+        "• call_recording_enabled: true\n"
+        "• transcription_enabled: false"
+    )
+
+
+def test_number_update_skips_the_concurrency_guard():
+    text = _number_update(
+        {"sms_relay_url": "https://new.test/sms", "expected_sms_relay_url": "https://old.test/sms"}
+    )
+    assert "sms_relay_url: https://old.test/sms → https://new.test/sms" in text
+    assert "expected_sms_relay_url" not in text
+
+
+def test_number_update_prints_a_long_url_in_full():
+    url = "https://new.test/" + "a" * 120
+    assert _number_update({"sms_relay_url": url}).endswith(url)
+
+
+def test_number_update_names_the_id_when_the_response_has_no_number():
+    text = _number_update(
+        {"sms_relay_url": "https://new.test/sms"}, {"sms_relay_url": "https://old.test/sms"}
+    )
+    assert text.startswith("This will change phone number ID 7:")
+
+
+def test_number_update_without_lookup_fails_closed(isolated_routes, anonymous):
+    api = _Api()
+    [result] = asyncio.run(
+        _calls(
+            _server(api), ("my_numbers_update", {"id": 7, "sms_relay_url": "https://new.test/sms"})
+        )
+    )
+    assert result.is_error and "nothing was done" in _text(result)
+    assert "authenticated MCP session" not in _text(result)
+    assert {r.method for r in api.requests} == {"GET"}
+
+
+@pytest.mark.parametrize("arguments", [{"sms_relay_url": "https://new.test/sms"}, {"id": True}])
+def test_number_update_requires_an_integer_id(arguments):
+    with pytest.raises(ConfirmationInputError):
+        _preview("my_numbers_update", arguments, NUMBER_7_LOOKUP)
+
+
+PROFILE = {
+    "id": 1,
+    "first_name": "Ann",
+    "contact_email": "old-contact@example.test",
+    "timezone": "UTC",
+    "default_destinations": [
+        {"transport": "sip", "value": "sip:x@old.test"},
+        {"transport": "sms", "value": "https://old.test/sms"},
+    ],
+    "company_info": {
+        "name": "Acme",
+        "address": "1 Old St",
+        "country": {"country_id": 1, "country_name": "United States"},
+    },
+}
+
+
+def _profile_update(arguments: dict) -> str:
+    return _preview("profile_update", arguments, {"/v1/profile": PROFILE})
+
+
+def test_profile_update_reads_current_values_from_the_profile():
+    text = _profile_update(
+        {
+            "contacts": "new-contact@example.test",
+            "time_zone": "UTC",
+            "sms_relay_url": "https://new.test/sms",
+            "dlr_relay_url": "https://new.test/dlr",
+            "company_info": {
+                "billing_address": "2 New St",
+                "country_code": "US",
+                "name": "Acme",
+            },
+        }
+    )
+    assert text == (
+        "This will change your account profile:\n"
+        "• contacts: old-contact@example.test → new-contact@example.test\n"
+        "• sms_relay_url: https://old.test/sms → https://new.test/sms\n"
+        "• dlr_relay_url: null → https://new.test/dlr\n"
+        "• company_info.billing_address: 1 Old St → 2 New St\n"
+        "• company_info.country_code: US"
+    )
+
+
+def test_profile_update_unchanged_values_give_the_bare_heading():
+    text = _profile_update({"sms_relay_url": "https://old.test/sms", "time_zone": "UTC"})
+    assert text == "This will change your account profile."
+
+
+def test_profile_update_without_lookup_fails_closed(isolated_routes, anonymous):
+    api = _Api()
+    [result] = asyncio.run(
+        _calls(_server(api), ("profile_update", {"sms_relay_url": "https://new.test/sms"}))
+    )
+    assert result.is_error and "nothing was done" in _text(result)
+    assert "authenticated MCP session" not in _text(result)
+    assert {r.method for r in api.requests} == {"GET"}
+
+
+def test_profile_update_prints_a_long_url_in_full():
+    url = "https://new.test/" + "a" * 120
+    assert _profile_update({"dlr_relay_url": url}).endswith(url)
+
+
+BULK_LOOKUPS = {
+    "/v1/numbers/1": {"number": "12125550101", "city": "New York", "country": "United States"}
+}
+
+
+def test_bulk_update_names_each_number():
+    arguments = {
+        "ids": [1, 2],
+        "sms_enabled": False,
+        "destinations": [{"destination": "+15550100", "priority": 1, "transport": "pstn"}],
+        "sms_relay_url": "https://new.test/sms",
+        "call_status_url": "https://status.test/cc",
+    }
+    assert _preview("my_numbers_bulk_update", arguments, BULK_LOOKUPS) == (
+        "This will change 2 numbers:\n"
+        "• 12125550101 (New York, United States)\n"
+        "• number ID 2\n"
+        "• sms_enabled: false\n"
+        "• destinations: destination=+15550100, priority=1, transport=pstn, trunk_id=null\n"
+        "• sms_relay_url: https://new.test/sms\n"
+        "• call_status_url: https://status.test/cc"
+    )
+
+
+def test_bulk_update_lists_at_most_the_cap():
+    ids = list(range(1, MAX_LISTED_NUMBERS + 4))
+    text = _preview("my_numbers_bulk_update", {"ids": ids, "sms_relay_url": "https://new.test/sms"})
+    lines = text.splitlines()
+    assert lines[0] == f"This will change {len(ids)} numbers:"
+    assert lines[-2] == "• and 3 more"
+    assert lines[-1] == "• sms_relay_url: https://new.test/sms"
+    assert len(lines) == MAX_LISTED_NUMBERS + 3
+
+
+def test_bulk_update_with_one_number_uses_the_singular():
+    text = _preview(
+        "my_numbers_bulk_update",
+        {"ids": [1], "sms_relay_url": "https://new.test/sms"},
+        BULK_LOOKUPS,
+    )
+    assert text.splitlines()[0] == "This will change 1 number:"
+
+
+def test_bulk_update_prints_a_long_url_in_full():
+    url = "https://new.test/" + "a" * 120
+    text = _preview("my_numbers_bulk_update", {"ids": [1], "sms_relay_url": url}, BULK_LOOKUPS)
+    assert text.endswith(url)
+
+
+@pytest.mark.parametrize("arguments", [{}, {"ids": []}, {"ids": [True]}, {"ids": "1"}])
+def test_bulk_update_rejects_unclear_ids(arguments):
+    with pytest.raises(ConfirmationInputError):
+        _preview("my_numbers_bulk_update", arguments, BULK_LOOKUPS)
+
+
+REDIRECT_LOOKUPS = {"/v1/numbers/7": NUMBER_7, "/v1/profile": PROFILE}
+REDIRECT_CALLS = [
+    ("my_numbers_update", {"id": 7, "sms_relay_url": "https://new.test/sms"}),
+    ("my_numbers_bulk_update", {"ids": [7], "sms_relay_url": "https://new.test/sms"}),
+    ("profile_update", {"sms_relay_url": "https://new.test/sms"}),
+]
+
+
+@pytest.mark.parametrize(("tool", "arguments"), REDIRECT_CALLS)
+def test_first_call_returns_a_preview_for_the_redirect_tools(
+    tool, arguments, isolated_routes, anonymous
+):
+    api = _Api(lookups=REDIRECT_LOOKUPS)
+    [result] = asyncio.run(_calls(_server(api), (tool, arguments)))
+    assert not result.is_error
+    assert _text(result).startswith("This will change")
+    assert _token(result)
+    assert {r.method for r in api.requests} == {"GET"}
+
+
+def test_changed_sms_relay_url_gets_a_new_preview(isolated_routes, anonymous):
+    api = _Api(lookups=REDIRECT_LOOKUPS)
+    mcp = _server(api)
+
+    async def run():
+        async with Client(mcp) as client:
+            first = await client.call_tool(
+                "my_numbers_update", {"id": 7, "sms_relay_url": "https://a.test/sms"}
+            )
+            changed = {
+                "id": 7,
+                "sms_relay_url": "https://b.test/sms",
+                TOKEN_PARAMETER: _token(first),
+            }
+            return first, await client.call_tool("my_numbers_update", changed, raise_on_error=False)
+
+    first, second = asyncio.run(run())
+    assert "does not match" in _text(second) and "https://b.test/sms" in _text(second)
+    assert _token(second) != _token(first)
+    assert {r.method for r in api.requests} == {"GET"}
+
+
+def test_redirect_tool_previews_carry_no_imperatives():
+    changed_destination = {"destinations": [{"destination": "+15550100", "priority": 2}]}
+    previews = [
+        _preview(
+            tool,
+            {**arguments, **(changed_destination if tool == "my_numbers_update" else {})},
+            REDIRECT_LOOKUPS,
+        )
+        for tool, arguments in REDIRECT_CALLS
+    ]
+    for line in (line for preview in previews for line in preview.splitlines()):
+        assert imperative_violations(line) == [], line
+
+
 @pytest.mark.parametrize(
     ("tool", "arguments", "lookups", "detail"),
     [
@@ -881,6 +1246,7 @@ def test_every_destructive_tool_and_the_named_ones_are_confirmed(real_tools):
     destructive = {t.name for t in tools if t.annotations and t.annotations.destructiveHint}
     assert set(gated) == destructive | ALWAYS_CONFIRMED
     assert set(DETAILS) | set(CUSTOM_PREVIEWS) <= set(gated)
+    assert set(REDIRECT_TOOLS) <= set(gated)
     for tool in tools:
         takes_token = TOKEN_PARAMETER in tool.parameters.get("properties", {})
         assert takes_token == (tool.name in gated), tool.name

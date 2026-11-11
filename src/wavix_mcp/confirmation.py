@@ -230,6 +230,8 @@ def _changes(
     current: Any,
     skip: Iterable[str],
     aliases: Mapping[str, str],
+    *,
+    absent_shows_new: bool = False,
 ) -> list[str]:
     known = _flatten(current) if isinstance(current, Mapping) else None
     lines = []
@@ -242,7 +244,11 @@ def _changes(
         if known is None:
             lines.append(f"{field}: {_display(new)}")
             continue
-        old = known.get(aliases.get(field, field))
+        key = aliases.get(field, field)
+        if absent_shows_new and key not in known:
+            lines.append(f"{field}: {_display(new)}")
+            continue
+        old = known.get(key)
         if not _same(old, new):
             lines.append(f"{field}: {_display(old)} → {_display(new)}")
     return lines
@@ -269,6 +275,88 @@ async def _update_sub_account(arguments: Mapping[str, Any], api: httpx.AsyncClie
     name = current.get("name") if isinstance(current, Mapping) else None
     lines = _changes(arguments, current, {"id"}, {})
     return _change_preview(f"sub-account {name or account_id}", lines)
+
+
+_DESTINATION_KEYS = ("destination", "priority", "transport", "trunk_id")
+
+
+def _destinations_text(items: Any) -> str:
+    if not isinstance(items, list):
+        return _display(items)
+    if not items:
+        return "[]"
+    return "; ".join(
+        ", ".join(f"{key}={_display(item.get(key))}" for key in _DESTINATION_KEYS)
+        if isinstance(item, Mapping)
+        else _display(item)
+        for item in items
+    )
+
+
+async def _update_number(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
+    number_id = _integer(arguments, "id")
+    current = await _fetch(api, f"/v1/numbers/{number_id}")
+    if not isinstance(current, Mapping):
+        raise RuntimeError(f"no current state for number {number_id}")
+    compare = {k: v for k, v in current.items() if k != "destination"}
+    if "destination" in current:
+        compare["destinations"] = _destinations_text(current["destination"])
+    request = dict(arguments)
+    if "destinations" in request:
+        request["destinations"] = _destinations_text(request["destinations"])
+    lines = _changes(request, compare, {"id", "expected_sms_relay_url"}, {}, absent_shows_new=True)
+    number = current.get("number")
+    return _change_preview(f"phone number {number or f'ID {number_id}'}", lines)
+
+
+_PROFILE_ALIASES: Mapping[str, str] = {
+    "contacts": "contact_email",
+    "time_zone": "timezone",
+    "company_info.billing_address": "company_info.address",
+}
+_PROFILE_RELAY_TRANSPORTS = {"sms_relay_url": "sms", "dlr_relay_url": "dlr"}
+
+
+def _profile_for_compare(current: Mapping[str, Any]) -> dict[str, Any]:
+    destinations = current.get("default_destinations")
+    entries = (
+        [d for d in destinations if isinstance(d, Mapping)]
+        if isinstance(destinations, list)
+        else []
+    )
+    compare = dict(current)
+    for field, transport in _PROFILE_RELAY_TRANSPORTS.items():
+        compare[field] = next(
+            (d.get("value") for d in entries if d.get("transport") == transport), None
+        )
+    return compare
+
+
+async def _update_profile(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
+    current = await _fetch(api, "/v1/profile")
+    if not isinstance(current, Mapping):
+        raise RuntimeError("no current state for the profile")
+    lines = _changes(
+        arguments, _profile_for_compare(current), set(), _PROFILE_ALIASES, absent_shows_new=True
+    )
+    return _change_preview("your account profile", lines)
+
+
+async def _update_numbers_bulk(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
+    ids = arguments.get("ids")
+    if not isinstance(ids, list) or not ids:
+        raise _invalid("ids")
+    if any(isinstance(v, bool) or not isinstance(v, int) for v in ids):
+        raise _invalid("ids")
+    numbers = await _lookup_all(
+        ids[:MAX_LISTED_NUMBERS], lambda number_id: _number_by_id(api, number_id)
+    )
+    patch = {k: v for k, v in arguments.items() if k != "ids"}
+    if isinstance(patch.get("destinations"), list):
+        patch["destinations"] = _destinations_text(patch["destinations"])
+    heading = f"This will change {_plural(len(ids), 'number')}:"
+    lines = [*_capped(numbers, len(ids)), *_argument_lines(patch)]
+    return f"{heading}\n{_bullets(lines)}"
 
 
 def _fee(entity: Mapping[str, Any], key: str) -> Decimal | None:
@@ -467,6 +555,9 @@ CUSTOM_PREVIEWS: Mapping[str, PreviewBuilder] = {
     "my_numbers_delete": _release_numbers,
     "sip_trunks_update": _update_trunk,
     "sub_accounts_update": _update_sub_account,
+    "my_numbers_update": _update_number,
+    "profile_update": _update_profile,
+    "my_numbers_bulk_update": _update_numbers_bulk,
     "cart_checkout": _checkout,
 }
 
