@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Update tools that ask the user to confirm now send a field the assistant sets to `null`, so clearing a field that the API allows clearing (for example the SMS callback URL of a phone number) takes effect instead of reporting success with the value unchanged. The preview lists a cleared field as `null`; a field the API does not allow clearing is not listed as emptied, and the API's own rejection reaches the assistant.
+- Update tools (`PATCH` and `PUT`) now send a field the assistant sets to `null`, so clearing a field that the API allows clearing (for example the SMS callback URL of a phone number) takes effect instead of reporting success with the value unchanged. For a field the API does not allow clearing, the API's own rejection reaches the assistant. Where a tool asks for confirmation, the preview lists a cleared field as `null` and does not list a field that cannot be cleared as emptied.
 
 ## [1.3.2] - 2026-11-06
 

@@ -41,6 +41,30 @@ _SPEC = {
 }
 
 
+def _ungated(method: str, operation_id: str, path: str) -> dict:
+    operation = {
+        "operationId": operation_id,
+        "summary": operation_id,
+        "x-mcp": {"readOnly": False, "destructive": False},
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {"label": {"type": ["string", "null"]}},
+                    }
+                }
+            }
+        },
+        "responses": {"200": {"description": "ok"}},
+    }
+    return {path: {method: operation}}
+
+
+_SPEC["paths"].update(_ungated("patch", "things_update", "/v1/things"))
+_SPEC["paths"].update(_ungated("post", "things_create", "/v1/things/new"))
+
+
 def _server(requests: list[httpx.Request]) -> FastMCP:
     def respond(request: httpx.Request) -> httpx.Response:
         requests.append(request)
@@ -56,15 +80,24 @@ def _server(requests: list[httpx.Request]) -> FastMCP:
     )
 
 
-def _sent_body(arguments: dict) -> dict:
+def _sent_body(arguments: dict, tool: str = "my_numbers_update") -> dict:
     requests: list[httpx.Request] = []
+    tool_arguments = {"id": 7, **arguments} if tool == "my_numbers_update" else arguments
 
     async def call() -> None:
         async with Client(_server(requests)) as client:
-            await client.call_tool("my_numbers_update", {"id": 7, **arguments})
+            await client.call_tool(tool, tool_arguments)
 
     asyncio.run(call())
-    return json.loads(requests[0].content)
+    return json.loads(requests[0].content) if requests[0].content else {}
+
+
+def test_null_is_sent_by_an_update_tool_without_confirmation():
+    assert _sent_body({"label": None}, "things_update") == {"label": None}
+
+
+def test_null_is_dropped_by_a_create_tool():
+    assert _sent_body({"label": None}, "things_create") == {}
 
 
 def test_null_for_nullable_field_is_sent():
