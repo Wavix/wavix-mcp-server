@@ -7,10 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-11-11
+
 ### Changed
 
-- `my_numbers_update`, `my_numbers_bulk_update` and `profile_update` now run in two steps. The first call changes nothing and returns a preview: old and new values for a number and for the profile, the affected numbers and the new values for the bulk update. The change is applied when the tool is called again with the same arguments and the `confirmation_token`.
-- `ten_dlc_subscriptions_create` and `sub_accounts_create` descriptions now state that the tools run in two steps: the first call creates nothing and returns a preview with a `confirmation_token`, and the item is created when the tool is called again with the same arguments and that token.
+- `my_numbers_update`, `my_numbers_bulk_update`, `profile_update`, `ten_dlc_subscriptions_create` and `sub_accounts_create` now run in two steps. The first call changes nothing and returns a preview with a `confirmation_token`: old and new values for a number and for the profile, the affected numbers and the new values for the bulk update, and the values to be created for a 10DLC event subscription and a sub-account. The change is applied when the tool is called again with the same arguments and that token. The descriptions of `ten_dlc_subscriptions_create` and `sub_accounts_create` now say so.
 - The confirmation preview for `call_control_create` and `voice_campaigns_create` now shows the automated-call disclosure sentence from the tool description, so the person approving the call sees it at the moment of approval.
 - The `my_numbers_delete` tool's input schema now states that exactly one of `ids` or `dids` is required.
 
@@ -126,7 +127,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Invoice download and 10DLC evidence upload are excluded from the tool surface.
 - The OAuth issuer is advertised without an RFC 8414-breaking trailing slash.
 
-[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.2...HEAD
+[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.3...HEAD
+[1.3.3]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.2.0...v1.3.0
