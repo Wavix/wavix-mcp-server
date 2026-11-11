@@ -56,6 +56,7 @@ def _post(
     summary: str,
     required: tuple = (),
     method: str = "post",
+    x_mcp: dict | None = None,
 ) -> dict:
     schema = {"type": "object", "properties": properties, "required": list(required)}
     return {
@@ -72,6 +73,7 @@ def _post(
                     "content": {"application/json": {"schema": _UUID_RESPONSE}},
                 }
             },
+            **({"x-mcp": x_mcp} if x_mcp else {}),
         }
     }
 
@@ -160,6 +162,7 @@ _SPEC = {
             "Update phone numbers in bulk",
             ("ids",),
             method="patch",
+            x_mcp={"destructive": False},
         ),
         "/v1/profile": _post(
             "profile_update",
@@ -179,6 +182,7 @@ _SPEC = {
             },
             "Update a profile",
             method="put",
+            x_mcp={"destructive": False},
         ),
         "/v1/mydids": {
             "get": {
