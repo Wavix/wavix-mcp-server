@@ -119,6 +119,27 @@ _SPEC = {
                 ],
             }
         },
+        "/v1/numbers": {
+            "delete": {
+                "operationId": "my_numbers_delete",
+                "summary": "Release numbers",
+                "x-mcp": {"destructive": True},
+                "parameters": [
+                    {
+                        "name": "ids",
+                        "in": "query",
+                        "schema": {"type": "array", "items": {"type": "integer"}},
+                    },
+                    {"name": "dids", "in": "query", "schema": {"type": "string"}},
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "content": {"application/json": {"schema": _UUID_RESPONSE}},
+                    }
+                },
+            }
+        },
         "/v1/mydids": {
             "get": {
                 "operationId": "my_numbers_list",
@@ -1028,3 +1049,35 @@ def test_failed_confirm_drops_the_token_from_memory(anonymous):
 
     token = asyncio.run(run())
     assert token not in middleware._pending.get("anonymous:s1", {})
+
+
+EXACTLY_ONE_OF = [{"required": ["ids"]}, {"required": ["dids"]}]
+
+
+def test_release_numbers_schema_requires_exactly_one_of_ids_or_dids():
+    async def schema():
+        async with Client(_server(_Api())) as client:
+            tools = {t.name: t for t in await client.list_tools()}
+            return tools["my_numbers_delete"].inputSchema
+
+    assert asyncio.run(schema())["oneOf"] == EXACTLY_ONE_OF
+
+
+@pytest.mark.parametrize("arguments", [{}, {"ids": [1], "dids": "15550100"}])
+def test_release_numbers_rejects_neither_or_both_before_any_request(arguments):
+    api = _Api()
+    [result] = asyncio.run(_calls(_server(api), ("my_numbers_delete", arguments)))
+    assert result.is_error
+    assert "ids" in _text(result) and "dids" in _text(result)
+    assert TOKEN_PARAMETER not in _text(result)
+    assert "This will release" not in _text(result)
+    assert api.requests == []
+
+
+@pytest.mark.parametrize("arguments", [{"ids": [1]}, {"dids": "15550100"}])
+def test_release_numbers_with_one_selector_still_returns_the_preview(arguments):
+    api = _Api()
+    [result] = asyncio.run(_calls(_server(api), ("my_numbers_delete", arguments)))
+    assert not result.is_error
+    assert "This will release 1 number" in _text(result)
+    assert TOKEN_PARAMETER in _text(result)
