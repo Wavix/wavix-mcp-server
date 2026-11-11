@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The confirmation preview for `call_control_create` and `voice_campaigns_create` now shows the automated-call disclosure sentence from the tool description, so the person approving the call sees it at the moment of approval.
+
 ## [1.3.2] - 2026-11-06
 
 ### Security
