@@ -542,6 +542,15 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
         _CONFIRMED_TOOLS[component.name] = ConfirmedTool(title or component.name, required)
         component.output_schema = None
         component.parameters = _with_confirmation_token(component.parameters)
+    if component.name in _EXACTLY_ONE_OF:
+        component.parameters = {**component.parameters, "oneOf": _exactly_one_of(component.name)}
+
+
+_EXACTLY_ONE_OF: dict[str, tuple[str, ...]] = {"my_numbers_delete": ("ids", "dids")}
+
+
+def _exactly_one_of(tool: str) -> list[dict[str, list[str]]]:
+    return [{"required": [name]} for name in _EXACTLY_ONE_OF[tool]]
 
 
 def _with_confirmation_token(parameters: dict[str, Any]) -> dict[str, Any]:

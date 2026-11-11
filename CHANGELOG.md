@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The `my_numbers_delete` tool's input schema now states that exactly one of `ids` or `dids` is required.
+
 ## [1.3.2] - 2026-11-06
 
 ### Security
