@@ -766,7 +766,9 @@ def build_server() -> FastMCP:
     _require_gated_tools(_CONFIRMED_TOOLS)
     _warn_on_never_gated_tools(tool_routes)
     mcp.add_middleware(ScopeFilterMiddleware(tool_routes))
-    mcp.add_middleware(ConfirmationMiddleware(preview_builders(_CONFIRMED_TOOLS), api_client))
+    mcp.add_middleware(
+        ConfirmationMiddleware(preview_builders(_CONFIRMED_TOOLS, TOOL_DESCRIPTIONS), api_client)
+    )
     mcp.add_middleware(SecretMaskingMiddleware())
     return mcp
 

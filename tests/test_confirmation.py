@@ -32,6 +32,7 @@ from wavix_mcp.confirmation import (
 )
 from wavix_mcp.scope_filter import ScopeFilterMiddleware
 
+from .test_call_disclosure import DISCLOSURE_SENTENCES, unsupported_claims
 from .test_instructions import imperative_violations
 
 APPROVAL_AFTER_PREVIEW = (
@@ -134,7 +135,9 @@ _SPEC = {
 }
 
 
-_BUILDERS = preview_builders({"call_control_create": ConfirmedTool("Start a call", ("from", "to"))})
+_BUILDERS = preview_builders(
+    {"call_control_create": ConfirmedTool("Start a call", ("from", "to"))}, server.TOOL_DESCRIPTIONS
+)
 
 
 class _Api:
@@ -199,7 +202,7 @@ def _server(api: _Api, clock: _Clock | None = None, *, with_scope_filter: bool =
     )
     if with_scope_filter:
         mcp.add_middleware(ScopeFilterMiddleware(dict(server._TOOL_ROUTES)))
-    builders = preview_builders(server._CONFIRMED_TOOLS)
+    builders = preview_builders(server._CONFIRMED_TOOLS, server.TOOL_DESCRIPTIONS)
     mcp.add_middleware(ConfirmationMiddleware(builders, client, clock=clock or _Clock()))
     return mcp
 
@@ -239,20 +242,49 @@ def test_first_call_returns_a_preview_and_dials_nothing(isolated_routes, anonymo
     assert api.dials == 0
     assert not preview.is_error
     lines = _text(preview).splitlines()
-    assert lines[:4] == [
+    assert lines[:5] == [
         'This will run "Start a call":',
         "• from: +15550100",
         "• to: +15550199",
         "• callback_url: https://cb.test/x",
+        DISCLOSURE_SENTENCES["call_control_create"][-1],
     ]
     assert re.fullmatch(
         "This preview is meant for the user. The action runs when this tool "
         rf'is called again with {TOKEN_PARAMETER}="[\w-]+"; that call is meant to follow '
         "the user's approval in a later message, and approval given before this preview "
         "is not approval of it\\.",
-        lines[4],
+        lines[5],
     )
-    assert imperative_violations(lines[4]) == []
+    assert imperative_violations(lines[5]) == []
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments"), [("call_control_create", CALL), ("voice_campaigns_create", CAMPAIGN)]
+)
+def test_preview_carries_the_disclosure_sentence(isolated_routes, anonymous, tool, arguments):
+    api = _Api()
+    [preview] = asyncio.run(_calls(_server(api), (tool, arguments)))
+    sentence = DISCLOSURE_SENTENCES[tool][-1]
+    assert sentence in _text(preview).splitlines()
+    assert imperative_violations(sentence) == []
+    assert unsupported_claims(sentence) == []
+    assert api.dials == 0
+
+
+def test_mismatch_preview_carries_the_disclosure_sentence(isolated_routes, anonymous):
+    api = _Api()
+    forged = {**CALL, TOKEN_PARAMETER: "forged"}
+    [preview] = asyncio.run(_calls(_server(api), ("call_control_create", forged)))
+    assert "does not match" in _text(preview)
+    assert DISCLOSURE_SENTENCES["call_control_create"][-1] in _text(preview)
+
+
+@pytest.mark.parametrize("tool", ["call_control_create", "voice_campaigns_create"])
+def test_preview_fails_without_the_disclosure_sentence(tool):
+    stripped = {tool: "Places a call."}
+    with pytest.raises(RuntimeError, match="disclosure sentence"):
+        preview_builders({tool: ConfirmedTool(tool)}, stripped)
 
 
 def test_token_runs_the_action_once_without_forwarding_the_token(isolated_routes, anonymous):
@@ -547,7 +579,7 @@ def _preview(tool: str, arguments: dict, lookups: dict | None = None, title: str
     api = httpx.AsyncClient(
         base_url="http://api.test", transport=httpx.MockTransport(_Api(lookups=lookups))
     )
-    build = preview_builders({tool: ConfirmedTool(title)})[tool]
+    build = preview_builders({tool: ConfirmedTool(title)}, server.TOOL_DESCRIPTIONS)[tool]
     return asyncio.run(build(arguments, api))
 
 
@@ -580,7 +612,8 @@ def test_line_breaks_and_direction_marks_cannot_forge_preview_lines():
     assert _preview("call_control_create", arguments, title="Start a call") == (
         'This will run "Start a call":\n'
         "• to: \\u202e9910555\n"
-        "• callback_url: https://a\\n• to: 15550199"
+        "• callback_url: https://a\\n• to: 15550199\n"
+        + DISCLOSURE_SENTENCES["call_control_create"][-1]
     )
 
 
