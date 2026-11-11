@@ -49,6 +49,7 @@ Details = Callable[[Mapping[str, Any], httpx.AsyncClient], Awaitable[list[str]]]
 class ConfirmedTool:
     title: str
     required: tuple[str, ...] = ()
+    clearable: frozenset[str] = frozenset()
 
 
 def _invalid(name: str) -> ConfirmationInputError:
@@ -356,7 +357,7 @@ async def _update_numbers_bulk(arguments: Mapping[str, Any], api: httpx.AsyncCli
     if isinstance(patch.get("destinations"), list):
         patch["destinations"] = _destinations_text(patch["destinations"])
     heading = f"This will change {_plural(len(ids), 'number')}:"
-    lines = [*_capped(numbers, len(ids)), *_argument_lines(patch)]
+    lines = [*_capped(numbers, len(ids)), *_argument_lines(patch, frozenset(patch))]
     return f"{heading}\n{_bullets(lines)}"
 
 
@@ -395,10 +396,10 @@ def _excerpt(text: str) -> str:
     return text[:MESSAGE_PREVIEW_CHARS].rstrip() + "…"
 
 
-def _argument_lines(arguments: Mapping[str, Any]) -> list[str]:
+def _argument_lines(arguments: Mapping[str, Any], clearable: frozenset[str]) -> list[str]:
     lines = []
     for field, value in _flatten(arguments).items():
-        if value is None or field == TOKEN_PARAMETER:
+        if field == TOKEN_PARAMETER or (value is None and field not in clearable):
             continue
         if field in _SECRET_FIELDS:
             lines.append(f"{field}: (hidden)")
@@ -415,7 +416,7 @@ def template_preview(tool: ConfirmedTool, details: Details | None = None) -> Pre
             value = arguments.get(name)
             if value is None or (isinstance(value, str) and not value.strip()):
                 raise _invalid(name)
-        lines = _argument_lines(arguments)
+        lines = _argument_lines(arguments, tool.clearable)
         if details is not None:
             lines += await details(arguments, api)
         heading = f'This will run "{tool.title}"'
@@ -591,6 +592,21 @@ ALWAYS_CONFIRMED = frozenset(
 )
 
 
+def _clearing_only(build: PreviewBuilder, tool: ConfirmedTool) -> PreviewBuilder:
+    async def filtered(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
+        kept = {k: v for k, v in arguments.items() if v is not None or k in tool.clearable}
+        return await build(kept, api)
+
+    return filtered
+
+
+def _builder(name: str, tool: ConfirmedTool) -> PreviewBuilder:
+    custom = CUSTOM_PREVIEWS.get(name)
+    if custom is None:
+        return template_preview(tool, DETAILS.get(name))
+    return _clearing_only(custom, tool)
+
+
 def disclosure_sentence(description: str) -> str:
     found = _DISCLOSURE_SENTENCE.search(description)
     if found is None:
@@ -608,10 +624,7 @@ def _with_disclosure(build: PreviewBuilder, sentence: str) -> PreviewBuilder:
 def preview_builders(
     tools: Mapping[str, ConfirmedTool], descriptions: Mapping[str, str]
 ) -> dict[str, PreviewBuilder]:
-    builders = {
-        name: CUSTOM_PREVIEWS.get(name) or template_preview(tool, DETAILS.get(name))
-        for name, tool in tools.items()
-    }
+    builders = {name: _builder(name, tool) for name, tool in tools.items()}
     for name in DISCLOSED_TOOLS & builders.keys():
         builders[name] = _with_disclosure(builders[name], disclosure_sentence(descriptions[name]))
     return builders
