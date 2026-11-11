@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `my_numbers_update`, `my_numbers_bulk_update` and `profile_update` now run in two steps. The first call changes nothing and returns a preview: old and new values for a number and for the profile, the affected numbers and the new values for the bulk update. The change is applied when the tool is called again with the same arguments and the `confirmation_token`.
+
 ### Fixed
 
 - Update tools (`PATCH` and `PUT`) now send a field the assistant sets to `null`, so clearing a field that the API allows clearing (for example the SMS callback URL of a phone number) takes effect instead of reporting success with the value unchanged. For a field the API does not allow clearing, the API's own rejection reaches the assistant. Where a tool asks for confirmation, the preview lists a cleared field as `null` and does not list a field that cannot be cleared as emptied.
