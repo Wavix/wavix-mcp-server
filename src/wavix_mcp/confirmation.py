@@ -230,6 +230,8 @@ def _changes(
     current: Any,
     skip: Iterable[str],
     aliases: Mapping[str, str],
+    *,
+    absent_shows_new: bool = False,
 ) -> list[str]:
     known = _flatten(current) if isinstance(current, Mapping) else None
     lines = []
@@ -242,7 +244,11 @@ def _changes(
         if known is None:
             lines.append(f"{field}: {_display(new)}")
             continue
-        old = known.get(aliases.get(field, field))
+        key = aliases.get(field, field)
+        if absent_shows_new and key not in known:
+            lines.append(f"{field}: {_display(new)}")
+            continue
+        old = known.get(key)
         if not _same(old, new):
             lines.append(f"{field}: {_display(old)} → {_display(new)}")
     return lines
@@ -269,6 +275,38 @@ async def _update_sub_account(arguments: Mapping[str, Any], api: httpx.AsyncClie
     name = current.get("name") if isinstance(current, Mapping) else None
     lines = _changes(arguments, current, {"id"}, {})
     return _change_preview(f"sub-account {name or account_id}", lines)
+
+
+_DESTINATION_KEYS = ("destination", "priority", "transport", "trunk_id")
+
+
+def _destinations_text(items: Any) -> str:
+    if not isinstance(items, list):
+        return _display(items)
+    if not items:
+        return "[]"
+    return "; ".join(
+        ", ".join(f"{key}={_display(item.get(key))}" for key in _DESTINATION_KEYS)
+        if isinstance(item, Mapping)
+        else _display(item)
+        for item in items
+    )
+
+
+async def _update_number(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
+    number_id = _integer(arguments, "id")
+    current = await _fetch(api, f"/v1/numbers/{number_id}")
+    if not isinstance(current, Mapping):
+        raise RuntimeError(f"no current state for number {number_id}")
+    compare = {k: v for k, v in current.items() if k != "destination"}
+    if "destination" in current:
+        compare["destinations"] = _destinations_text(current["destination"])
+    request = dict(arguments)
+    if "destinations" in request:
+        request["destinations"] = _destinations_text(request["destinations"])
+    lines = _changes(request, compare, {"id", "expected_sms_relay_url"}, {}, absent_shows_new=True)
+    number = current.get("number")
+    return _change_preview(f"phone number {number or f'ID {number_id}'}", lines)
 
 
 def _fee(entity: Mapping[str, Any], key: str) -> Decimal | None:
@@ -467,6 +505,7 @@ CUSTOM_PREVIEWS: Mapping[str, PreviewBuilder] = {
     "my_numbers_delete": _release_numbers,
     "sip_trunks_update": _update_trunk,
     "sub_accounts_update": _update_sub_account,
+    "my_numbers_update": _update_number,
     "cart_checkout": _checkout,
 }
 

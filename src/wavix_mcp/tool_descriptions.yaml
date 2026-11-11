@@ -274,7 +274,11 @@ my_numbers_update: >-
   only the fields provided — SMS enablement, inbound call routing destinations, the
   inbound-message callback URL, call recording, transcription and its duration
   threshold, and the call-status callback URL. Applies to changing one number's routing
-  or feature settings. Changes the number's configuration. Requires the
+  or feature settings. The first call changes nothing and returns a preview listing each
+  setting that would change, old value to new value, with a `confirmation_token`; the
+  change is applied when the tool is called again with the same arguments and that
+  token, a call meant to follow the user's approval of the preview in a later message.
+  Changes the number's configuration. Requires the
   `numbers:write` scope and the number's `id`.
 
 number_validator_create_bulk: >-

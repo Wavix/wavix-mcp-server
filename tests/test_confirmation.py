@@ -37,6 +37,7 @@ from .test_instructions import imperative_violations
 APPROVAL_AFTER_PREVIEW = (
     "a call meant to follow the user's approval of the preview in a later message"
 )
+REDIRECT_TOOLS = ("my_numbers_update", "my_numbers_bulk_update", "profile_update")
 CALL = {"from": "+15550100", "to": "+15550199", "callback_url": "https://cb.test/x"}
 CAMPAIGN = {
     "voice_campaign": {"callflow_id": 3212, "caller_id": "13123310912", "contact": "16729923812"}
@@ -49,10 +50,16 @@ _UUID_RESPONSE = {
 }
 
 
-def _post(operation_id: str, properties: dict, summary: str, required: tuple = ()) -> dict:
+def _post(
+    operation_id: str,
+    properties: dict,
+    summary: str,
+    required: tuple = (),
+    method: str = "post",
+) -> dict:
     schema = {"type": "object", "properties": properties, "required": list(required)}
     return {
-        "post": {
+        method: {
             "operationId": operation_id,
             "summary": summary,
             "requestBody": {
@@ -119,6 +126,60 @@ _SPEC = {
                 ],
             }
         },
+        "/v1/numbers/{id}": {
+            "patch": {
+                **_post(
+                    "my_numbers_update",
+                    {
+                        "sms_enabled": {"type": "boolean"},
+                        "sms_relay_url": {"type": "string"},
+                        "expected_sms_relay_url": {"type": "string"},
+                        "call_status_url": {"type": "string"},
+                        "call_recording_enabled": {"type": "boolean"},
+                        "transcription_enabled": {"type": "boolean"},
+                        "destinations": {"type": "array", "items": {"type": "object"}},
+                    },
+                    "Update a phone number",
+                    method="patch",
+                )["patch"],
+                "x-mcp": {"destructive": False},
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "integer"}}
+                ],
+            }
+        },
+        "/v1/numbers": _post(
+            "my_numbers_bulk_update",
+            {
+                "ids": {"type": "array", "items": {"type": "integer"}},
+                "sms_enabled": {"type": "boolean"},
+                "sms_relay_url": {"type": "string"},
+                "call_status_url": {"type": "string"},
+                "destinations": {"type": "array", "items": {"type": "object"}},
+            },
+            "Update phone numbers in bulk",
+            ("ids",),
+            method="patch",
+        ),
+        "/v1/profile": _post(
+            "profile_update",
+            {
+                "contacts": {"type": "string"},
+                "time_zone": {"type": "string"},
+                "sms_relay_url": {"type": "string"},
+                "dlr_relay_url": {"type": "string"},
+                "company_info": {
+                    "type": "object",
+                    "properties": {
+                        "billing_address": {"type": "string"},
+                        "country_code": {"type": "string"},
+                        "name": {"type": "string"},
+                    },
+                },
+            },
+            "Update a profile",
+            method="put",
+        ),
         "/v1/mydids": {
             "get": {
                 "operationId": "my_numbers_list",
@@ -712,6 +773,130 @@ def test_sub_account_update_compares_nested_destinations():
     assert _preview("sub_accounts_update", arguments, lookups) == (
         "This will change sub-account Shop:\n• status: enabled → disabled"
     )
+
+
+NUMBER_7 = {
+    "id": 7,
+    "number": "12125550101",
+    "city": "New York",
+    "country": "United States",
+    "sms_enabled": True,
+    "sms_relay_url": "https://old.test/sms",
+    "call_status_url": None,
+    "destination": [
+        {
+            "id": 1,
+            "destination": "+15550100",
+            "priority": 1,
+            "transport": "pstn",
+            "trunk_id": None,
+            "srtp": False,
+            "trunk_label": None,
+        }
+    ],
+}
+NUMBER_7_LOOKUP = {"/v1/numbers/7": NUMBER_7}
+
+
+def _number_update(arguments: dict, number: dict | None = None) -> str:
+    lookups = {"/v1/numbers/7": number if number is not None else NUMBER_7}
+    return _preview("my_numbers_update", {"id": 7, **arguments}, lookups)
+
+
+def test_number_update_lists_only_the_changes():
+    text = _number_update(
+        {
+            "sms_enabled": True,
+            "sms_relay_url": "https://new.test/sms",
+            "call_status_url": "https://status.test/cc",
+            "destinations": [{"destination": "+15550100", "priority": 1, "transport": "pstn"}],
+        }
+    )
+    assert text == (
+        "This will change phone number 12125550101:\n"
+        "• sms_relay_url: https://old.test/sms → https://new.test/sms\n"
+        "• call_status_url: null → https://status.test/cc"
+    )
+
+
+def test_number_update_shows_a_changed_destination_with_key_names():
+    text = _number_update(
+        {"destinations": [{"destination": "+15550100", "priority": 2, "transport": "pstn"}]}
+    )
+    assert text.splitlines()[1] == (
+        "• destinations: destination=+15550100, priority=1, transport=pstn, trunk_id=null"
+        " → destination=+15550100, priority=2, transport=pstn, trunk_id=null"
+    )
+
+
+def test_number_update_catches_swapped_priorities():
+    number = {
+        **NUMBER_7,
+        "destination": [
+            {"destination": "+15550100", "priority": 1, "transport": "pstn", "trunk_id": None},
+            {"destination": "sip:a@t.test", "priority": 2, "transport": "sip", "trunk_id": 5},
+        ],
+    }
+    text = _number_update(
+        {
+            "destinations": [
+                {"destination": "+15550100", "priority": 2, "transport": "pstn", "trunk_id": None},
+                {"destination": "sip:a@t.test", "priority": 1, "transport": "sip", "trunk_id": 5},
+            ]
+        },
+        number,
+    )
+    lines = [line for line in text.splitlines() if "destinations:" in line]
+    assert len(lines) == 1
+    old, new = lines[0].split(" → ")
+    assert re.findall(r"priority=\d", old) != re.findall(r"priority=\d", new)
+
+
+def test_number_update_shows_new_value_only_for_fields_the_number_omits():
+    text = _number_update({"call_recording_enabled": True, "transcription_enabled": False})
+    assert text == (
+        "This will change phone number 12125550101:\n"
+        "• call_recording_enabled: true\n"
+        "• transcription_enabled: false"
+    )
+
+
+def test_number_update_skips_the_concurrency_guard():
+    text = _number_update(
+        {"sms_relay_url": "https://new.test/sms", "expected_sms_relay_url": "https://old.test/sms"}
+    )
+    assert "sms_relay_url: https://old.test/sms → https://new.test/sms" in text
+    assert "expected_sms_relay_url" not in text
+
+
+def test_number_update_prints_a_long_url_in_full():
+    url = "https://new.test/" + "a" * 120
+    assert _number_update({"sms_relay_url": url}).endswith(url)
+
+
+def test_number_update_names_the_id_when_the_response_has_no_number():
+    text = _number_update(
+        {"sms_relay_url": "https://new.test/sms"}, {"sms_relay_url": "https://old.test/sms"}
+    )
+    assert text.startswith("This will change phone number ID 7:")
+
+
+def test_number_update_without_lookup_fails_closed(isolated_routes, anonymous):
+    api = _Api()
+    [result] = asyncio.run(
+        _calls(
+            _server(api), ("my_numbers_update", {"id": 7, "sms_relay_url": "https://new.test/sms"})
+        )
+    )
+    assert result.is_error and "nothing was done" in _text(result)
+    assert "authenticated MCP session" not in _text(result)
+    assert {r.method for r in api.requests} == {"GET"}
+
+
+@pytest.mark.parametrize("arguments", [{"sms_relay_url": "https://new.test/sms"}, {"id": True}])
+def test_number_update_requires_an_integer_id(arguments):
+    with pytest.raises(ConfirmationInputError):
+        _preview("my_numbers_update", arguments, NUMBER_7_LOOKUP)
 
 
 @pytest.mark.parametrize(
