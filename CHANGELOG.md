@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `my_numbers_update`, `my_numbers_bulk_update` and `profile_update` now run in two steps. The first call changes nothing and returns a preview: old and new values for a number and for the profile, the affected numbers and the new values for the bulk update. The change is applied when the tool is called again with the same arguments and the `confirmation_token`.
+- `ten_dlc_subscriptions_create` and `sub_accounts_create` descriptions now state that the tools run in two steps: the first call creates nothing and returns a preview with a `confirmation_token`, and the item is created when the tool is called again with the same arguments and that token.
+- The confirmation preview for `call_control_create` and `voice_campaigns_create` now shows the automated-call disclosure sentence from the tool description, so the person approving the call sees it at the moment of approval.
 - The `my_numbers_delete` tool's input schema now states that exactly one of `ids` or `dids` is required.
 
 ## [1.3.2] - 2026-11-06
