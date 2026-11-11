@@ -583,6 +583,15 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
         )
         component.output_schema = None
         component.parameters = _with_confirmation_token(component.parameters)
+    if component.name in _EXACTLY_ONE_OF:
+        component.parameters = {**component.parameters, "oneOf": _exactly_one_of(component.name)}
+
+
+_EXACTLY_ONE_OF: dict[str, tuple[str, ...]] = {"my_numbers_delete": ("ids", "dids")}
+
+
+def _exactly_one_of(tool: str) -> list[dict[str, list[str]]]:
+    return [{"required": [name]} for name in _EXACTLY_ONE_OF[tool]]
 
 
 def _with_confirmation_token(parameters: dict[str, Any]) -> dict[str, Any]:
@@ -807,7 +816,9 @@ def build_server() -> FastMCP:
     _require_gated_tools(_CONFIRMED_TOOLS)
     _warn_on_never_gated_tools(tool_routes)
     mcp.add_middleware(ScopeFilterMiddleware(tool_routes))
-    mcp.add_middleware(ConfirmationMiddleware(preview_builders(_CONFIRMED_TOOLS), api_client))
+    mcp.add_middleware(
+        ConfirmationMiddleware(preview_builders(_CONFIRMED_TOOLS, TOOL_DESCRIPTIONS), api_client)
+    )
     mcp.add_middleware(SecretMaskingMiddleware())
     return mcp
 

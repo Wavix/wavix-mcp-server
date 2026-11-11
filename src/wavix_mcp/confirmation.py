@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import re
 import secrets
 import time
 import unicodedata
@@ -583,6 +584,9 @@ DETAILS: Mapping[str, Details] = {
     "webrtc_tokens_delete": _widget_token_details,
 }
 
+DISCLOSED_TOOLS = frozenset({"call_control_create", "voice_campaigns_create"})
+_DISCLOSURE_SENTENCE = re.compile(r"[^.]*\bTerms of Service\.")
+
 ALWAYS_CONFIRMED = frozenset(
     {"call_webhooks_create", "sip_trunks_update", "sub_accounts_update", *CUSTOM_PREVIEWS}
 )
@@ -603,8 +607,27 @@ def _builder(name: str, tool: ConfirmedTool) -> PreviewBuilder:
     return _clearing_only(custom, tool)
 
 
-def preview_builders(tools: Mapping[str, ConfirmedTool]) -> dict[str, PreviewBuilder]:
-    return {name: _builder(name, tool) for name, tool in tools.items()}
+def disclosure_sentence(description: str) -> str:
+    found = _DISCLOSURE_SENTENCE.search(description)
+    if found is None:
+        raise RuntimeError("tool description carries no Terms of Service disclosure sentence")
+    return found.group(0).strip()
+
+
+def _with_disclosure(build: PreviewBuilder, sentence: str) -> PreviewBuilder:
+    async def disclosed(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
+        return f"{await build(arguments, api)}\n{sentence}"
+
+    return disclosed
+
+
+def preview_builders(
+    tools: Mapping[str, ConfirmedTool], descriptions: Mapping[str, str]
+) -> dict[str, PreviewBuilder]:
+    builders = {name: _builder(name, tool) for name, tool in tools.items()}
+    for name in DISCLOSED_TOOLS & builders.keys():
+        builders[name] = _with_disclosure(builders[name], disclosure_sentence(descriptions[name]))
+    return builders
 
 
 def _caller_identity() -> str:

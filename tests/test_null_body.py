@@ -114,7 +114,7 @@ def test_omitted_fields_are_not_added():
 
 def _preview(clearable: frozenset[str], arguments: dict) -> str:
     tool = ConfirmedTool("Update a number", ("id",), clearable)
-    build = preview_builders({"example_update": tool})["example_update"]
+    build = preview_builders({"example_update": tool}, {})["example_update"]
     return asyncio.run(build(arguments, httpx.AsyncClient()))
 
 
