@@ -309,6 +309,39 @@ async def _update_number(arguments: Mapping[str, Any], api: httpx.AsyncClient) -
     return _change_preview(f"phone number {number or f'ID {number_id}'}", lines)
 
 
+_PROFILE_ALIASES: Mapping[str, str] = {
+    "contacts": "contact_email",
+    "time_zone": "timezone",
+    "company_info.billing_address": "company_info.address",
+}
+_PROFILE_RELAY_TRANSPORTS = {"sms_relay_url": "sms", "dlr_relay_url": "dlr"}
+
+
+def _profile_for_compare(current: Mapping[str, Any]) -> dict[str, Any]:
+    destinations = current.get("default_destinations")
+    entries = (
+        [d for d in destinations if isinstance(d, Mapping)]
+        if isinstance(destinations, list)
+        else []
+    )
+    compare = dict(current)
+    for field, transport in _PROFILE_RELAY_TRANSPORTS.items():
+        compare[field] = next(
+            (d.get("value") for d in entries if d.get("transport") == transport), None
+        )
+    return compare
+
+
+async def _update_profile(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
+    current = await _fetch(api, "/v1/profile")
+    if not isinstance(current, Mapping):
+        raise RuntimeError("no current state for the profile")
+    lines = _changes(
+        arguments, _profile_for_compare(current), set(), _PROFILE_ALIASES, absent_shows_new=True
+    )
+    return _change_preview("your account profile", lines)
+
+
 def _fee(entity: Mapping[str, Any], key: str) -> Decimal | None:
     try:
         return Decimal(str(entity.get(key)))
@@ -506,6 +539,7 @@ CUSTOM_PREVIEWS: Mapping[str, PreviewBuilder] = {
     "sip_trunks_update": _update_trunk,
     "sub_accounts_update": _update_sub_account,
     "my_numbers_update": _update_number,
+    "profile_update": _update_profile,
     "cart_checkout": _checkout,
 }
 

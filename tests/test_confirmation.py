@@ -899,6 +899,71 @@ def test_number_update_requires_an_integer_id(arguments):
         _preview("my_numbers_update", arguments, NUMBER_7_LOOKUP)
 
 
+PROFILE = {
+    "id": 1,
+    "first_name": "Ann",
+    "contact_email": "old-contact@example.test",
+    "timezone": "UTC",
+    "default_destinations": [
+        {"transport": "sip", "value": "sip:x@old.test"},
+        {"transport": "sms", "value": "https://old.test/sms"},
+    ],
+    "company_info": {
+        "name": "Acme",
+        "address": "1 Old St",
+        "country": {"country_id": 1, "country_name": "United States"},
+    },
+}
+
+
+def _profile_update(arguments: dict) -> str:
+    return _preview("profile_update", arguments, {"/v1/profile": PROFILE})
+
+
+def test_profile_update_reads_current_values_from_the_profile():
+    text = _profile_update(
+        {
+            "contacts": "new-contact@example.test",
+            "time_zone": "UTC",
+            "sms_relay_url": "https://new.test/sms",
+            "dlr_relay_url": "https://new.test/dlr",
+            "company_info": {
+                "billing_address": "2 New St",
+                "country_code": "US",
+                "name": "Acme",
+            },
+        }
+    )
+    assert text == (
+        "This will change your account profile:\n"
+        "• contacts: old-contact@example.test → new-contact@example.test\n"
+        "• sms_relay_url: https://old.test/sms → https://new.test/sms\n"
+        "• dlr_relay_url: null → https://new.test/dlr\n"
+        "• company_info.billing_address: 1 Old St → 2 New St\n"
+        "• company_info.country_code: US"
+    )
+
+
+def test_profile_update_unchanged_values_give_the_bare_heading():
+    text = _profile_update({"sms_relay_url": "https://old.test/sms", "time_zone": "UTC"})
+    assert text == "This will change your account profile."
+
+
+def test_profile_update_without_lookup_fails_closed(isolated_routes, anonymous):
+    api = _Api()
+    [result] = asyncio.run(
+        _calls(_server(api), ("profile_update", {"sms_relay_url": "https://new.test/sms"}))
+    )
+    assert result.is_error and "nothing was done" in _text(result)
+    assert "authenticated MCP session" not in _text(result)
+    assert {r.method for r in api.requests} == {"GET"}
+
+
+def test_profile_update_prints_a_long_url_in_full():
+    url = "https://new.test/" + "a" * 120
+    assert _profile_update({"dlr_relay_url": url}).endswith(url)
+
+
 @pytest.mark.parametrize(
     ("tool", "arguments", "lookups", "detail"),
     [

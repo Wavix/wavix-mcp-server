@@ -580,8 +580,11 @@ profile_get: >-
 
 profile_update: >-
   Updates the profile and billing details of the authenticated account. Applies when
-  the user wants to change their account profile or billing information and has
-  confirmed the new values. Modifies the account's stored profile and billing
+  the user wants to change their account profile or billing information. The first
+  call changes nothing and returns a preview listing each profile field that would
+  change, old value to new value, with a `confirmation_token`; the change is applied
+  when the tool is called again with the same arguments and that token, a call meant
+  to follow the user's approval of the preview in a later message. Modifies the account's stored profile and billing
   details. Requires the `account:write` scope.
 
 billing_invoices_list: >-
