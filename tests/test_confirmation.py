@@ -1019,6 +1019,62 @@ def test_bulk_update_rejects_unclear_ids(arguments):
         _preview("my_numbers_bulk_update", arguments, BULK_LOOKUPS)
 
 
+REDIRECT_LOOKUPS = {"/v1/numbers/7": NUMBER_7, "/v1/profile": PROFILE}
+REDIRECT_CALLS = [
+    ("my_numbers_update", {"id": 7, "sms_relay_url": "https://new.test/sms"}),
+    ("my_numbers_bulk_update", {"ids": [7], "sms_relay_url": "https://new.test/sms"}),
+    ("profile_update", {"sms_relay_url": "https://new.test/sms"}),
+]
+
+
+@pytest.mark.parametrize(("tool", "arguments"), REDIRECT_CALLS)
+def test_first_call_returns_a_preview_for_the_redirect_tools(
+    tool, arguments, isolated_routes, anonymous
+):
+    api = _Api(lookups=REDIRECT_LOOKUPS)
+    [result] = asyncio.run(_calls(_server(api), (tool, arguments)))
+    assert not result.is_error
+    assert _text(result).startswith("This will change")
+    assert _token(result)
+    assert {r.method for r in api.requests} == {"GET"}
+
+
+def test_changed_sms_relay_url_gets_a_new_preview(isolated_routes, anonymous):
+    api = _Api(lookups=REDIRECT_LOOKUPS)
+    mcp = _server(api)
+
+    async def run():
+        async with Client(mcp) as client:
+            first = await client.call_tool(
+                "my_numbers_update", {"id": 7, "sms_relay_url": "https://a.test/sms"}
+            )
+            changed = {
+                "id": 7,
+                "sms_relay_url": "https://b.test/sms",
+                TOKEN_PARAMETER: _token(first),
+            }
+            return first, await client.call_tool("my_numbers_update", changed, raise_on_error=False)
+
+    first, second = asyncio.run(run())
+    assert "does not match" in _text(second) and "https://b.test/sms" in _text(second)
+    assert _token(second) != _token(first)
+    assert {r.method for r in api.requests} == {"GET"}
+
+
+def test_redirect_tool_previews_carry_no_imperatives():
+    changed_destination = {"destinations": [{"destination": "+15550100", "priority": 2}]}
+    previews = [
+        _preview(
+            tool,
+            {**arguments, **(changed_destination if tool == "my_numbers_update" else {})},
+            REDIRECT_LOOKUPS,
+        )
+        for tool, arguments in REDIRECT_CALLS
+    ]
+    for line in (line for preview in previews for line in preview.splitlines()):
+        assert imperative_violations(line) == [], line
+
+
 @pytest.mark.parametrize(
     ("tool", "arguments", "lookups", "detail"),
     [
@@ -1186,6 +1242,7 @@ def test_every_destructive_tool_and_the_named_ones_are_confirmed(real_tools):
     destructive = {t.name for t in tools if t.annotations and t.annotations.destructiveHint}
     assert set(gated) == destructive | ALWAYS_CONFIRMED
     assert set(DETAILS) | set(CUSTOM_PREVIEWS) <= set(gated)
+    assert set(REDIRECT_TOOLS) <= set(gated)
     for tool in tools:
         takes_token = TOKEN_PARAMETER in tool.parameters.get("properties", {})
         assert takes_token == (tool.name in gated), tool.name
