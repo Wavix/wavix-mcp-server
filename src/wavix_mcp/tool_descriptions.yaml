@@ -951,12 +951,15 @@ ten_dlc_campaigns_nudge: >-
   Campaign every 24 hours.
 
 ten_dlc_subscriptions_create: >-
-  Registers a webhook callback URL to receive Wavix 10DLC event notifications for
-  a chosen event category. Applies when the user wants to be notified of 10DLC brand,
-  campaign, or number changes over a webhook. Creates a 10DLC event subscription
-  delivering events in the chosen category to the given URL. Requires the
-  `campaigns:write` scope, the 10DLC feature enabled for the account, a `url`, and
-  a `subscription_category` of `brand`, `campaign`, or `number`.
+  Registers a webhook URL to receive Wavix 10DLC events for a chosen event
+  category. Applies when the user wants to be notified of 10DLC brand,
+  campaign, or number changes over a webhook. The first call creates nothing and
+  returns a preview listing the event category and the webhook URL with a
+  `confirmation_token`; the subscription is created when the tool is called again
+  with the same arguments and that token, a call meant to follow the user's approval
+  of the preview in a later message. Requires the `campaigns:write`
+  scope, the 10DLC feature enabled for the account, a `url`, and a
+  `subscription_category` of `brand`, `campaign`, or `number`.
 
 ten_dlc_subscriptions_delete: >-
   Deletes the 10DLC event subscription for the specified event category. Applies when
@@ -980,10 +983,13 @@ ten_dlc_subscriptions_list: >-
 sub_accounts_create: >-
   Creates a new sub-organization under the authenticated master account and
   returns it with a generated `api_key`. Applies when the user wants to add a
-  sub-organization and has confirmed its name. Creates a persistent
-  sub-organization and issues its `api_key`. Requires the `subaccounts:write`
-  scope and a `name` of up to 75 characters; the optional `default_destinations`
-  object sets default webhook URLs for inbound messages and delivery reports.
+  sub-organization. The first call creates nothing and returns a preview listing the
+  `name` and any default webhook URLs with a `confirmation_token`; the
+  sub-organization is created when the tool is called again with the same arguments
+  and that token, a call meant to follow the user's approval of the preview in a later
+  message. Requires the `subaccounts:write` scope and a `name` of up to 75 characters; the optional
+  `default_destinations` object sets default webhook URLs for inbound messages and
+  delivery reports.
 
 sub_accounts_get: >-
   Retrieves a single sub-organization by its `id`. Applies to inspecting one known
