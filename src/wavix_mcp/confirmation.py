@@ -342,6 +342,23 @@ async def _update_profile(arguments: Mapping[str, Any], api: httpx.AsyncClient) 
     return _change_preview("your account profile", lines)
 
 
+async def _update_numbers_bulk(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
+    ids = arguments.get("ids")
+    if not isinstance(ids, list) or not ids:
+        raise _invalid("ids")
+    if any(isinstance(v, bool) or not isinstance(v, int) for v in ids):
+        raise _invalid("ids")
+    numbers = await _lookup_all(
+        ids[:MAX_LISTED_NUMBERS], lambda number_id: _number_by_id(api, number_id)
+    )
+    patch = {k: v for k, v in arguments.items() if k != "ids"}
+    if isinstance(patch.get("destinations"), list):
+        patch["destinations"] = _destinations_text(patch["destinations"])
+    heading = f"This will change {_plural(len(ids), 'number')}:"
+    lines = [*_capped(numbers, len(ids)), *_argument_lines(patch)]
+    return f"{heading}\n{_bullets(lines)}"
+
+
 def _fee(entity: Mapping[str, Any], key: str) -> Decimal | None:
     try:
         return Decimal(str(entity.get(key)))
@@ -540,6 +557,7 @@ CUSTOM_PREVIEWS: Mapping[str, PreviewBuilder] = {
     "sub_accounts_update": _update_sub_account,
     "my_numbers_update": _update_number,
     "profile_update": _update_profile,
+    "my_numbers_bulk_update": _update_numbers_bulk,
     "cart_checkout": _checkout,
 }
 

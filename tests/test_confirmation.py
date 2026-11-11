@@ -964,6 +964,61 @@ def test_profile_update_prints_a_long_url_in_full():
     assert _profile_update({"dlr_relay_url": url}).endswith(url)
 
 
+BULK_LOOKUPS = {
+    "/v1/numbers/1": {"number": "12125550101", "city": "New York", "country": "United States"}
+}
+
+
+def test_bulk_update_names_each_number():
+    arguments = {
+        "ids": [1, 2],
+        "sms_enabled": False,
+        "destinations": [{"destination": "+15550100", "priority": 1, "transport": "pstn"}],
+        "sms_relay_url": "https://new.test/sms",
+        "call_status_url": "https://status.test/cc",
+    }
+    assert _preview("my_numbers_bulk_update", arguments, BULK_LOOKUPS) == (
+        "This will change 2 numbers:\n"
+        "• 12125550101 (New York, United States)\n"
+        "• number ID 2\n"
+        "• sms_enabled: false\n"
+        "• destinations: destination=+15550100, priority=1, transport=pstn, trunk_id=null\n"
+        "• sms_relay_url: https://new.test/sms\n"
+        "• call_status_url: https://status.test/cc"
+    )
+
+
+def test_bulk_update_lists_at_most_the_cap():
+    ids = list(range(1, MAX_LISTED_NUMBERS + 4))
+    text = _preview("my_numbers_bulk_update", {"ids": ids, "sms_relay_url": "https://new.test/sms"})
+    lines = text.splitlines()
+    assert lines[0] == f"This will change {len(ids)} numbers:"
+    assert lines[-2] == "• and 3 more"
+    assert lines[-1] == "• sms_relay_url: https://new.test/sms"
+    assert len(lines) == MAX_LISTED_NUMBERS + 3
+
+
+def test_bulk_update_with_one_number_uses_the_singular():
+    text = _preview(
+        "my_numbers_bulk_update",
+        {"ids": [1], "sms_relay_url": "https://new.test/sms"},
+        BULK_LOOKUPS,
+    )
+    assert text.splitlines()[0] == "This will change 1 number:"
+
+
+def test_bulk_update_prints_a_long_url_in_full():
+    url = "https://new.test/" + "a" * 120
+    text = _preview("my_numbers_bulk_update", {"ids": [1], "sms_relay_url": url}, BULK_LOOKUPS)
+    assert text.endswith(url)
+
+
+@pytest.mark.parametrize("arguments", [{}, {"ids": []}, {"ids": [True]}, {"ids": "1"}])
+def test_bulk_update_rejects_unclear_ids(arguments):
+    with pytest.raises(ConfirmationInputError):
+        _preview("my_numbers_bulk_update", arguments, BULK_LOOKUPS)
+
+
 @pytest.mark.parametrize(
     ("tool", "arguments", "lookups", "detail"),
     [

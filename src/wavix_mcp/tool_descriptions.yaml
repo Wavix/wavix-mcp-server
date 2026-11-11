@@ -239,8 +239,11 @@ my_numbers_bulk_update: >-
   `ids` list, updating only the fields provided — SMS enablement, inbound call
   routing destinations, the inbound-message callback URL, call recording,
   transcription and its duration threshold, and the call-status callback URL. Applies to
-  making one routing or feature change across several owned numbers at once.
-  Changes the numbers' configuration; destination and SMS callback changes are
+  making one routing or feature change across several owned numbers at once. The
+  first call changes nothing and returns a preview listing the numbers and the new
+  settings with a `confirmation_token`; the changes are applied when the tool is
+  called again with the same arguments and that token, a call meant to follow the
+  user's approval of the preview in a later message. Changes the numbers' configuration; destination and SMS callback changes are
   applied asynchronously and may not appear in the response immediately. Requires
   the `numbers:write` scope and the `ids` list of numbers to update.
 
