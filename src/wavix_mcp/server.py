@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_http_headers
 from fastmcp.server.providers.openapi import MCPType, OpenAPITool, RouteMap
+from fastmcp.utilities.openapi.director import RequestDirector
 from fastmcp.utilities.openapi.models import HTTPRoute
 from mcp.types import ToolAnnotations
 
@@ -489,6 +490,40 @@ def _download_url_annotations(title: str) -> ToolAnnotations:
     )
 
 
+class _NullForwardingDirector(RequestDirector):
+    def _unflatten_arguments(self, route: HTTPRoute, flat_args: dict[str, Any]) -> Any:
+        path, query, header, cookie, body = super()._unflatten_arguments(
+            route, {name: value for name, value in flat_args.items() if value is not None}
+        )
+        cleared = {
+            mapping["openapi_name"]: None
+            for name, value in flat_args.items()
+            if value is None
+            and (mapping := route.parameter_map.get(name)) is not None
+            and mapping["location"] == "body"
+        }
+        if cleared and (body is None or isinstance(body, dict)):
+            body = {**(body or {}), **cleared}
+        return path, query, header, cookie, body
+
+
+def _accepts_null(schema: dict[str, Any]) -> bool:
+    kind = schema.get("type")
+    if kind == "null" or (isinstance(kind, list) and "null" in kind):
+        return True
+    return any(
+        isinstance(member, dict) and _accepts_null(member) for member in schema.get("anyOf", [])
+    )
+
+
+def _clearable_fields(parameters: dict[str, Any]) -> frozenset[str]:
+    return frozenset(
+        name
+        for name, schema in parameters.get("properties", {}).items()
+        if isinstance(schema, dict) and _accepts_null(schema)
+    )
+
+
 def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
     """Map the operation onto the generated tool: human title, risk annotations,
     and an optional MCP-audience description.
@@ -539,7 +574,11 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
     # MCP clients reject a non-error result lacking structuredContent when outputSchema is declared.
     if component.annotations.destructiveHint or component.name in ALWAYS_CONFIRMED:
         required = tuple(component.parameters.get("required", []))
-        _CONFIRMED_TOOLS[component.name] = ConfirmedTool(title or component.name, required)
+        clearable = _clearable_fields(component.parameters)
+        _CONFIRMED_TOOLS[component.name] = ConfirmedTool(
+            title or component.name, required, clearable
+        )
+        component._director = _NullForwardingDirector(component._director._spec)
         component.output_schema = None
         component.parameters = _with_confirmation_token(component.parameters)
 
