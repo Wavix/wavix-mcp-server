@@ -9,6 +9,15 @@ Entries are derived from the commit history, which follows
 
 ## [Unreleased]
 
+### Added
+
+- Seven WhatsApp tools: `whatsapp_webhooks_create`, `whatsapp_webhooks_list`,
+  `whatsapp_webhooks_get`, `whatsapp_webhooks_update`,
+  `whatsapp_webhooks_delete` and `whatsapp_webhooks_send_test` manage webhooks
+  for WhatsApp events, and `whatsapp_events_list` reads the events without a
+  webhook. `whatsapp_webhooks_create` and `whatsapp_webhooks_update` run in two
+  steps, like `call_webhooks_create`.
+
 ## [1.3.1] - 2026-10-16
 
 ### Changed
