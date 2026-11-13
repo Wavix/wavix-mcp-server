@@ -1306,6 +1306,18 @@ def test_every_destructive_tool_and_the_named_ones_are_confirmed(real_tools):
         assert takes_token == (tool.name in gated), tool.name
 
 
+WEBHOOK_REGISTRATION_TOOLS = {
+    "call_webhooks_create",
+    "whatsapp_webhooks_create",
+    "whatsapp_webhooks_update",
+}
+
+
+def test_webhook_registration_tools_stay_confirmed(real_tools):
+    _tools, gated = real_tools
+    assert set(gated) >= WEBHOOK_REGISTRATION_TOOLS
+
+
 def test_tool_descriptions_carry_no_assistant_imperatives(real_tools):
     tools, _gated = real_tools
     violations = {

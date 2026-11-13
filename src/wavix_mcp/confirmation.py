@@ -588,7 +588,14 @@ DISCLOSED_TOOLS = frozenset({"call_control_create", "voice_campaigns_create"})
 _DISCLOSURE_SENTENCE = re.compile(r"[^.]*\bTerms of Service\.")
 
 ALWAYS_CONFIRMED = frozenset(
-    {"call_webhooks_create", "sip_trunks_update", "sub_accounts_update", *CUSTOM_PREVIEWS}
+    {
+        "call_webhooks_create",
+        "sip_trunks_update",
+        "sub_accounts_update",
+        "whatsapp_webhooks_create",
+        "whatsapp_webhooks_update",
+        *CUSTOM_PREVIEWS,
+    }
 )
 
 
