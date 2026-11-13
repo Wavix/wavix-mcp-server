@@ -1077,20 +1077,27 @@ whatsapp_templates_create: >-
   which may be omitted when the account has a single WhatsApp Business Account.
 
 whatsapp_messages_send: >-
-  Sends an approved WhatsApp template message from one of the account's senders to a
-  single recipient, substituting the template's placeholders, header, and buttons.
-  Applies when the user asks to send a WhatsApp message. The first call sends nothing
-  and returns a preview naming the sender, the recipient, the template and its
-  placeholder values with a `confirmation_token`; the message is sent when the tool is
-  called again with the same arguments and that token, a call meant to follow the user's
-  approval of the preview in a later message. Billable to the account
-  balance and irreversible once accepted; the provider may still reject or defer
-  delivery. Requires the `whatsapp:write` scope, the WhatsApp channel enabled, the
-  account's `sending` capability, and a registered sender as `from`. The template must
-  be approved for that sender. An `idempotency_key` (up to 128 characters, unique per
-  account) makes retries safe: a repeated send with the same key returns the original
-  message and sends nothing, and the rest of the request is not compared, so a key is
-  safe to reuse only for the same send.
+  Sends a WhatsApp message from one of the account's senders to a single recipient:
+  either an approved template, substituting its placeholders, header, and buttons, or
+  free-form `content` of type `text`, `image`, `video`, `audio`, `document`, `buttons`
+  (up to 3 reply buttons) or `list` (up to 10 items); exactly one of `template` and
+  `content` is given. Applies when the user asks to send a WhatsApp message. The first
+  call sends nothing and returns a preview naming the sender, the recipient, and the
+  template with its placeholder values or the free-form content, with a
+  `confirmation_token`; the message is sent when the tool is called again with the same
+  arguments and that token, a call meant to follow the user's approval of the preview in
+  a later message. Billable to the account balance and irreversible once accepted; a
+  message with `content` is charged at the service rate and a template message at its
+  category's rate; the provider may still reject or defer delivery. Requires the
+  `whatsapp:write` scope, the WhatsApp channel enabled, the account's `sending`
+  capability, and a registered sender as `from`. A template must be approved for that
+  sender and can be sent at any time; `content` can be sent only while the recipient's
+  24-hour service window is open, that is, within 24 hours of the last message the
+  recipient sent to the sender, and otherwise the call fails with `422` carrying
+  `service_window_closed_at`. An `idempotency_key` (up to 128 characters, unique
+  per account) makes retries safe: a repeated send with the same key returns the
+  original message and sends nothing, and the rest of the request is not compared, so a
+  key is safe to reuse only for the same send.
 
 whatsapp_webhooks_create: >-
   Registers a WhatsApp webhook for one `group` of event types (`messages`,
