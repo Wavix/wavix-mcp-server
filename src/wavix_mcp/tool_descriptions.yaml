@@ -1223,16 +1223,28 @@ whatsapp_events_list: >-
   the events, and an event must match both when both are given.
 
 whatsapp_messages_list: >-
-  Lists the account's WhatsApp messages, filterable by direction, delivery
-  status, sender or recipient number, and date range. Applies to reviewing sent and
-  received WhatsApp messages or checking delivery outcomes. Read-only, no side
-  effects. Requires the `whatsapp:read` scope and the WhatsApp channel enabled;
-  results are paginated with `per_page` from 1 to 100 (default 25) and `page`
-  starting at 1.
+  Lists the connected Wavix account's WhatsApp messages, inbound and outbound
+  merged and newest first, filterable by direction, delivery status, sender or
+  recipient number, and date range. Applies when the user reviews sent and
+  received WhatsApp messages or checks delivery outcomes. Not for one message by
+  its UUID; `whatsapp_messages_get` returns that. Read-only; no side effects.
+  An inbound message carries `content` with its `type`, the `text` of a text
+  message and, for a media file, a `media_id`, a `media_url` and a `mime_type`;
+  an outbound message has no `content`. A delivery status of `read` means the
+  recipient opened the message. A `media_url` is a Wavix address that needs the
+  account's API key, and no tool of this server downloads the file. Requires the
+  `whatsapp:read` scope and the WhatsApp channel enabled; results are paginated
+  with `per_page` from 1 to 100 (default 25) and `page` starting at 1.
 
 whatsapp_messages_get: >-
   Retrieves a single WhatsApp message by its UUID, including its direction,
-  delivery status, recipient, and timestamps. Applies to inspecting one message's
-  current state after listing or sending. Read-only, no side effects. Requires
-  the `whatsapp:read` scope, the WhatsApp channel enabled, and a message UUID
-  belonging to the caller's account.
+  delivery status, recipient, and timestamps. Applies when the user inspects
+  one message's current state after listing or sending. Not for browsing many
+  messages; `whatsapp_messages_list` returns pages of them. Read-only; no side
+  effects. An inbound message carries `content` with its `type`, the `text` of a
+  text message and, for a media file, a `media_id`, a `media_url` and a
+  `mime_type`; an outbound message has no `content`. A delivery status of `read`
+  means the recipient opened the message. A `media_url` is a Wavix address that
+  needs the account's API key, and no tool of this server downloads the file.
+  Requires the `whatsapp:read` scope, the WhatsApp channel enabled, and a message
+  UUID belonging to the caller's account.
