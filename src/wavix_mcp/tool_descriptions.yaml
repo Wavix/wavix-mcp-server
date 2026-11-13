@@ -1094,7 +1094,7 @@ whatsapp_messages_send: >-
 
 whatsapp_webhooks_create: >-
   Registers a WhatsApp webhook for one `group` of event types (`messages`,
-  `templates`, `senders` or `wabas`) of the connected Wavix account: an https
+  `templates` or `senders`) of the connected Wavix account: an https
   URL that Wavix sends signed POST requests to for every event type of that
   group, returned with its signing `secret`. Applies when the user wants a
   group of WhatsApp events pushed to their own webhook URL instead of reading
@@ -1108,7 +1108,7 @@ whatsapp_webhooks_create: >-
   carries the signing `secret` once and no other tool returns it; a secret
   cannot be replaced, so a new one needs `whatsapp_webhooks_delete` for the
   webhook and a new `whatsapp_webhooks_create`. The account can have one
-  webhook per group, up to four, and webhooks of different groups can share a
+  webhook per group, up to three, and webhooks of different groups can share a
   URL; a second webhook for a group is rejected with 409. Requires the
   `whatsapp:write` scope, the WhatsApp channel enabled, a subscription plan and
   an account that is not blocked or suspended; `url` must be https, without
@@ -1119,7 +1119,7 @@ whatsapp_webhooks_create: >-
 
 whatsapp_webhooks_list: >-
   Returns the WhatsApp webhooks of the connected Wavix account, at most one per
-  group and so up to four, each with its ID, URL, group, whether it is enabled
+  group and so up to three, each with its ID, URL, group, whether it is enabled
   and the event types it receives. Applies when the user wants to know whether,
   where and for which groups WhatsApp events are pushed, or needs the webhook
   ID for the other WhatsApp webhook tools. Not for call webhooks, which
