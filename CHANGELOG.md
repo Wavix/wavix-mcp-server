@@ -4,8 +4,6 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Entries are derived from the commit history, which follows
-[Conventional Commits](https://www.conventionalcommits.org/).
 
 ## [Unreleased]
 
@@ -26,6 +24,24 @@ Entries are derived from the commit history, which follows
 
 - The server instructions no longer call the confirmation token single-use: a
   repeated confirmed call within five minutes returns the stored result.
+
+## [1.3.3] - 2026-11-11
+
+### Changed
+
+- `my_numbers_update`, `my_numbers_bulk_update`, `profile_update`, `ten_dlc_subscriptions_create` and `sub_accounts_create` now run in two steps. The first call changes nothing and returns a preview with a `confirmation_token`: old and new values for a number and for the profile, the affected numbers and the new values for the bulk update, and the values to be created for a 10DLC event subscription and a sub-account. The change is applied when the tool is called again with the same arguments and that token. The descriptions of `ten_dlc_subscriptions_create` and `sub_accounts_create` now say so.
+- The confirmation preview for `call_control_create` and `voice_campaigns_create` now shows the automated-call disclosure sentence from the tool description, so the person approving the call sees it at the moment of approval.
+- The `my_numbers_delete` tool's input schema now states that exactly one of `ids` or `dids` is required.
+
+### Fixed
+
+- Update tools (`PATCH` and `PUT`) now send a field the assistant sets to `null`, so clearing a field that the API allows clearing (for example the SMS callback URL of a phone number) takes effect instead of reporting success with the value unchanged. For a field the API does not allow clearing, the API's own rejection reaches the assistant. Where a tool asks for confirmation, the preview lists a cleared field as `null` and does not list a field that cannot be cleared as emptied.
+
+## [1.3.2] - 2026-11-06
+
+### Security
+
+- Sub-account and API key tools return each API key masked to its last 4 characters, so the full key no longer reaches the assistant or the chat history.
 
 ## [1.3.1] - 2026-10-16
 
@@ -129,7 +145,9 @@ Entries are derived from the commit history, which follows
 - Invoice download and 10DLC evidence upload are excluded from the tool surface.
 - The OAuth issuer is advertised without an RFC 8414-breaking trailing slash.
 
-[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.3...HEAD
+[1.3.3]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.2...v1.3.3
+[1.3.2]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.1.0...v1.2.0

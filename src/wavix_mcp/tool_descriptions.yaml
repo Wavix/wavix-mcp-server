@@ -239,8 +239,11 @@ my_numbers_bulk_update: >-
   `ids` list, updating only the fields provided — SMS enablement, inbound call
   routing destinations, the inbound-message callback URL, call recording,
   transcription and its duration threshold, and the call-status callback URL. Applies to
-  making one routing or feature change across several owned numbers at once.
-  Changes the numbers' configuration; destination and SMS callback changes are
+  making one routing or feature change across several owned numbers at once. The
+  first call changes nothing and returns a preview listing the numbers and the new
+  settings with a `confirmation_token`; the changes are applied when the tool is
+  called again with the same arguments and that token, a call meant to follow the
+  user's approval of the preview in a later message. Changes the numbers' configuration; destination and SMS callback changes are
   applied asynchronously and may not appear in the response immediately. Requires
   the `numbers:write` scope and the `ids` list of numbers to update.
 
@@ -274,7 +277,11 @@ my_numbers_update: >-
   only the fields provided — SMS enablement, inbound call routing destinations, the
   inbound-message callback URL, call recording, transcription and its duration
   threshold, and the call-status callback URL. Applies to changing one number's routing
-  or feature settings. Changes the number's configuration. Requires the
+  or feature settings. The first call changes nothing and returns a preview listing each
+  setting that would change, old value to new value, with a `confirmation_token`; the
+  change is applied when the tool is called again with the same arguments and that
+  token, a call meant to follow the user's approval of the preview in a later message.
+  Changes the number's configuration. Requires the
   `numbers:write` scope and the number's `id`.
 
 number_validator_create_bulk: >-
@@ -576,8 +583,11 @@ profile_get: >-
 
 profile_update: >-
   Updates the profile and billing details of the authenticated account. Applies when
-  the user wants to change their account profile or billing information and has
-  confirmed the new values. Modifies the account's stored profile and billing
+  the user wants to change their account profile or billing information. The first
+  call changes nothing and returns a preview listing each profile field that would
+  change, old value to new value, with a `confirmation_token`; the change is applied
+  when the tool is called again with the same arguments and that token, a call meant
+  to follow the user's approval of the preview in a later message. Modifies the account's stored profile and billing
   details. Requires the `account:write` scope.
 
 billing_invoices_list: >-
@@ -941,12 +951,15 @@ ten_dlc_campaigns_nudge: >-
   Campaign every 24 hours.
 
 ten_dlc_subscriptions_create: >-
-  Registers a webhook callback URL to receive Wavix 10DLC event notifications for
-  a chosen event category. Applies when the user wants to be notified of 10DLC brand,
-  campaign, or number changes over a webhook. Creates a 10DLC event subscription
-  delivering events in the chosen category to the given URL. Requires the
-  `campaigns:write` scope, the 10DLC feature enabled for the account, a `url`, and
-  a `subscription_category` of `brand`, `campaign`, or `number`.
+  Registers a webhook URL to receive Wavix 10DLC events for a chosen event
+  category. Applies when the user wants to be notified of 10DLC brand,
+  campaign, or number changes over a webhook. The first call creates nothing and
+  returns a preview listing the event category and the webhook URL with a
+  `confirmation_token`; the subscription is created when the tool is called again
+  with the same arguments and that token, a call meant to follow the user's approval
+  of the preview in a later message. Requires the `campaigns:write`
+  scope, the 10DLC feature enabled for the account, a `url`, and a
+  `subscription_category` of `brand`, `campaign`, or `number`.
 
 ten_dlc_subscriptions_delete: >-
   Deletes the 10DLC event subscription for the specified event category. Applies when
@@ -970,10 +983,13 @@ ten_dlc_subscriptions_list: >-
 sub_accounts_create: >-
   Creates a new sub-organization under the authenticated master account and
   returns it with a generated `api_key`. Applies when the user wants to add a
-  sub-organization and has confirmed its name. Creates a persistent
-  sub-organization and issues its `api_key`. Requires the `subaccounts:write`
-  scope and a `name` of up to 75 characters; the optional `default_destinations`
-  object sets default webhook URLs for inbound messages and delivery reports.
+  sub-organization. The first call creates nothing and returns a preview listing the
+  `name` and any default webhook URLs with a `confirmation_token`; the
+  sub-organization is created when the tool is called again with the same arguments
+  and that token, a call meant to follow the user's approval of the preview in a later
+  message. Requires the `subaccounts:write` scope and a `name` of up to 75 characters; the optional
+  `default_destinations` object sets default webhook URLs for inbound messages and
+  delivery reports.
 
 sub_accounts_get: >-
   Retrieves a single sub-organization by its `id`. Applies to inspecting one known

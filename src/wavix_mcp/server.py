@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_http_headers
 from fastmcp.server.providers.openapi import MCPType, OpenAPITool, RouteMap
+from fastmcp.utilities.openapi.director import RequestDirector
 from fastmcp.utilities.openapi.models import HTTPRoute
 from mcp.types import ToolAnnotations
 
@@ -28,6 +29,7 @@ from .confirmation import (
 )
 from .docs import register_api_spec, register_docs
 from .scope_filter import ScopeFilterMiddleware
+from .secret_masking import SecretMaskingMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -450,6 +452,7 @@ def _xmcp_route_map_fn(route: HTTPRoute, mcp_type: MCPType) -> MCPType | None:
 
 
 _READ_ONLY_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+_UPDATE_METHODS = frozenset({"PATCH", "PUT"})
 
 # Operations the spec left unannotated, collected during generation so
 # build_server can report them once instead of 100+ lines at startup.
@@ -485,6 +488,40 @@ def _download_url_annotations(title: str) -> ToolAnnotations:
         readOnlyHint=True,
         destructiveHint=False,
         openWorldHint=True,
+    )
+
+
+class _NullForwardingDirector(RequestDirector):
+    def _unflatten_arguments(self, route: HTTPRoute, flat_args: dict[str, Any]) -> Any:
+        path, query, header, cookie, body = super()._unflatten_arguments(
+            route, {name: value for name, value in flat_args.items() if value is not None}
+        )
+        cleared = {
+            mapping["openapi_name"]: None
+            for name, value in flat_args.items()
+            if value is None
+            and (mapping := route.parameter_map.get(name)) is not None
+            and mapping["location"] == "body"
+        }
+        if cleared and (body is None or isinstance(body, dict)):
+            body = {**(body or {}), **cleared}
+        return path, query, header, cookie, body
+
+
+def _accepts_null(schema: dict[str, Any]) -> bool:
+    kind = schema.get("type")
+    if kind == "null" or (isinstance(kind, list) and "null" in kind):
+        return True
+    return any(
+        isinstance(member, dict) and _accepts_null(member) for member in schema.get("anyOf", [])
+    )
+
+
+def _clearable_fields(parameters: dict[str, Any]) -> frozenset[str]:
+    return frozenset(
+        name
+        for name, schema in parameters.get("properties", {}).items()
+        if isinstance(schema, dict) and _accepts_null(schema)
     )
 
 
@@ -535,12 +572,26 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
         # Every tool reaches the live Wavix API, never a closed local set.
         openWorldHint=_hint(xmcp.get("openWorld"), True),
     )
+    if method in _UPDATE_METHODS:
+        component._director = _NullForwardingDirector(component._director._spec)
     # MCP clients reject a non-error result lacking structuredContent when outputSchema is declared.
     if component.annotations.destructiveHint or component.name in ALWAYS_CONFIRMED:
         required = tuple(component.parameters.get("required", []))
-        _CONFIRMED_TOOLS[component.name] = ConfirmedTool(title or component.name, required)
+        clearable = _clearable_fields(component.parameters)
+        _CONFIRMED_TOOLS[component.name] = ConfirmedTool(
+            title or component.name, required, clearable
+        )
         component.output_schema = None
         component.parameters = _with_confirmation_token(component.parameters)
+    if component.name in _EXACTLY_ONE_OF:
+        component.parameters = {**component.parameters, "oneOf": _exactly_one_of(component.name)}
+
+
+_EXACTLY_ONE_OF: dict[str, tuple[str, ...]] = {"my_numbers_delete": ("ids", "dids")}
+
+
+def _exactly_one_of(tool: str) -> list[dict[str, list[str]]]:
+    return [{"required": [name]} for name in _EXACTLY_ONE_OF[tool]]
 
 
 def _with_confirmation_token(parameters: dict[str, Any]) -> dict[str, Any]:
@@ -765,7 +816,10 @@ def build_server() -> FastMCP:
     _require_gated_tools(_CONFIRMED_TOOLS)
     _warn_on_never_gated_tools(tool_routes)
     mcp.add_middleware(ScopeFilterMiddleware(tool_routes))
-    mcp.add_middleware(ConfirmationMiddleware(preview_builders(_CONFIRMED_TOOLS), api_client))
+    mcp.add_middleware(
+        ConfirmationMiddleware(preview_builders(_CONFIRMED_TOOLS, TOOL_DESCRIPTIONS), api_client)
+    )
+    mcp.add_middleware(SecretMaskingMiddleware())
     return mcp
 
 
