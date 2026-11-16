@@ -39,6 +39,7 @@ def test_instructions_carry_no_assistant_imperatives():
 
 def test_instructions_name_the_gated_webhook_registrations():
     assert "register call webhooks, register or change WhatsApp webhooks" in INSTRUCTIONS
+    assert "submit WhatsApp templates" in INSTRUCTIONS
 
 
 def test_instructions_state_that_the_server_does_not_see_the_conversation():

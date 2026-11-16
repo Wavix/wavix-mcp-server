@@ -1,4 +1,4 @@
-"""Two-step confirmation: a preview with a single-use token, then the action."""
+"""Two-step confirmation: a preview with a token that acts once, then the action."""
 
 import asyncio
 import copy
@@ -898,6 +898,11 @@ def test_webhook_registration_tools_stay_confirmed(real_tools):
     assert set(gated) >= WEBHOOK_REGISTRATION_TOOLS
 
 
+def test_irreversible_submission_tools_stay_confirmed(real_tools):
+    _tools, gated = real_tools
+    assert "whatsapp_templates_create" in gated
+
+
 def test_tool_descriptions_carry_no_assistant_imperatives(real_tools):
     tools, _gated = real_tools
     violations = {
@@ -1040,3 +1045,84 @@ def test_failed_confirm_drops_the_token_from_memory(anonymous):
 
     token = asyncio.run(run())
     assert token not in middleware._pending.get("anonymous:s1", {})
+
+
+WEBHOOK_UUID = "3a525ca2-6909-4c72-9399-905adf7f3a74"
+
+
+def test_whatsapp_webhook_update_lists_only_the_changes():
+    lookups = {
+        f"/v1/whatsapp/webhooks/{WEBHOOK_UUID}": {
+            "webhook": {"uuid": WEBHOOK_UUID, "url": "https://a.test/hook", "enabled": True}
+        }
+    }
+    arguments = {"uuid": WEBHOOK_UUID, "url": "https://a.test/hook", "enabled": False}
+    text = _preview("whatsapp_webhooks_update", arguments, lookups)
+    assert text == "This will change WhatsApp webhook https://a.test/hook:\n• enabled: true → false"
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"uuid": WEBHOOK_UUID, "url": "http://a.test/hook"},
+        {"uuid": WEBHOOK_UUID},
+        {"url": "https://a.test/hook"},
+    ],
+)
+def test_whatsapp_webhook_update_refuses_what_the_api_would_refuse(arguments):
+    with pytest.raises(ConfirmationInputError):
+        _preview("whatsapp_webhooks_update", arguments)
+
+
+def test_whatsapp_webhook_create_refuses_a_url_without_https():
+    arguments = {"url": "http://a.test/hook", "group": "messages"}
+    with pytest.raises(ConfirmationInputError):
+        _preview("whatsapp_webhooks_create", arguments)
+    text = _preview("whatsapp_webhooks_create", {**arguments, "url": "https://a.test/hook"})
+    assert "• url: https://a.test/hook" in text
+
+
+def test_whatsapp_template_preview_names_each_component():
+    arguments = {
+        "name": "order_shipped",
+        "language": "en_US",
+        "category": "utility",
+        "sender": "14155550100",
+        "components": [
+            {"type": "header", "format": "text", "text": "Order {{1}}"},
+            {"type": "body", "text": "Hello {{1}}, your order shipped."},
+            {"type": "footer", "text": "Wavix"},
+            {
+                "type": "buttons",
+                "buttons": [
+                    {"type": "quick_reply", "text": "Stop"},
+                    {"type": "url", "text": "Track", "url": "https://a.test/t"},
+                ],
+            },
+        ],
+    }
+    assert _preview("whatsapp_templates_create", arguments) == (
+        "This will create a WhatsApp template; no tool of this server withdraws a template:\n"
+        "• name: order_shipped\n"
+        "• language: en_US\n"
+        "• category: utility\n"
+        "• sender: 14155550100\n"
+        "• header (text): Order {{1}}\n"
+        "• body: Hello {{1}}, your order shipped.\n"
+        "• footer: Wavix\n"
+        "• button (quick_reply): Stop\n"
+        "• button (url): Track, → https://a.test/t"
+    )
+
+
+@pytest.mark.parametrize("missing", ["name", "language", "category", "components"])
+def test_whatsapp_template_preview_needs_the_required_arguments(missing):
+    arguments = {
+        "name": "n",
+        "language": "en",
+        "category": "utility",
+        "components": [{"type": "body", "text": "Hi"}],
+    }
+    del arguments[missing]
+    with pytest.raises(ConfirmationInputError):
+        _preview("whatsapp_templates_create", arguments)

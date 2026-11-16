@@ -463,11 +463,83 @@ async def _evidence_details(arguments: Mapping[str, Any], api: httpx.AsyncClient
     return [f"file: {name}"] if name else []
 
 
+def _require_https(arguments: Mapping[str, Any]) -> None:
+    url = arguments.get("url")
+    if url is not None and not (isinstance(url, str) and url.lower().startswith("https://")):
+        raise ConfirmationInputError(
+            "The WhatsApp webhook URL must be an https URL, which the API requires, "
+            "so nothing was done."
+        )
+
+
+async def _whatsapp_webhook_create_details(
+    arguments: Mapping[str, Any], api: httpx.AsyncClient
+) -> list[str]:
+    _require_https(arguments)
+    return []
+
+
+async def _update_whatsapp_webhook(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
+    webhook_id = _text(arguments, "uuid")
+    if arguments.get("url") is None and arguments.get("enabled") is None:
+        raise ConfirmationInputError(
+            "The update needs at least one of url or enabled, which the API requires, "
+            "so nothing was done."
+        )
+    _require_https(arguments)
+    current = (await _entity(api, f"/v1/whatsapp/webhooks/{webhook_id}")).get("webhook")
+    url = current.get("url") if isinstance(current, Mapping) else None
+    lines = _changes(arguments, current, {"uuid"}, {})
+    return _change_preview(f"WhatsApp webhook {url or webhook_id}", lines)
+
+
+def _template_component_lines(components: Any) -> list[str]:
+    lines = []
+    for component in components if isinstance(components, list) else []:
+        if not isinstance(component, Mapping):
+            lines.append(f"component: {_display(component)}")
+            continue
+        kind = component.get("type")
+        if kind == "header":
+            label = f"header ({component.get('format')})"
+            lines.append(f"{label}: {component['text']}" if component.get("text") else label)
+        elif kind in ("body", "footer"):
+            lines.append(f"{kind}: {component.get('text')}")
+        elif kind == "buttons":
+            for button in component.get("buttons") or []:
+                button = button if isinstance(button, Mapping) else {}
+                target = button.get("url") or button.get("phone_number")
+                lines.append(
+                    f"button ({button.get('type')}): "
+                    + _joined(button.get("text"), target and f"→ {target}")
+                )
+        else:
+            lines.append(f"component: {_display(component)}")
+    return lines
+
+
+async def _create_whatsapp_template(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
+    lines = [f"{key}: {_text(arguments, key)}" for key in ("name", "language", "category")]
+    components = arguments.get("components")
+    if not isinstance(components, list) or not components:
+        raise _invalid("components")
+    lines += [
+        f"{key}: {arguments[key]}"
+        for key in ("waba_id", "sender")
+        if arguments.get(key) not in (None, "")
+    ]
+    lines += _template_component_lines(components)
+    heading = "This will create a WhatsApp template; no tool of this server withdraws a template"
+    return f"{heading}:\n{_bullets(lines)}"
+
+
 CUSTOM_PREVIEWS: Mapping[str, PreviewBuilder] = {
     "my_numbers_delete": _release_numbers,
     "sip_trunks_update": _update_trunk,
     "sub_accounts_update": _update_sub_account,
     "cart_checkout": _checkout,
+    "whatsapp_webhooks_update": _update_whatsapp_webhook,
+    "whatsapp_templates_create": _create_whatsapp_template,
 }
 
 DETAILS: Mapping[str, Details] = {
@@ -489,6 +561,7 @@ DETAILS: Mapping[str, Details] = {
     "ten_dlc_campaign_numbers_unlink": _campaign_details,
     "ten_dlc_subscriptions_delete": _subscription_details,
     "webrtc_tokens_delete": _widget_token_details,
+    "whatsapp_webhooks_create": _whatsapp_webhook_create_details,
 }
 
 ALWAYS_CONFIRMED = frozenset(
@@ -497,7 +570,6 @@ ALWAYS_CONFIRMED = frozenset(
         "sip_trunks_update",
         "sub_accounts_update",
         "whatsapp_webhooks_create",
-        "whatsapp_webhooks_update",
         *CUSTOM_PREVIEWS,
     }
 )
