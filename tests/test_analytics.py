@@ -297,6 +297,26 @@ def test_identify_returns_none_without_authorization_header_and_makes_no_call():
     assert api.calls == 0
 
 
+def test_sweep_expires_a_negative_entry_inserted_after_a_positive_one():
+    # Positive (long TTL) and negative (short TTL) entries can expire out of
+    # insertion order; _sweep must not stop scanning at the first live entry
+    # it meets in insertion order, or a later-inserted, sooner-expiring entry
+    # is never evicted and lingers in the cache indefinitely.
+    api = _ProfileApi()
+    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
+    now = [0.0]
+    resolver = analytics._IdentityResolver(client, clock=lambda: now[0])
+
+    asyncio.run(resolver(request={}, extra=_extra("Bearer long-lived")))  # t=0, TTL 300
+    resolver._cache["short-lived"] = analytics._CachedIdentity(None, expires_at=5.0)
+
+    now[0] = 40.0  # the synthetic short-lived entry has expired; long-lived has not
+    asyncio.run(resolver(request={}, extra=_extra("Bearer third-call")))  # triggers _sweep
+
+    assert "short-lived" not in resolver._cache
+    assert any(c.expires_at == 300.0 for c in resolver._cache.values())
+
+
 def test_identify_caches_a_failed_resolution_too():
     api = _ProfileApi(status=403, body={})
     client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))

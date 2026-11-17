@@ -60,6 +60,8 @@ class _IdentityResolver:
             return cached.identity
         identity, ttl = await self._resolve(authorization)
         if len(self._cache) >= MAX_CACHED_IDENTITIES:
+            # Oldest-inserted, not oldest-expiring: a coarse FIFO cap, not
+            # true LRU/TTL eviction. Good enough as a hard size bound.
             del self._cache[next(iter(self._cache))]
         self._cache[key] = _CachedIdentity(identity, now + ttl)
         return identity
@@ -88,11 +90,12 @@ class _IdentityResolver:
         return identity, IDENTITY_CACHE_TTL_S
 
     def _sweep(self, now: float) -> None:
-        while self._cache:
-            oldest = next(iter(self._cache))
-            if self._cache[oldest].expires_at > now:
-                break
-            del self._cache[oldest]
+        # Positive and negative-cache entries carry different TTLs, so
+        # insertion order is not expiry order: scan every entry rather than
+        # stopping at the first unexpired one.
+        expired = [key for key, cached in self._cache.items() if cached.expires_at <= now]
+        for key in expired:
+            del self._cache[key]
 
 
 @dataclass
