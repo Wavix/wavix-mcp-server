@@ -777,6 +777,7 @@ def build_server() -> FastMCP:
         timeout=60,
         follow_redirects=True,
     )
+    analytics_client: analytics._AnalyticsHandle | None = None
 
     @asynccontextmanager
     async def lifespan(_app):
