@@ -23,7 +23,11 @@ logger = logging.getLogger(__name__)
 ToolRoutes = dict[str, tuple[str, str]]
 
 
-def _oauth_token():
+class ScopeDeniedError(ToolError):
+    pass
+
+
+def oauth_token():
     """The connection's OAuth token, or None when there is no OAuth identity.
 
     An API-key connection under the passthrough fallback (`auth`) carries a
@@ -59,18 +63,18 @@ class ScopeFilterMiddleware(Middleware):
 
     async def on_list_tools(self, context: MiddlewareContext, call_next) -> Sequence[Tool]:
         tools = await call_next(context)
-        token = _oauth_token()
+        token = oauth_token()
         if token is None:
             return tools
         granted = _granted_scopes(token)
         return [t for t in tools if scopes.is_allowed(granted, self._requirement(t.name))]
 
     async def on_call_tool(self, context: MiddlewareContext, call_next):
-        token = _oauth_token()
+        token = oauth_token()
         if token is not None:
             requirement = self._requirement(context.message.name)
             if not scopes.is_allowed(_granted_scopes(token), requirement):
-                raise ToolError(_denied_message(context.message.name, requirement))
+                raise ScopeDeniedError(_denied_message(context.message.name, requirement))
         return await call_next(context)
 
 

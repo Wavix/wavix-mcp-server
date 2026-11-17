@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import re
@@ -11,6 +12,7 @@ import jsonref
 import yaml
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 from fastmcp.server.dependencies import get_http_headers
 from fastmcp.server.providers.openapi import MCPType, OpenAPITool, RouteMap
 from fastmcp.utilities.openapi.director import RequestDirector
@@ -609,6 +611,13 @@ def _with_confirmation_token(parameters: dict[str, Any]) -> dict[str, Any]:
     return {**parameters, "properties": properties}
 
 
+class DownloadUrlError(ToolError):
+    def __init__(self, payload: dict[str, Any]) -> None:
+        super().__init__(json.dumps(payload))
+        self.payload = payload
+        self.status_code = payload["status_code"]
+
+
 async def _resolve_to_download_url(
     api_client: httpx.AsyncClient,
     base_url: str,
@@ -619,7 +628,8 @@ async def _resolve_to_download_url(
       Checked before the 2xx branch because the recording endpoint sends it on a 200;
       a ``Location`` on a 4xx/5xx is not a download and falls through to the error case.
     - **other 2xx** – synthetic ``{base_url}{path}`` → ``download_url`` (caller re-fetches with Bearer).
-    - **other** – ``{error, status_code, body}``; binary bodies become ``"<binary body omitted>"``.
+    - **other** – raises ``DownloadUrlError`` whose text is ``{error, status_code, body}`` as JSON;
+      binary bodies become ``"<binary body omitted>"``.
     """
     request = api_client.build_request("GET", path)
     response = await api_client.send(request, follow_redirects=False)
@@ -647,11 +657,7 @@ async def _resolve_to_download_url(
         body: str = response.content.decode("utf-8", errors="strict")[:500]
     except UnicodeDecodeError:
         body = "<binary body omitted>"
-    return {
-        "error": f"HTTP {code}",
-        "status_code": code,
-        "body": body,
-    }
+    raise DownloadUrlError({"error": f"HTTP {code}", "status_code": code, "body": body})
 
 
 def _register_binary_redirect_tools(

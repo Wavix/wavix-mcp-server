@@ -30,8 +30,8 @@ _ANONYMOUS_CALLER = "anonymous"
 _TOKEN_MISMATCH = (
     "The confirmation token has expired or does not match these arguments. Nothing was done."
 )
-_PREVIEW_FAILED = "The confirmation preview could not be prepared, so nothing was done."
-_NO_CALLER = "This action needs an authenticated MCP session, so nothing was done."
+PREVIEW_FAILED_MESSAGE = "The confirmation preview could not be prepared, so nothing was done."
+NO_CALLER_MESSAGE = "This action needs an authenticated MCP session, so nothing was done."
 _SECRET_FIELDS = frozenset({"password"})
 _EXCERPTED_FIELDS = frozenset({"message_body.text"})
 _INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
@@ -763,7 +763,7 @@ class ConfirmationMiddleware(Middleware):
 
         caller = self._caller(context.fastmcp_context)
         if caller is None:
-            return _refused(_NO_CALLER)
+            return _refused(NO_CALLER_MESSAGE)
         tokens = self._tokens(caller)
         binding = self._binding(caller, tool, arguments)
         pending = tokens.get(str(token)) if token is not None else None
@@ -782,7 +782,7 @@ class ConfirmationMiddleware(Middleware):
             return _refused(str(exc))
         except Exception:
             logger.exception("Building the confirmation preview for %s failed", tool)
-            return _refused(_PREVIEW_FAILED)
+            return _refused(PREVIEW_FAILED_MESSAGE)
         if token is not None:
             preview = f"{_TOKEN_MISMATCH}\n\n{preview}"
 

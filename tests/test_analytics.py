@@ -2,15 +2,22 @@
 schema change, and no behavior change when PostHog is unset or unreachable."""
 
 import asyncio
+import importlib.metadata
 import time
 from types import SimpleNamespace
 
 import httpx
 import mcp.types as mcp_types
+import pytest
 from fastmcp import Client, FastMCP
 from fastmcp.client.transports import StreamableHttpTransport
+from fastmcp.server.auth import AccessToken
 
 import wavix_mcp.analytics as analytics
+import wavix_mcp.scope_filter as scope_filter
+from wavix_mcp.auth import PASSTHROUGH_CLIENT_ID
+from wavix_mcp.confirmation import NO_CALLER_MESSAGE, PREVIEW_FAILED_MESSAGE
+from wavix_mcp.server import DownloadUrlError
 
 _SPEC = {
     "openapi": "3.1.0",
@@ -38,6 +45,47 @@ _SPEC = {
                 },
             }
         },
+        "/v1/slow": {
+            "get": {
+                "operationId": "slow_tool",
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "content": {"application/json": {"schema": {"type": "object"}}},
+                    }
+                },
+            }
+        },
+        "/v1/down": {
+            "get": {
+                "operationId": "down_tool",
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "content": {"application/json": {"schema": {"type": "object"}}},
+                    }
+                },
+            }
+        },
+        "/v1/shape": {
+            "get": {
+                "operationId": "shape_tool",
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["id"],
+                                    "properties": {"id": {"type": "string"}},
+                                }
+                            }
+                        },
+                    }
+                },
+            }
+        },
         "/v1/echo": {
             "get": {
                 "operationId": "echo_tool",
@@ -60,7 +108,27 @@ class _Api:
     async def __call__(self, request: httpx.Request) -> httpx.Response:
         if request.url.path == "/v1/boom":
             return httpx.Response(500, json={"error": "boom"})
+        if request.url.path == "/v1/slow":
+            raise httpx.ReadTimeout("slow", request=request)
+        if request.url.path == "/v1/down":
+            raise httpx.ConnectError("down", request=request)
         return httpx.Response(200, json={"ok": True})
+
+
+def _typed_tool(n: int) -> int:
+    return n
+
+
+def _unreachable_tool() -> dict:
+    raise httpx.ConnectError("down")
+
+
+def _timed_out_tool() -> dict:
+    raise httpx.ReadTimeout("slow")
+
+
+def _missing_download_tool() -> dict:
+    raise DownloadUrlError({"error": "HTTP 404", "status_code": 404, "body": "secret detail"})
 
 
 class _FakePosthog:
@@ -94,6 +162,10 @@ def _instrumented_server(
         monkeypatch.setattr(analytics, "Posthog", lambda *a, **k: posthog_fake)
     client = httpx.AsyncClient(base_url=base_url, transport=httpx.MockTransport(_Api()))
     mcp = FastMCP.from_openapi(openapi_spec=_SPEC, client=client, name="t")
+    mcp.tool(_typed_tool, name="typed_tool")
+    mcp.tool(_unreachable_tool, name="unreachable_tool")
+    mcp.tool(_timed_out_tool, name="timed_out_tool")
+    mcp.tool(_missing_download_tool, name="missing_download_tool")
     # instrument()'s own captures fire via asyncio.create_task and are not awaited
     # inline (posthog==7.83.1 posthog/mcp/_instrumentation.py fire_and_forget), so a
     # caller that asserts on them right after a tool call must drain them first via
@@ -136,6 +208,7 @@ def test_one_tool_call_captures_one_event_with_core_properties(monkeypatch):
     assert properties["$mcp_client_name"] == "pytest-client"
     assert properties["$mcp_client_version"] == "9.9"
     assert "$session_id" in properties
+    assert properties["$mcp_server_build"] == analytics._server_build()
     # The adapter's own session-level events stay on: a client that connects
     # or lists tools but never calls one would otherwise be invisible.
     assert any(e["event"] == "$mcp_initialize" for e in fake.captured)
@@ -214,7 +287,7 @@ def test_before_send_drops_values_keeps_input_keys(monkeypatch):
         assert "$mcp_input_keys" in properties
 
 
-def test_before_send_drops_error_message_keeps_error_type(monkeypatch):
+def test_before_send_replaces_error_message_with_an_error_type(monkeypatch):
     fake = _FakePosthog()
     mcp = _instrumented_server(monkeypatch, posthog_fake=fake)
 
@@ -225,7 +298,8 @@ def test_before_send_drops_error_message_keeps_error_type(monkeypatch):
     assert len(tool_call_events) == 1
     properties = tool_call_events[0]["properties"]
     assert properties["$mcp_is_error"] is True
-    assert "$mcp_error_type" in properties
+    assert properties["$mcp_error_type"] == "wavix_api_error"
+    assert properties["$mcp_error_class"] == "ValueError"
     assert "$mcp_error_message" not in properties
     assert "$mcp_parameters" not in properties
     assert "$mcp_response" not in properties
@@ -259,55 +333,244 @@ def test_before_send_keeps_input_key_names_not_values(monkeypatch):
     assert "super-secret-value" not in repr(properties)
 
 
+@pytest.mark.parametrize(
+    ("tool", "arguments", "expected"),
+    [
+        ("slow_tool", {}, "wavix_api_unreachable"),
+        ("down_tool", {}, "wavix_api_unreachable"),
+        ("shape_tool", {}, "invalid_response"),
+        ("typed_tool", {"n": "not a number"}, "invalid_input"),
+        ("unreachable_tool", {}, "wavix_api_unreachable"),
+        ("timed_out_tool", {}, "wavix_api_unreachable"),
+        ("missing_download_tool", {}, "not_found"),
+        ("no_such_tool", {}, "not_found"),
+    ],
+)
+def test_failed_call_is_typed_from_the_real_fastmcp_error(monkeypatch, tool, arguments, expected):
+    fake = _FakePosthog()
+    mcp = _instrumented_server(monkeypatch, posthog_fake=fake)
+
+    result = asyncio.run(_call(mcp, tool, arguments))
+
+    assert result.is_error is True
+    properties = _tool_call_events(fake)[0]["properties"]
+    assert properties["$mcp_error_type"] == expected
+    assert "$mcp_error_message" not in properties
+
+
+def _error_event(error_class: str, status: int | None, message: str) -> dict:
+    return {
+        "event": "$mcp_tool_call",
+        "properties": {
+            "$mcp_is_error": True,
+            "$mcp_error_type": error_class,
+            "$mcp_error_status": status,
+            "$mcp_error_message": message,
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    ("error_class", "status", "message", "expected"),
+    [
+        ("ValueError", 400, "HTTP error 400", "invalid_input"),
+        ("ValueError", 401, "HTTP error 401", "unauthenticated"),
+        ("ValueError", 403, "HTTP error 403", "missing_permission"),
+        ("ValueError", 404, "HTTP error 404", "not_found"),
+        ("ValueError", 409, "HTTP error 409", "wavix_api_rejected"),
+        ("ValueError", 422, "HTTP error 422", "invalid_input"),
+        ("ValueError", 429, "HTTP error 429", "rate_limited"),
+        ("ValueError", 502, "HTTP error 502", "wavix_api_error"),
+        ("ScopeDeniedError", None, "Tool 'x' requires a permission", "missing_permission"),
+        ("Error", None, NO_CALLER_MESSAGE, "unauthenticated"),
+        ("Error", None, PREVIEW_FAILED_MESSAGE, "internal_error"),
+        ("Error", None, "Missing or invalid required argument: id", "invalid_input"),
+        ("ConnectError", None, "refused", "wavix_api_unreachable"),
+        ("ReadTimeout", None, "timed out", "wavix_api_unreachable"),
+        ("NotFoundError", None, "Unknown tool: x", "not_found"),
+        ("RuntimeError", None, "unexpected", "internal_error"),
+    ],
+)
+def test_error_type_names_the_failure_category(error_class, status, message, expected):
+    properties = analytics._before_send(_error_event(error_class, status, message))["properties"]
+
+    assert properties["$mcp_error_type"] == expected
+    assert properties["$mcp_error_class"] == error_class
+    assert "$mcp_error_message" not in properties
+
+
+def test_error_on_a_non_tool_event_keeps_the_library_error_type():
+    event = {
+        **_error_event("Error", None, "tools/list returned no tools"),
+        "event": "$mcp_tools_list",
+    }
+
+    properties = analytics._before_send(event)["properties"]
+
+    assert properties["$mcp_error_type"] == "Error"
+    assert "$mcp_error_message" not in properties
+
+
+def test_successful_call_gets_no_error_type():
+    properties = analytics._before_send(
+        {"event": "$mcp_tool_call", "properties": {"$mcp_is_error": False}}
+    )["properties"]
+
+    assert "$mcp_error_type" not in properties
+    assert "$mcp_error_class" not in properties
+
+
+def test_server_build_joins_package_version_and_short_sha(monkeypatch):
+    monkeypatch.setenv(analytics.BUILD_SHA_ENV, "28d5e62aa1b2c3d4")
+    version = importlib.metadata.version(analytics.PACKAGE_NAME)
+
+    assert analytics._server_build() == f"{version}+28d5e62"
+
+
+def test_server_build_is_the_package_version_without_a_sha(monkeypatch):
+    monkeypatch.delenv(analytics.BUILD_SHA_ENV, raising=False)
+
+    assert analytics._server_build() == importlib.metadata.version(analytics.PACKAGE_NAME)
+
+
 def _extra(authorization: str | None) -> dict:
     headers = {"authorization": authorization} if authorization else {}
     return {"ctx": SimpleNamespace(request=SimpleNamespace(headers=headers))}
 
 
 class _ProfileApi:
-    def __init__(self, status: int = 200, body: dict | None = None):
+    def __init__(self, status: int = 200, body: object = None, delay_s: float = 0.0):
         self.calls = 0
         self._status = status
-        self._body = body or {"id": 42, "email": "a@b.com"}
+        self._body = {"id": 42, "email": "a@b.com"} if body is None else body
+        self._delay_s = delay_s
 
     async def __call__(self, request: httpx.Request) -> httpx.Response:
         self.calls += 1
+        if self._delay_s:
+            await asyncio.sleep(self._delay_s)
         return httpx.Response(self._status, json=self._body)
 
 
 def _resolver(
-    status: int = 200, body: dict | None = None, *, clock=None
+    status: int = 200, body: object = None, *, clock=None, delay_s: float = 0.0
 ) -> tuple["analytics._IdentityResolver", _ProfileApi]:
-    api = _ProfileApi(status=status, body=body)
+    api = _ProfileApi(status=status, body=body, delay_s=delay_s)
     client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
     kwargs = {} if clock is None else {"clock": clock}
     return analytics._IdentityResolver(client, **kwargs), api
 
 
+async def _drain(resolver: "analytics._IdentityResolver") -> None:
+    await asyncio.gather(*list(resolver._pending.values()))
+
+
+def _identify_after_lookup(resolver, authorization: str | None):
+    async def run():
+        first = await resolver(request={}, extra=_extra(authorization))
+        await _drain(resolver)
+        return first, await resolver(request={}, extra=_extra(authorization))
+
+    return asyncio.run(run())
+
+
+def _oauth(monkeypatch, *, sub: str | None, client_id: str = "claude") -> None:
+    claims = {} if sub is None else {"sub": sub}
+    token = AccessToken(token="jwt", client_id=client_id, scopes=[], claims=claims)
+    monkeypatch.setattr(scope_filter, "get_access_token", lambda: token)
+
+
+def test_identify_uses_the_oauth_subject_without_a_lookup(monkeypatch):
+    _oauth(monkeypatch, sub="1234")
+    resolver, api = _resolver()
+
+    identity = asyncio.run(resolver(request={}, extra=_extra("Bearer jwt")))
+
+    assert identity.distinct_id == "1234"
+    assert api.calls == 0
+
+
+def test_identify_falls_back_to_the_lookup_for_an_api_key_passthrough(monkeypatch):
+    _oauth(monkeypatch, sub="1234", client_id=PASSTHROUGH_CLIENT_ID)
+    resolver, api = _resolver()
+
+    _, identity = _identify_after_lookup(resolver, "Bearer api-key")
+
+    assert identity.distinct_id == "42"
+    assert api.calls == 1
+
+
+def test_identify_falls_back_to_the_lookup_for_an_oauth_token_without_subject(monkeypatch):
+    _oauth(monkeypatch, sub=None)
+    resolver, api = _resolver()
+
+    _, identity = _identify_after_lookup(resolver, "Bearer jwt")
+
+    assert identity.distinct_id == "42"
+    assert api.calls == 1
+
+
+def test_identify_answers_a_cold_lookup_without_waiting_for_it():
+    resolver, api = _resolver(delay_s=1.0)
+
+    async def run():
+        start = time.monotonic()
+        identity = await resolver(request={}, extra=_extra("Bearer api-key"))
+        elapsed = time.monotonic() - start
+        await asyncio.sleep(0.05)
+        await resolver.aclose()
+        return identity, elapsed
+
+    identity, elapsed = asyncio.run(run())
+
+    assert identity is None
+    assert elapsed < 0.5
+    assert api.calls == 1
+
+
 def test_identify_resolves_the_account_never_the_raw_header():
     resolver, _ = _resolver()
 
-    identity = asyncio.run(resolver(request={}, extra=_extra("Bearer secret-token")))
+    first, identity = _identify_after_lookup(resolver, "Bearer secret-token")
 
+    assert first is None
     assert identity.distinct_id == "42"
-    assert identity.properties == {"email": "a@b.com"}
     assert "secret-token" not in repr(identity)
-    assert "secret-token" not in str(identity.properties)
+
+
+def test_identify_sends_no_email():
+    resolver, _ = _resolver(body={"id": 42, "email": "a@b.com"})
+
+    _, identity = _identify_after_lookup(resolver, "Bearer secret-token")
+
+    assert not identity.properties
+    assert "a@b.com" not in repr(identity)
 
 
 def test_identify_caches_the_resolved_identity_per_header():
     resolver, api = _resolver()
 
-    asyncio.run(resolver(request={}, extra=_extra("Bearer secret-token")))
+    _identify_after_lookup(resolver, "Bearer secret-token")
     asyncio.run(resolver(request={}, extra=_extra("Bearer secret-token")))
 
     assert api.calls == 1
 
 
+def test_identify_looks_the_account_up_again_after_the_ttl():
+    now = [0.0]
+    resolver, api = _resolver(clock=lambda: now[0])
+
+    _identify_after_lookup(resolver, "Bearer secret-token")
+    now[0] = analytics.IDENTITY_CACHE_TTL_S + 1
+    _identify_after_lookup(resolver, "Bearer secret-token")
+
+    assert api.calls == 2
+
+
 def test_identify_returns_none_on_403_without_raising():
     resolver, _ = _resolver(status=403, body={})
 
-    result = asyncio.run(resolver(request={}, extra=_extra("Bearer other-token")))
+    _, result = _identify_after_lookup(resolver, "Bearer other-token")
 
     assert result is None
 
@@ -315,58 +578,30 @@ def test_identify_returns_none_on_403_without_raising():
 def test_identify_returns_none_without_authorization_header_and_makes_no_call():
     resolver, api = _resolver()
 
-    result = asyncio.run(resolver(request={}, extra=_extra(None)))
+    _, result = _identify_after_lookup(resolver, None)
 
     assert result is None
     assert api.calls == 0
 
 
-def test_sweep_expires_a_negative_entry_inserted_after_a_positive_one():
-    # Positive (long TTL) and negative (short TTL) entries can expire out of
-    # insertion order; _sweep must not stop scanning at the first live entry
-    # it meets in insertion order, or a later-inserted, sooner-expiring entry
-    # is never evicted and lingers in the cache indefinitely.
-    now = [0.0]
-    resolver, _ = _resolver(clock=lambda: now[0])
-
-    asyncio.run(resolver(request={}, extra=_extra("Bearer long-lived")))  # t=0, TTL 300
-    resolver._cache["short-lived"] = analytics._CachedIdentity(None, expires_at=5.0)
-
-    now[0] = 40.0  # the synthetic short-lived entry has expired; long-lived has not
-    asyncio.run(resolver(request={}, extra=_extra("Bearer third-call")))  # triggers _sweep
-
-    assert "short-lived" not in resolver._cache
-    assert any(c.expires_at == 300.0 for c in resolver._cache.values())
-
-
 def test_identify_single_flights_concurrent_calls_for_the_same_header():
-    calls = 0
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal calls
-        calls += 1
-        await asyncio.sleep(0.05)
-        return httpx.Response(200, json={"id": 42, "email": "a@b.com"})
-
-    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(handler))
-    resolver = analytics._IdentityResolver(client)
+    resolver, api = _resolver(delay_s=0.05)
 
     async def run():
-        return await asyncio.gather(
+        await asyncio.gather(
             *(resolver(request={}, extra=_extra("Bearer secret-token")) for _ in range(5))
         )
+        await _drain(resolver)
 
-    results = asyncio.run(run())
+    asyncio.run(run())
 
-    assert calls == 1
-    assert all(r.distinct_id == "42" for r in results)
+    assert api.calls == 1
 
 
 def test_identify_caches_a_failed_resolution_too():
     resolver, api = _resolver(status=403, body={})
 
-    asyncio.run(resolver(request={}, extra=_extra("Bearer scoped-token")))
-    asyncio.run(resolver(request={}, extra=_extra("Bearer scoped-token")))
+    _identify_after_lookup(resolver, "Bearer scoped-token")
 
     assert api.calls == 1
 
@@ -374,27 +609,48 @@ def test_identify_caches_a_failed_resolution_too():
 def test_identify_returns_none_on_malformed_profile_body_without_raising():
     resolver, api = _resolver(body=["not", "a", "json", "object"])
 
-    result = asyncio.run(resolver(request={}, extra=_extra("Bearer odd-token")))
+    _, result = _identify_after_lookup(resolver, "Bearer odd-token")
 
     assert result is None
     assert api.calls == 1
 
 
-def test_identify_omits_email_property_when_profile_has_none():
-    resolver, _ = _resolver(body={"id": 42, "email": None})
+def test_identify_caches_an_unexpected_lookup_failure_without_leaking_it():
+    resolver, _ = _resolver()
+    calls = 0
 
-    identity = asyncio.run(resolver(request={}, extra=_extra("Bearer secret-token")))
+    async def broken_get(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("client closed")
 
-    assert identity.distinct_id == "42"
-    assert "email" not in identity.properties
+    resolver._client = SimpleNamespace(get=broken_get)
+
+    _, first = _identify_after_lookup(resolver, "Bearer api-key")
+    _, second = _identify_after_lookup(resolver, "Bearer api-key")
+
+    assert first is None and second is None
+    assert calls == 1
+
+
+def test_resolver_aclose_cancels_a_pending_lookup():
+    resolver, _ = _resolver(delay_s=10.0)
+
+    async def run():
+        await resolver(request={}, extra=_extra("Bearer api-key"))
+        await resolver.aclose()
+        return dict(resolver._pending)
+
+    start = time.monotonic()
+    pending = asyncio.run(run())
+
+    assert pending == {}
+    assert time.monotonic() - start < 2.0
 
 
 def test_identify_wiring_links_the_captured_event_to_the_account(monkeypatch):
-    """EC-006 end to end: a real inbound Authorization header, through the
-    actual HTTP transport (the in-memory Client used elsewhere never
-    populates request headers, so it can't exercise this path), must resolve
-    to the captured event's `distinct_id`/`$set` — and the raw header value
-    must never appear in it."""
+    """The in-memory Client never populates request headers, so only the real
+    HTTP transport exercises the Authorization-header path."""
     monkeypatch.setenv("POSTHOG_API_KEY", "phc_test")
     fake = _FakePosthog()
     monkeypatch.setattr(analytics, "Posthog", lambda *a, **k: fake)
@@ -434,20 +690,22 @@ def test_identify_wiring_links_the_captured_event_to_the_account(monkeypatch):
     async def run():
         async with app.router.lifespan_context(app):
             async with Client(transport) as client:
-                result = await client.call_tool("ping_tool", {})
-            assert handle is not None
+                first = await client.call_tool("ping_tool", {})
+                assert handle is not None and handle.resolver is not None
+                await _drain(handle.resolver)
+                second = await client.call_tool("ping_tool", {})
             await handle.flush()
-            return result
+            return first, second
 
-    result = asyncio.run(run())
+    first, second = asyncio.run(run())
 
-    assert result.is_error is False
+    assert first.is_error is False
+    assert second.is_error is False
     assert profile_api.calls == 1
     tool_call_events = _tool_call_events(fake)
-    assert len(tool_call_events) == 1
-    event = tool_call_events[0]
-    assert event["distinct_id"] == "777"
-    assert event["properties"]["$set"] == {"email": "caller@example.com"}
+    assert len(tool_call_events) == 2
+    assert tool_call_events[-1]["distinct_id"] == "777"
+    assert "caller@example.com" not in repr(fake.captured)
     assert "super-secret-token" not in repr(fake.captured)
 
 
