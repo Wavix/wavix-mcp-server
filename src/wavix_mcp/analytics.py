@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import hashlib
 import logging
 import os
@@ -143,7 +144,13 @@ class _AnalyticsHandle:
                 try:
                     posthog_client.shutdown()
                 finally:
-                    loop.call_soon_threadsafe(done.set_result, None)
+                    # A shutdown() slower than SHUTDOWN_TIMEOUT_S finishes
+                    # after wait_for() below has already given up and the
+                    # loop may be closed by then (process exit, or another
+                    # asyncio.run() in tests) — nothing is waiting on `done`
+                    # at that point either way.
+                    with contextlib.suppress(RuntimeError):
+                        loop.call_soon_threadsafe(done.set_result, None)
 
             threading.Thread(target=_shutdown, daemon=True).start()
             try:

@@ -75,6 +75,10 @@ class _FakePosthog:
         self.shutdown_called = True
 
 
+def _tool_call_events(fake: _FakePosthog) -> list[dict]:
+    return [e for e in fake.captured if e["event"] == "$mcp_tool_call"]
+
+
 def _instrumented_server(
     monkeypatch,
     *,
@@ -123,7 +127,7 @@ def test_one_tool_call_captures_one_event_with_core_properties(monkeypatch):
 
     asyncio.run(_call(mcp, "ping_tool", {}))
 
-    tool_call_events = [e for e in fake.captured if e["event"] == "$mcp_tool_call"]
+    tool_call_events = _tool_call_events(fake)
     assert len(tool_call_events) == 1
     properties = tool_call_events[0]["properties"]
     assert properties["$mcp_tool_name"] == "ping_tool"
@@ -201,7 +205,7 @@ def test_before_send_drops_values_keeps_input_keys(monkeypatch):
 
     asyncio.run(_call(mcp, "ping_tool", {}))
 
-    tool_call_events = [e for e in fake.captured if e["event"] == "$mcp_tool_call"]
+    tool_call_events = _tool_call_events(fake)
     assert len(tool_call_events) >= 1
     for entry in tool_call_events:
         properties = entry["properties"]
@@ -217,7 +221,7 @@ def test_before_send_drops_error_message_keeps_error_type(monkeypatch):
     result = asyncio.run(_call(mcp, "boom_tool", {}))
 
     assert result.is_error is True
-    tool_call_events = [e for e in fake.captured if e["event"] == "$mcp_tool_call"]
+    tool_call_events = _tool_call_events(fake)
     assert len(tool_call_events) == 1
     properties = tool_call_events[0]["properties"]
     assert properties["$mcp_is_error"] is True
@@ -248,7 +252,7 @@ def test_before_send_keeps_input_key_names_not_values(monkeypatch):
 
     asyncio.run(_call(mcp, "echo_tool", {"x": "super-secret-value"}))
 
-    tool_call_events = [e for e in fake.captured if e["event"] == "$mcp_tool_call"]
+    tool_call_events = _tool_call_events(fake)
     assert len(tool_call_events) == 1
     properties = tool_call_events[0]["properties"]
     assert properties["$mcp_input_keys"] == ["x"]
@@ -439,7 +443,7 @@ def test_identify_wiring_links_the_captured_event_to_the_account(monkeypatch):
 
     assert result.is_error is False
     assert profile_api.calls == 1
-    tool_call_events = [e for e in fake.captured if e["event"] == "$mcp_tool_call"]
+    tool_call_events = _tool_call_events(fake)
     assert len(tool_call_events) == 1
     event = tool_call_events[0]
     assert event["distinct_id"] == "777"
