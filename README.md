@@ -179,6 +179,8 @@ Requires Python 3.10+.
 | `OAUTH_RESOURCE` | unset | Public base URL this server is reached at, used as the resource identifier |
 | `OAUTH_API_KEY_PASSTHROUGH` | `true` | With OAuth on, still accept a bearer that is not an OAuth JWT and forward it upstream (API keys keep working). Set `false` to require a JWT |
 | `MCP_PATH` | `/mcp` | Path the MCP endpoint is served on |
+| `POSTHOG_API_KEY` | unset (analytics disabled) | PostHog project API key for MCP tool-call usage analytics |
+| `POSTHOG_URL` | `https://us.i.posthog.com` | PostHog ingestion host |
 
 No Wavix credentials are required to **run** the server — they are forwarded per-request from the MCP client's `Authorization: Bearer <api_key>` header. Self-hosters are responsible for terminating TLS in front of the server (nginx, Caddy, cloud load balancer) before exposing it publicly.
 

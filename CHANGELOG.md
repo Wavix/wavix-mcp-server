@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional PostHog MCP usage analytics: every tool call sends one
+  `$mcp_tool_call` event (tool name, duration, outcome, client, session),
+  linked to the calling Wavix account. No tool's advertised schema
+  changes, and argument values, response bodies and error messages are
+  never captured. Disabled unless `POSTHOG_API_KEY` is set.
+
 ## [1.4.0] - 2026-11-17
 
 ### Added
