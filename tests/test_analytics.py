@@ -3,6 +3,7 @@ schema change, and no behavior change when PostHog is unset or unreachable."""
 
 import asyncio
 import time
+from types import SimpleNamespace
 
 import httpx
 import mcp.types as mcp_types
@@ -182,3 +183,64 @@ def test_before_send_drops_error_message_keeps_error_type(monkeypatch):
     assert "$mcp_parameters" not in properties
     assert "$mcp_response" not in properties
     assert "$mcp_input_keys" in properties
+
+
+def _extra(authorization: str | None) -> dict:
+    headers = {"authorization": authorization} if authorization else {}
+    return {"ctx": SimpleNamespace(request=SimpleNamespace(headers=headers))}
+
+
+class _ProfileApi:
+    def __init__(self, status: int = 200, body: dict | None = None):
+        self.calls = 0
+        self._status = status
+        self._body = body or {"id": 42, "email": "a@b.com"}
+
+    async def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.calls += 1
+        return httpx.Response(self._status, json=self._body)
+
+
+def test_identify_resolves_the_account_never_the_raw_header():
+    api = _ProfileApi()
+    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
+    resolver = analytics._IdentityResolver(client)
+
+    identity = asyncio.run(resolver(request={}, extra=_extra("Bearer secret-token")))
+
+    assert identity.distinct_id == "42"
+    assert identity.properties == {"email": "a@b.com"}
+    assert "secret-token" not in repr(identity)
+    assert "secret-token" not in str(identity.properties)
+
+
+def test_identify_caches_the_resolved_identity_per_header():
+    api = _ProfileApi()
+    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
+    resolver = analytics._IdentityResolver(client)
+
+    asyncio.run(resolver(request={}, extra=_extra("Bearer secret-token")))
+    asyncio.run(resolver(request={}, extra=_extra("Bearer secret-token")))
+
+    assert api.calls == 1
+
+
+def test_identify_returns_none_on_403_without_raising():
+    api = _ProfileApi(status=403, body={})
+    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
+    resolver = analytics._IdentityResolver(client)
+
+    result = asyncio.run(resolver(request={}, extra=_extra("Bearer other-token")))
+
+    assert result is None
+
+
+def test_identify_returns_none_without_authorization_header_and_makes_no_call():
+    api = _ProfileApi()
+    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
+    resolver = analytics._IdentityResolver(client)
+
+    result = asyncio.run(resolver(request={}, extra=_extra(None)))
+
+    assert result is None
+    assert api.calls == 0
