@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-17
+
 ### Added
 
 - Seven WhatsApp tools: `whatsapp_webhooks_create`, `whatsapp_webhooks_list`,
@@ -14,14 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `whatsapp_webhooks_delete` and `whatsapp_webhooks_send_test` manage webhooks
   for WhatsApp events, and `whatsapp_events_list` reads the events without a
   webhook. `whatsapp_webhooks_create` and `whatsapp_webhooks_update` run in two
-  steps, like `call_webhooks_create`.
-- `whatsapp_templates_create` runs in two steps. The previews of
-  `whatsapp_templates_create` and `whatsapp_webhooks_update` list the template
-  components and the changed fields, and a WhatsApp webhook URL that is not
-  `https` is refused before the preview.
+  steps, like `call_webhooks_create`: a preview first, then the confirmed call.
+  A WhatsApp webhook URL that is not `https` is refused before the preview.
 
 ### Changed
 
+- `whatsapp_templates_create` runs in two steps: a preview that lists the
+  template components, then the confirmed call. The preview of
+  `whatsapp_webhooks_update` lists the changed fields.
 - The server instructions no longer call the confirmation token single-use: a
   repeated confirmed call within five minutes returns the stored result.
 
@@ -145,7 +147,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Invoice download and 10DLC evidence upload are excluded from the tool surface.
 - The OAuth issuer is advertised without an RFC 8414-breaking trailing slash.
 
-[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.3...HEAD
+[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.3...v1.4.0
 [1.3.3]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.0...v1.3.1
