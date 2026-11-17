@@ -166,16 +166,21 @@ def test_instrumentation_adds_no_result_fields(monkeypatch):
 
 
 def test_no_posthog_api_key_disables_analytics_entirely(monkeypatch):
-    monkeypatch.setattr(
-        analytics,
-        "Posthog",
-        lambda *a, **k: (_ for _ in ()).throw(AssertionError("Posthog() must not be constructed")),
-    )
+    # A spy, not a throwing stub: a broad `except Exception` around
+    # `instrument()`'s init (degrade-gracefully-on-misconfiguration) would
+    # swallow a raised sentinel and still look like "never constructed".
+    # Recording the call makes the assertion immune to that.
+    calls: list[tuple] = []
+    monkeypatch.setattr(analytics, "Posthog", lambda *a, **k: calls.append((a, k)))
     mcp = _instrumented_server(monkeypatch, api_key=None)
+
+    assert mcp._wavix_analytics_handle is None
+    assert calls == []
 
     result = asyncio.run(_call(mcp, "ping_tool", {}))
 
     assert result.is_error is False
+    assert calls == []
 
 
 def test_unreachable_posthog_host_does_not_delay_a_tool_call(monkeypatch):
@@ -221,6 +226,20 @@ def test_before_send_drops_error_message_keeps_error_type(monkeypatch):
     assert "$mcp_parameters" not in properties
     assert "$mcp_response" not in properties
     assert "$mcp_input_keys" in properties
+
+
+def test_failed_call_emits_no_exception_autocapture_event(monkeypatch):
+    # DD-007: enable_exception_autocapture=False. Unpinned, this flag can
+    # flip without any other test failing, and the adapter's $exception
+    # event carries the raw upstream error body in $exception_list, which
+    # _before_send never strips (it only pops $mcp_error_message).
+    fake = _FakePosthog()
+    mcp = _instrumented_server(monkeypatch, posthog_fake=fake)
+
+    result = asyncio.run(_call(mcp, "boom_tool", {}))
+
+    assert result.is_error is True
+    assert not any(e["event"] == "$exception" for e in fake.captured)
 
 
 def test_before_send_keeps_input_key_names_not_values(monkeypatch):
