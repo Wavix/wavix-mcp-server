@@ -75,8 +75,12 @@ class _IdentityResolver:
             if not (200 <= response.status_code < 300):
                 return None, NEGATIVE_IDENTITY_CACHE_TTL_S
             profile = response.json()
+            # Omit rather than send None: PostHog $set merges every property
+            # named here into the person, and a None would overwrite the
+            # email other Wavix surfaces already set for the same person.
+            email = profile.get("email")
             identity = UserIdentity(
-                distinct_id=str(profile["id"]), properties={"email": profile.get("email")}
+                distinct_id=str(profile["id"]), properties={"email": email} if email else {}
             )
         except (httpx.HTTPError, ValueError, KeyError):
             return None, NEGATIVE_IDENTITY_CACHE_TTL_S

@@ -257,6 +257,17 @@ def test_identify_caches_a_failed_resolution_too():
     assert api.calls == 1
 
 
+def test_identify_omits_email_property_when_profile_has_none():
+    api = _ProfileApi(body={"id": 42, "email": None})
+    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
+    resolver = analytics._IdentityResolver(client)
+
+    identity = asyncio.run(resolver(request={}, extra=_extra("Bearer secret-token")))
+
+    assert identity.distinct_id == "42"
+    assert "email" not in identity.properties
+
+
 def test_instrument_degrades_to_no_analytics_on_init_failure(monkeypatch):
     monkeypatch.setenv("POSTHOG_API_KEY", "phc_test")
     monkeypatch.setattr(
