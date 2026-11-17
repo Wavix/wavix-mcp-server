@@ -367,6 +367,15 @@ def test_identify_caches_a_failed_resolution_too():
     assert api.calls == 1
 
 
+def test_identify_returns_none_on_malformed_profile_body_without_raising():
+    resolver, api = _resolver(body=["not", "a", "json", "object"])
+
+    result = asyncio.run(resolver(request={}, extra=_extra("Bearer odd-token")))
+
+    assert result is None
+    assert api.calls == 1
+
+
 def test_identify_omits_email_property_when_profile_has_none():
     resolver, _ = _resolver(body={"id": 42, "email": None})
 
@@ -451,6 +460,22 @@ def test_instrument_degrades_to_no_analytics_on_init_failure(monkeypatch):
     assert handle is None
 
 
+def test_instrument_shuts_down_the_posthog_client_on_init_failure(monkeypatch):
+    monkeypatch.setenv("POSTHOG_API_KEY", "phc_test")
+    fake = _FakePosthog()
+    monkeypatch.setattr(analytics, "Posthog", lambda *a, **k: fake)
+    monkeypatch.setattr(
+        analytics,
+        "instrument_fastmcp",
+        lambda *a, **k: (_ for _ in ()).throw(TypeError("unexpected keyword argument")),
+    )
+
+    handle = analytics.instrument(FastMCP(name="t"), base_url="http://api.test")
+
+    assert handle is None
+    assert fake.shutdown_called is True
+
+
 def test_aclose_shuts_down_the_posthog_client(monkeypatch):
     fake = _FakePosthog()
     mcp = _instrumented_server(monkeypatch, posthog_fake=fake)
@@ -458,3 +483,16 @@ def test_aclose_shuts_down_the_posthog_client(monkeypatch):
     asyncio.run(mcp._wavix_analytics_handle.aclose())
 
     assert fake.shutdown_called is True
+
+
+def test_aclose_does_not_hang_if_posthog_shutdown_never_returns(monkeypatch):
+    monkeypatch.setattr(analytics, "SHUTDOWN_TIMEOUT_S", 0.05)
+    fake = _FakePosthog()
+    fake.shutdown = lambda: time.sleep(10)
+    mcp = _instrumented_server(monkeypatch, posthog_fake=fake)
+
+    start = time.monotonic()
+    asyncio.run(mcp._wavix_analytics_handle.aclose())
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 2.0

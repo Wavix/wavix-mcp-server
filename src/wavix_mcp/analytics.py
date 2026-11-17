@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -21,6 +22,7 @@ IDENTITY_CACHE_TTL_S = 300.0
 NEGATIVE_IDENTITY_CACHE_TTL_S = 30.0
 MAX_CACHED_IDENTITIES = 1000
 PROFILE_TIMEOUT_S = 3.0
+SHUTDOWN_TIMEOUT_S = 5.0
 
 
 def _before_send(event: PostHogCaptureEvent) -> PostHogCaptureEvent:
@@ -60,8 +62,6 @@ class _IdentityResolver:
         if cached is not None and cached.expires_at > now:
             return cached.identity
 
-        # Single-flight: concurrent calls sharing a cold key would otherwise
-        # each issue their own GET /v1/profile.
         lock = self._locks.setdefault(key, asyncio.Lock())
         async with lock:
             cached = self._cache.get(key)
@@ -69,8 +69,6 @@ class _IdentityResolver:
                 return cached.identity
             identity, ttl = await self._resolve(authorization)
             if len(self._cache) >= MAX_CACHED_IDENTITIES:
-                # Oldest-inserted, not oldest-expiring: a coarse FIFO cap,
-                # not true LRU/TTL eviction. Good enough as a hard size bound.
                 oldest = next(iter(self._cache))
                 del self._cache[oldest]
                 self._locks.pop(oldest, None)
@@ -78,36 +76,42 @@ class _IdentityResolver:
         return identity
 
     async def _resolve(self, authorization: str) -> tuple[UserIdentity | None, float]:
-        # A 403 (OAuth connection scoped narrower than account:read) is a
-        # permanent-until-reconnect state, not a transient failure — cache it
-        # too, with a shorter TTL, or every tool call from that caller pays a
-        # GET /v1/profile round trip forever.
         try:
-            response = await self._client.get(
-                "/v1/profile", headers={"Authorization": authorization}
+            # httpx's bare `timeout=` bounds connect/read/write/pool each
+            # separately, not the call as a whole; wait_for() is the actual
+            # total budget.
+            response = await asyncio.wait_for(
+                self._client.get("/v1/profile", headers={"Authorization": authorization}),
+                timeout=PROFILE_TIMEOUT_S,
             )
             if not (200 <= response.status_code < 300):
                 return None, NEGATIVE_IDENTITY_CACHE_TTL_S
             profile = response.json()
-            # Omit rather than send None: PostHog $set merges every property
-            # named here into the person, and a None would overwrite the
-            # email other Wavix surfaces already set for the same person.
             email = profile.get("email")
             identity = UserIdentity(
                 distinct_id=str(profile["id"]), properties={"email": email} if email else {}
             )
-        except (httpx.HTTPError, ValueError, KeyError):
+        except (
+            httpx.HTTPError,
+            ValueError,
+            KeyError,
+            AttributeError,
+            TypeError,
+            asyncio.TimeoutError,
+        ):
             return None, NEGATIVE_IDENTITY_CACHE_TTL_S
         return identity, IDENTITY_CACHE_TTL_S
 
     def _sweep(self, now: float) -> None:
-        # Positive and negative-cache entries carry different TTLs, so
-        # insertion order is not expiry order: scan every entry rather than
-        # stopping at the first unexpired one.
         expired = [key for key, cached in self._cache.items() if cached.expires_at <= now]
         for key in expired:
             del self._cache[key]
             self._locks.pop(key, None)
+        orphaned = [
+            key for key, lock in self._locks.items() if key not in self._cache and not lock.locked()
+        ]
+        for key in orphaned:
+            del self._locks[key]
 
 
 @dataclass
@@ -117,19 +121,38 @@ class _AnalyticsHandle:
     profile_client: httpx.AsyncClient | None = None
 
     async def flush(self) -> None:
-        # No production caller: exists so tests can drain the adapter's
-        # fire-and-forget captures deterministically before asserting on them.
         await self.analytics.flush()
 
     async def aclose(self) -> None:
         if self.profile_client is not None:
             await self.profile_client.aclose()
         if self.posthog_client is not None:
-            # instrument()'s own contract: "call shutdown() on exit to
-            # flush" — the SDK never owns the client's lifecycle. shutdown()
-            # is synchronous and drains the send queue, so run it off the
-            # event loop.
-            await asyncio.to_thread(self.posthog_client.shutdown)
+            # posthog/mcp's documented contract: flush() before shutdown(),
+            # or a trailing capture is dropped.
+            await self.flush()
+            # A plain `asyncio.to_thread` runs on the loop's default
+            # executor, whose non-daemon workers block interpreter exit
+            # regardless of any wait_for() here — a hung shutdown() would
+            # still stall process exit into a SIGKILL. A daemon thread lets
+            # us bound *our* wait without that risk.
+            loop = asyncio.get_running_loop()
+            done = loop.create_future()
+            posthog_client = self.posthog_client
+
+            def _shutdown() -> None:
+                try:
+                    posthog_client.shutdown()
+                finally:
+                    loop.call_soon_threadsafe(done.set_result, None)
+
+            threading.Thread(target=_shutdown, daemon=True).start()
+            try:
+                await asyncio.wait_for(done, timeout=SHUTDOWN_TIMEOUT_S)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "PostHog shutdown did not drain within %ss; exiting without a full flush.",
+                    SHUTDOWN_TIMEOUT_S,
+                )
 
 
 def instrument(mcp: FastMCP, *, base_url: str) -> _AnalyticsHandle | None:
@@ -138,6 +161,7 @@ def instrument(mcp: FastMCP, *, base_url: str) -> _AnalyticsHandle | None:
         logger.warning("PostHog analytics disabled: POSTHOG_API_KEY is not set.")
         return None
 
+    posthog_client: Posthog | None = None
     try:
         posthog_client = Posthog(
             api_key, host=os.getenv("POSTHOG_URL", "").strip() or DEFAULT_POSTHOG_URL
@@ -165,9 +189,8 @@ def instrument(mcp: FastMCP, *, base_url: str) -> _AnalyticsHandle | None:
             ),
         )
     except Exception:
-        # Analytics must never be able to take the server down with it —
-        # a misconfigured POSTHOG_URL or an incompatible posthog resolve
-        # degrades to "no analytics", same as POSTHOG_API_KEY being unset.
         logger.exception("PostHog analytics disabled: failed to initialize instrumentation.")
+        if posthog_client is not None:
+            posthog_client.shutdown()
         return None
     return _AnalyticsHandle(analytics, posthog_client, profile_client)
