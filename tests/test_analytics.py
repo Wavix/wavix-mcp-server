@@ -317,6 +317,29 @@ def test_sweep_expires_a_negative_entry_inserted_after_a_positive_one():
     assert any(c.expires_at == 300.0 for c in resolver._cache.values())
 
 
+def test_identify_single_flights_concurrent_calls_for_the_same_header():
+    calls = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.05)
+        return httpx.Response(200, json={"id": 42, "email": "a@b.com"})
+
+    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(handler))
+    resolver = analytics._IdentityResolver(client)
+
+    async def run():
+        return await asyncio.gather(
+            *(resolver(request={}, extra=_extra("Bearer secret-token")) for _ in range(5))
+        )
+
+    results = asyncio.run(run())
+
+    assert calls == 1
+    assert all(r.distinct_id == "42" for r in results)
+
+
 def test_identify_caches_a_failed_resolution_too():
     api = _ProfileApi(status=403, body={})
     client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))

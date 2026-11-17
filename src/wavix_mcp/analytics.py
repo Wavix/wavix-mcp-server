@@ -46,6 +46,7 @@ class _IdentityResolver:
         self._client = client
         self._clock = clock
         self._cache: dict[str, _CachedIdentity] = {}
+        self._locks: dict[str, asyncio.Lock] = {}
 
     async def __call__(self, request: dict[str, Any], extra: Any) -> UserIdentity | None:
         headers = get_request_headers(extra) or {}
@@ -58,12 +59,22 @@ class _IdentityResolver:
         cached = self._cache.get(key)
         if cached is not None and cached.expires_at > now:
             return cached.identity
-        identity, ttl = await self._resolve(authorization)
-        if len(self._cache) >= MAX_CACHED_IDENTITIES:
-            # Oldest-inserted, not oldest-expiring: a coarse FIFO cap, not
-            # true LRU/TTL eviction. Good enough as a hard size bound.
-            del self._cache[next(iter(self._cache))]
-        self._cache[key] = _CachedIdentity(identity, now + ttl)
+
+        # Single-flight: concurrent calls sharing a cold key would otherwise
+        # each issue their own GET /v1/profile.
+        lock = self._locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            cached = self._cache.get(key)
+            if cached is not None and cached.expires_at > now:
+                return cached.identity
+            identity, ttl = await self._resolve(authorization)
+            if len(self._cache) >= MAX_CACHED_IDENTITIES:
+                # Oldest-inserted, not oldest-expiring: a coarse FIFO cap,
+                # not true LRU/TTL eviction. Good enough as a hard size bound.
+                oldest = next(iter(self._cache))
+                del self._cache[oldest]
+                self._locks.pop(oldest, None)
+            self._cache[key] = _CachedIdentity(identity, now + ttl)
         return identity
 
     async def _resolve(self, authorization: str) -> tuple[UserIdentity | None, float]:
@@ -96,6 +107,7 @@ class _IdentityResolver:
         expired = [key for key, cached in self._cache.items() if cached.expires_at <= now]
         for key in expired:
             del self._cache[key]
+            self._locks.pop(key, None)
 
 
 @dataclass
