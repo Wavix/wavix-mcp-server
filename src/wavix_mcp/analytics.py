@@ -105,6 +105,8 @@ class _AnalyticsHandle:
     profile_client: httpx.AsyncClient | None = None
 
     async def flush(self) -> None:
+        # No production caller: exists so tests can drain the adapter's
+        # fire-and-forget captures deterministically before asserting on them.
         await self.analytics.flush()
 
     async def aclose(self) -> None:
