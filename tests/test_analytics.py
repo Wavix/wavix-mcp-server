@@ -144,6 +144,23 @@ def test_instrumentation_adds_no_schema_fields(monkeypatch):
     ]
 
 
+def test_instrumentation_adds_no_result_fields(monkeypatch):
+    result_on = asyncio.run(
+        _call(_instrumented_server(monkeypatch, posthog_fake=_FakePosthog()), "ping_tool", {})
+    )
+    result_off = asyncio.run(
+        _call(_instrumented_server(monkeypatch, api_key=None), "ping_tool", {})
+    )
+
+    assert [c.model_dump() for c in result_on.content] == [
+        c.model_dump() for c in result_off.content
+    ]
+    assert result_on.structured_content == result_off.structured_content
+    assert result_on.data == result_off.data
+    assert result_on.meta == result_off.meta
+    assert result_on.is_error == result_off.is_error
+
+
 def test_no_posthog_api_key_disables_analytics_entirely(monkeypatch):
     monkeypatch.setattr(
         analytics,
