@@ -128,8 +128,6 @@ def instrument(mcp: FastMCP, *, base_url: str) -> _AnalyticsHandle | None:
                 enable_conversation_id=False,
                 collect_feedback=False,
                 enable_exception_autocapture=False,
-                send_initialize_event=False,
-                send_tools_list_event=False,
                 logger=logger.info,
                 before_send=_before_send,
                 identify=resolver,

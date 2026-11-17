@@ -104,16 +104,18 @@ def test_one_tool_call_captures_one_event_with_core_properties(monkeypatch):
 
     asyncio.run(_call(mcp, "ping_tool", {}))
 
-    assert len(fake.captured) == 1
-    event = fake.captured[0]
-    assert event["event"] == "$mcp_tool_call"
-    properties = event["properties"]
+    tool_call_events = [e for e in fake.captured if e["event"] == "$mcp_tool_call"]
+    assert len(tool_call_events) == 1
+    properties = tool_call_events[0]["properties"]
     assert properties["$mcp_tool_name"] == "ping_tool"
     assert "$mcp_duration_ms" in properties
     assert properties["$mcp_is_error"] is False
     assert properties["$mcp_client_name"] == "pytest-client"
     assert properties["$mcp_client_version"] == "9.9"
     assert "$session_id" in properties
+    # The adapter's own session-level events stay on: a client that connects
+    # or lists tools but never calls one would otherwise be invisible.
+    assert any(e["event"] == "$mcp_initialize" for e in fake.captured)
 
 
 def test_instrumentation_adds_no_schema_fields(monkeypatch):
@@ -158,8 +160,9 @@ def test_before_send_drops_values_keeps_input_keys(monkeypatch):
 
     asyncio.run(_call(mcp, "ping_tool", {}))
 
-    assert len(fake.captured) >= 1
-    for entry in fake.captured:
+    tool_call_events = [e for e in fake.captured if e["event"] == "$mcp_tool_call"]
+    assert len(tool_call_events) >= 1
+    for entry in tool_call_events:
         properties = entry["properties"]
         assert "$mcp_parameters" not in properties
         assert "$mcp_response" not in properties
@@ -173,7 +176,6 @@ def test_before_send_drops_error_message_keeps_error_type(monkeypatch):
     result = asyncio.run(_call(mcp, "boom_tool", {}))
 
     assert result.is_error is True
-    assert len(fake.captured) == 1
     tool_call_events = [e for e in fake.captured if e["event"] == "$mcp_tool_call"]
     assert len(tool_call_events) == 1
     properties = tool_call_events[0]["properties"]
