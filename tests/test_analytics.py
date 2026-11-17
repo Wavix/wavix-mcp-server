@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import httpx
 import mcp.types as mcp_types
 from fastmcp import Client, FastMCP
+from fastmcp.client.transports import StreamableHttpTransport
 
 import wavix_mcp.analytics as analytics
 
@@ -29,6 +30,20 @@ _SPEC = {
         "/v1/boom": {
             "get": {
                 "operationId": "boom_tool",
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "content": {"application/json": {"schema": {"type": "object"}}},
+                    }
+                },
+            }
+        },
+        "/v1/echo": {
+            "get": {
+                "operationId": "echo_tool",
+                "parameters": [
+                    {"name": "x", "in": "query", "required": True, "schema": {"type": "string"}}
+                ],
                 "responses": {
                     "200": {
                         "description": "ok",
@@ -187,6 +202,19 @@ def test_before_send_drops_error_message_keeps_error_type(monkeypatch):
     assert "$mcp_input_keys" in properties
 
 
+def test_before_send_keeps_input_key_names_not_values(monkeypatch):
+    fake = _FakePosthog()
+    mcp = _instrumented_server(monkeypatch, posthog_fake=fake)
+
+    asyncio.run(_call(mcp, "echo_tool", {"x": "super-secret-value"}))
+
+    tool_call_events = [e for e in fake.captured if e["event"] == "$mcp_tool_call"]
+    assert len(tool_call_events) == 1
+    properties = tool_call_events[0]["properties"]
+    assert properties["$mcp_input_keys"] == ["x"]
+    assert "super-secret-value" not in repr(properties)
+
+
 def _extra(authorization: str | None) -> dict:
     headers = {"authorization": authorization} if authorization else {}
     return {"ctx": SimpleNamespace(request=SimpleNamespace(headers=headers))}
@@ -268,6 +296,68 @@ def test_identify_omits_email_property_when_profile_has_none():
 
     assert identity.distinct_id == "42"
     assert "email" not in identity.properties
+
+
+def test_identify_wiring_links_the_captured_event_to_the_account(monkeypatch):
+    """EC-006 end to end: a real inbound Authorization header, through the
+    actual HTTP transport (the in-memory Client used elsewhere never
+    populates request headers, so it can't exercise this path), must resolve
+    to the captured event's `distinct_id`/`$set` — and the raw header value
+    must never appear in it."""
+    monkeypatch.setenv("POSTHOG_API_KEY", "phc_test")
+    fake = _FakePosthog()
+    monkeypatch.setattr(analytics, "Posthog", lambda *a, **k: fake)
+
+    profile_api = _ProfileApi(body={"id": 777, "email": "caller@example.com"})
+    real_async_client = httpx.AsyncClient
+
+    def async_client(*args, **kwargs):
+        if kwargs.get("base_url") == "http://profile.test":
+            return real_async_client(
+                base_url="http://profile.test",
+                transport=httpx.MockTransport(profile_api),
+                timeout=kwargs.get("timeout"),
+            )
+        return real_async_client(*args, **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", async_client)
+
+    api_client = httpx.AsyncClient(
+        base_url="http://api.test", transport=httpx.MockTransport(_Api())
+    )
+    mcp = FastMCP.from_openapi(openapi_spec=_SPEC, client=api_client, name="t")
+    handle = analytics.instrument(mcp, base_url="http://profile.test")
+    app = mcp.http_app(path="/mcp")
+
+    def http_client_factory(headers=None, timeout=None, auth=None, **_kwargs):
+        return httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://testserver", headers=headers
+        )
+
+    transport = StreamableHttpTransport(
+        "http://testserver/mcp",
+        headers={"Authorization": "Bearer super-secret-token"},
+        httpx_client_factory=http_client_factory,
+    )
+
+    async def run():
+        async with app.router.lifespan_context(app):
+            async with Client(transport) as client:
+                result = await client.call_tool("ping_tool", {})
+            assert handle is not None
+            await handle.flush()
+            return result
+
+    result = asyncio.run(run())
+
+    assert result.is_error is False
+    assert profile_api.calls == 1
+    tool_call_events = [e for e in fake.captured if e["event"] == "$mcp_tool_call"]
+    assert len(tool_call_events) == 1
+    event = tool_call_events[0]
+    assert event["distinct_id"] == "777"
+    assert event["properties"]["$set"] == {"email": "caller@example.com"}
+    assert "super-secret-token" not in repr(fake.captured)
 
 
 def test_instrument_degrades_to_no_analytics_on_init_failure(monkeypatch):
