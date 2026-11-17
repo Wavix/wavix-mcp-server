@@ -66,9 +66,13 @@ class _Api:
 class _FakePosthog:
     def __init__(self) -> None:
         self.captured: list[dict] = []
+        self.shutdown_called = False
 
     def capture(self, event, **kwargs) -> None:
         self.captured.append({"event": event, **kwargs})
+
+    def shutdown(self) -> None:
+        self.shutdown_called = True
 
 
 def _instrumented_server(
@@ -388,3 +392,12 @@ def test_instrument_degrades_to_no_analytics_on_init_failure(monkeypatch):
     handle = analytics.instrument(FastMCP(name="t"), base_url="http://api.test")
 
     assert handle is None
+
+
+def test_aclose_shuts_down_the_posthog_client(monkeypatch):
+    fake = _FakePosthog()
+    mcp = _instrumented_server(monkeypatch, posthog_fake=fake)
+
+    asyncio.run(mcp._wavix_analytics_handle.aclose())
+
+    assert fake.shutdown_called is True

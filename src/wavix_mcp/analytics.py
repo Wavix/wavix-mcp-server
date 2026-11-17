@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import logging
 import os
@@ -97,6 +98,7 @@ class _IdentityResolver:
 @dataclass
 class _AnalyticsHandle:
     analytics: McpAnalytics
+    posthog_client: Posthog | None = None
     profile_client: httpx.AsyncClient | None = None
 
     async def flush(self) -> None:
@@ -105,6 +107,12 @@ class _AnalyticsHandle:
     async def aclose(self) -> None:
         if self.profile_client is not None:
             await self.profile_client.aclose()
+        if self.posthog_client is not None:
+            # instrument()'s own contract: "call shutdown() on exit to
+            # flush" — the SDK never owns the client's lifecycle. shutdown()
+            # is synchronous and drains the send queue, so run it off the
+            # event loop.
+            await asyncio.to_thread(self.posthog_client.shutdown)
 
 
 def instrument(mcp: FastMCP, *, base_url: str) -> _AnalyticsHandle | None:
@@ -117,7 +125,13 @@ def instrument(mcp: FastMCP, *, base_url: str) -> _AnalyticsHandle | None:
         posthog_client = Posthog(
             api_key, host=os.getenv("POSTHOG_URL", "").strip() or DEFAULT_POSTHOG_URL
         )
-        profile_client = httpx.AsyncClient(base_url=base_url, timeout=PROFILE_TIMEOUT_S)
+        # No redirect following: unlike api_client, this client sends the
+        # caller's own Authorization header, so a redirect target must never
+        # see it (api_client gets the same guarantee from MCPHeaderAuth's
+        # allowed_host check instead).
+        profile_client = httpx.AsyncClient(
+            base_url=base_url, timeout=PROFILE_TIMEOUT_S, follow_redirects=False
+        )
         resolver = _IdentityResolver(profile_client)
         analytics = instrument_fastmcp(
             mcp,
@@ -139,4 +153,4 @@ def instrument(mcp: FastMCP, *, base_url: str) -> _AnalyticsHandle | None:
         # degrades to "no analytics", same as POSTHOG_API_KEY being unset.
         logger.exception("PostHog analytics disabled: failed to initialize instrumentation.")
         return None
-    return _AnalyticsHandle(analytics, profile_client)
+    return _AnalyticsHandle(analytics, posthog_client, profile_client)
