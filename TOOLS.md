@@ -30,6 +30,13 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 - `whatsapp_messages_list` — List WhatsApp messages
 - `whatsapp_messages_send` — Send a WhatsApp message
 - `whatsapp_messages_get` — Retrieve a WhatsApp message
+- `whatsapp_webhooks_list` — List WhatsApp webhooks
+- `whatsapp_webhooks_create` — Create a WhatsApp webhook
+- `whatsapp_webhooks_get` — Retrieve a WhatsApp webhook
+- `whatsapp_webhooks_update` — Update a WhatsApp webhook
+- `whatsapp_webhooks_delete` — Delete a WhatsApp webhook
+- `whatsapp_webhooks_send_test` — Send a WhatsApp webhook test event
+- `whatsapp_events_list` — List WhatsApp events
 
 ## Call control
 

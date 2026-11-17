@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Seven WhatsApp tools: `whatsapp_webhooks_create`, `whatsapp_webhooks_list`,
+  `whatsapp_webhooks_get`, `whatsapp_webhooks_update`,
+  `whatsapp_webhooks_delete` and `whatsapp_webhooks_send_test` manage webhooks
+  for WhatsApp events, and `whatsapp_events_list` reads the events without a
+  webhook. `whatsapp_webhooks_create` and `whatsapp_webhooks_update` run in two
+  steps, like `call_webhooks_create`.
+- `whatsapp_templates_create` runs in two steps. The previews of
+  `whatsapp_templates_create` and `whatsapp_webhooks_update` list the template
+  components and the changed fields, and a WhatsApp webhook URL that is not
+  `https` is refused before the preview.
+
+### Changed
+
+- The server instructions no longer call the confirmation token single-use: a
+  repeated confirmed call within five minutes returns the stored result.
+
 ## [1.3.3] - 2026-11-11
 
 ### Changed
