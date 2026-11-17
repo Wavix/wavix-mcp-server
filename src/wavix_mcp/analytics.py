@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_POSTHOG_URL = "https://us.i.posthog.com"
 IDENTITY_CACHE_TTL_S = 300.0
+NEGATIVE_IDENTITY_CACHE_TTL_S = 30.0
 MAX_CACHED_IDENTITIES = 1000
 PROFILE_TIMEOUT_S = 3.0
 
@@ -33,7 +34,7 @@ def _before_send(event: PostHogCaptureEvent) -> PostHogCaptureEvent:
 
 @dataclass
 class _CachedIdentity:
-    identity: UserIdentity
+    identity: UserIdentity | None
     expires_at: float
 
 
@@ -56,22 +57,30 @@ class _IdentityResolver:
         cached = self._cache.get(key)
         if cached is not None and cached.expires_at > now:
             return cached.identity
+        identity, ttl = await self._resolve(authorization)
+        if len(self._cache) >= MAX_CACHED_IDENTITIES:
+            del self._cache[next(iter(self._cache))]
+        self._cache[key] = _CachedIdentity(identity, now + ttl)
+        return identity
+
+    async def _resolve(self, authorization: str) -> tuple[UserIdentity | None, float]:
+        # A 403 (OAuth connection scoped narrower than account:read) is a
+        # permanent-until-reconnect state, not a transient failure — cache it
+        # too, with a shorter TTL, or every tool call from that caller pays a
+        # GET /v1/profile round trip forever.
         try:
             response = await self._client.get(
                 "/v1/profile", headers={"Authorization": authorization}
             )
-        except httpx.HTTPError:
-            return None
-        if not (200 <= response.status_code < 300):
-            return None
-        profile = response.json()
-        identity = UserIdentity(
-            distinct_id=str(profile["id"]), properties={"email": profile.get("email")}
-        )
-        if len(self._cache) >= MAX_CACHED_IDENTITIES:
-            del self._cache[next(iter(self._cache))]
-        self._cache[key] = _CachedIdentity(identity, now + IDENTITY_CACHE_TTL_S)
-        return identity
+            if not (200 <= response.status_code < 300):
+                return None, NEGATIVE_IDENTITY_CACHE_TTL_S
+            profile = response.json()
+            identity = UserIdentity(
+                distinct_id=str(profile["id"]), properties={"email": profile.get("email")}
+            )
+        except (httpx.HTTPError, ValueError, KeyError):
+            return None, NEGATIVE_IDENTITY_CACHE_TTL_S
+        return identity, IDENTITY_CACHE_TTL_S
 
     def _sweep(self, now: float) -> None:
         while self._cache:
@@ -100,25 +109,32 @@ def instrument(mcp: FastMCP, *, base_url: str) -> _AnalyticsHandle | None:
         logger.warning("PostHog analytics disabled: POSTHOG_API_KEY is not set.")
         return None
 
-    posthog_client = Posthog(
-        api_key, host=os.getenv("POSTHOG_URL", "").strip() or DEFAULT_POSTHOG_URL
-    )
-    profile_client = httpx.AsyncClient(base_url=base_url, timeout=PROFILE_TIMEOUT_S)
-    resolver = _IdentityResolver(profile_client)
-    analytics = instrument_fastmcp(
-        mcp,
-        posthog_client,
-        MCPAnalyticsOptions(
-            context=False,
-            capture_model=False,
-            enable_conversation_id=False,
-            collect_feedback=False,
-            enable_exception_autocapture=False,
-            send_initialize_event=False,
-            send_tools_list_event=False,
-            logger=logger.info,
-            before_send=_before_send,
-            identify=resolver,
-        ),
-    )
+    try:
+        posthog_client = Posthog(
+            api_key, host=os.getenv("POSTHOG_URL", "").strip() or DEFAULT_POSTHOG_URL
+        )
+        profile_client = httpx.AsyncClient(base_url=base_url, timeout=PROFILE_TIMEOUT_S)
+        resolver = _IdentityResolver(profile_client)
+        analytics = instrument_fastmcp(
+            mcp,
+            posthog_client,
+            MCPAnalyticsOptions(
+                context=False,
+                capture_model=False,
+                enable_conversation_id=False,
+                collect_feedback=False,
+                enable_exception_autocapture=False,
+                send_initialize_event=False,
+                send_tools_list_event=False,
+                logger=logger.info,
+                before_send=_before_send,
+                identify=resolver,
+            ),
+        )
+    except Exception:
+        # Analytics must never be able to take the server down with it —
+        # a misconfigured POSTHOG_URL or an incompatible posthog resolve
+        # degrades to "no analytics", same as POSTHOG_API_KEY being unset.
+        logger.exception("PostHog analytics disabled: failed to initialize instrumentation.")
+        return None
     return _AnalyticsHandle(analytics, profile_client)

@@ -244,3 +244,27 @@ def test_identify_returns_none_without_authorization_header_and_makes_no_call():
 
     assert result is None
     assert api.calls == 0
+
+
+def test_identify_caches_a_failed_resolution_too():
+    api = _ProfileApi(status=403, body={})
+    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
+    resolver = analytics._IdentityResolver(client)
+
+    asyncio.run(resolver(request={}, extra=_extra("Bearer scoped-token")))
+    asyncio.run(resolver(request={}, extra=_extra("Bearer scoped-token")))
+
+    assert api.calls == 1
+
+
+def test_instrument_degrades_to_no_analytics_on_init_failure(monkeypatch):
+    monkeypatch.setenv("POSTHOG_API_KEY", "phc_test")
+    monkeypatch.setattr(
+        analytics,
+        "instrument_fastmcp",
+        lambda *a, **k: (_ for _ in ()).throw(TypeError("unexpected keyword argument")),
+    )
+
+    handle = analytics.instrument(FastMCP(name="t"), base_url="http://api.test")
+
+    assert handle is None
