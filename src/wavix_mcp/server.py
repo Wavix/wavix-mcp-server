@@ -17,7 +17,7 @@ from fastmcp.utilities.openapi.director import RequestDirector
 from fastmcp.utilities.openapi.models import HTTPRoute
 from mcp.types import ToolAnnotations
 
-from . import scopes
+from . import analytics, scopes
 from .auth import build_auth_provider, mcp_path
 from .confirmation import (
     ALWAYS_CONFIRMED,
@@ -785,6 +785,8 @@ def build_server() -> FastMCP:
         finally:
             await docs_client.aclose()
             await api_client.aclose()
+            if analytics_client is not None:
+                await analytics_client.aclose()
 
     mcp = FastMCP.from_openapi(
         openapi_spec=spec,
@@ -820,6 +822,7 @@ def build_server() -> FastMCP:
         ConfirmationMiddleware(preview_builders(_CONFIRMED_TOOLS, TOOL_DESCRIPTIONS), api_client)
     )
     mcp.add_middleware(SecretMaskingMiddleware())
+    analytics_client = analytics.instrument(mcp, base_url=base_url)
     return mcp
 
 
