@@ -252,10 +252,17 @@ class _ProfileApi:
         return httpx.Response(self._status, json=self._body)
 
 
-def test_identify_resolves_the_account_never_the_raw_header():
-    api = _ProfileApi()
+def _resolver(
+    status: int = 200, body: dict | None = None, *, clock=None
+) -> tuple["analytics._IdentityResolver", _ProfileApi]:
+    api = _ProfileApi(status=status, body=body)
     client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
-    resolver = analytics._IdentityResolver(client)
+    kwargs = {} if clock is None else {"clock": clock}
+    return analytics._IdentityResolver(client, **kwargs), api
+
+
+def test_identify_resolves_the_account_never_the_raw_header():
+    resolver, _ = _resolver()
 
     identity = asyncio.run(resolver(request={}, extra=_extra("Bearer secret-token")))
 
@@ -266,9 +273,7 @@ def test_identify_resolves_the_account_never_the_raw_header():
 
 
 def test_identify_caches_the_resolved_identity_per_header():
-    api = _ProfileApi()
-    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
-    resolver = analytics._IdentityResolver(client)
+    resolver, api = _resolver()
 
     asyncio.run(resolver(request={}, extra=_extra("Bearer secret-token")))
     asyncio.run(resolver(request={}, extra=_extra("Bearer secret-token")))
@@ -277,9 +282,7 @@ def test_identify_caches_the_resolved_identity_per_header():
 
 
 def test_identify_returns_none_on_403_without_raising():
-    api = _ProfileApi(status=403, body={})
-    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
-    resolver = analytics._IdentityResolver(client)
+    resolver, _ = _resolver(status=403, body={})
 
     result = asyncio.run(resolver(request={}, extra=_extra("Bearer other-token")))
 
@@ -287,9 +290,7 @@ def test_identify_returns_none_on_403_without_raising():
 
 
 def test_identify_returns_none_without_authorization_header_and_makes_no_call():
-    api = _ProfileApi()
-    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
-    resolver = analytics._IdentityResolver(client)
+    resolver, api = _resolver()
 
     result = asyncio.run(resolver(request={}, extra=_extra(None)))
 
@@ -302,10 +303,8 @@ def test_sweep_expires_a_negative_entry_inserted_after_a_positive_one():
     # insertion order; _sweep must not stop scanning at the first live entry
     # it meets in insertion order, or a later-inserted, sooner-expiring entry
     # is never evicted and lingers in the cache indefinitely.
-    api = _ProfileApi()
-    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
     now = [0.0]
-    resolver = analytics._IdentityResolver(client, clock=lambda: now[0])
+    resolver, _ = _resolver(clock=lambda: now[0])
 
     asyncio.run(resolver(request={}, extra=_extra("Bearer long-lived")))  # t=0, TTL 300
     resolver._cache["short-lived"] = analytics._CachedIdentity(None, expires_at=5.0)
@@ -341,9 +340,7 @@ def test_identify_single_flights_concurrent_calls_for_the_same_header():
 
 
 def test_identify_caches_a_failed_resolution_too():
-    api = _ProfileApi(status=403, body={})
-    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
-    resolver = analytics._IdentityResolver(client)
+    resolver, api = _resolver(status=403, body={})
 
     asyncio.run(resolver(request={}, extra=_extra("Bearer scoped-token")))
     asyncio.run(resolver(request={}, extra=_extra("Bearer scoped-token")))
@@ -352,9 +349,7 @@ def test_identify_caches_a_failed_resolution_too():
 
 
 def test_identify_omits_email_property_when_profile_has_none():
-    api = _ProfileApi(body={"id": 42, "email": None})
-    client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(api))
-    resolver = analytics._IdentityResolver(client)
+    resolver, _ = _resolver(body={"id": 42, "email": None})
 
     identity = asyncio.run(resolver(request={}, extra=_extra("Bearer secret-token")))
 
