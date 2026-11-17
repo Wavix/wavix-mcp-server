@@ -149,3 +149,36 @@ def test_unreachable_posthog_host_does_not_delay_a_tool_call(monkeypatch):
 
     assert result.is_error is False
     assert elapsed < 2.0
+
+
+def test_before_send_drops_values_keeps_input_keys(monkeypatch):
+    fake = _FakePosthog()
+    mcp = _instrumented_server(monkeypatch, posthog_fake=fake)
+
+    asyncio.run(_call(mcp, "ping_tool", {}))
+
+    assert len(fake.captured) >= 1
+    for entry in fake.captured:
+        properties = entry["properties"]
+        assert "$mcp_parameters" not in properties
+        assert "$mcp_response" not in properties
+        assert "$mcp_input_keys" in properties
+
+
+def test_before_send_drops_error_message_keeps_error_type(monkeypatch):
+    fake = _FakePosthog()
+    mcp = _instrumented_server(monkeypatch, posthog_fake=fake)
+
+    result = asyncio.run(_call(mcp, "boom_tool", {}))
+
+    assert result.is_error is True
+    assert len(fake.captured) == 1
+    tool_call_events = [e for e in fake.captured if e["event"] == "$mcp_tool_call"]
+    assert len(tool_call_events) == 1
+    properties = tool_call_events[0]["properties"]
+    assert properties["$mcp_is_error"] is True
+    assert "$mcp_error_type" in properties
+    assert "$mcp_error_message" not in properties
+    assert "$mcp_parameters" not in properties
+    assert "$mcp_response" not in properties
+    assert "$mcp_input_keys" in properties
