@@ -7,21 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-18
+
 ### Added
 
-- Optional PostHog MCP usage analytics: every tool call sends one
-  `$mcp_tool_call` event (tool name, duration, outcome and error category,
-  client, session, server build), linked to the calling Wavix account and
-  without the account's email. No tool's advertised schema
-  changes, and argument values, response bodies and error messages are
-  never captured. Disabled unless `POSTHOG_API_KEY` is set.
+- Optional usage analytics through PostHog. When `POSTHOG_API_KEY` is set, every tool call sends one `$mcp_tool_call` event with the tool name, duration, outcome and error category, MCP client, session and server build, linked to the calling Wavix account but not to its email. Argument values, response bodies and error messages are never sent, and no tool's schema changes. Without `POSTHOG_API_KEY` nothing is sent.
 
 ### Changed
 
-- `call_recording_get_by_call`, `speech_analytics_file_get` and
-  `ten_dlc_brand_evidence_get` return an API failure as an error result. The
-  text is the same `{error, status_code, body}` JSON as before, which these
-  tools used to return as a successful result.
+- `call_recording_get_by_call`, `speech_analytics_file_get` and `ten_dlc_brand_evidence_get` now return a Wavix API failure as an error result instead of a successful one. The result text is unchanged: the same `{error, status_code, body}` JSON.
 
 ## [1.4.0] - 2026-11-17
 
@@ -163,7 +157,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Invoice download and 10DLC evidence upload are excluded from the tool surface.
 - The OAuth issuer is advertised without an RFC 8414-breaking trailing slash.
 
-[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/Wavix/wavix-mcp-server/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.3...v1.4.0
 [1.3.3]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.1...v1.3.2
