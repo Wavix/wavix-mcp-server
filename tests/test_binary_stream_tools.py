@@ -1,11 +1,13 @@
 """Unit tests for _resolve_to_download_url using httpx.MockTransport."""
 
 import asyncio
+import json
 from collections.abc import Callable
 
 import httpx
+import pytest
 
-from wavix_mcp.server import _resolve_to_download_url
+from wavix_mcp.server import DownloadUrlError, _resolve_to_download_url
 
 BASE_URL = "https://api.test.example"
 PATH = "/v1/recordings/aa566501-c591-4a8b-b3b9-cc1295398b72"
@@ -18,6 +20,14 @@ def _resolve(handler: Callable[[httpx.Request], httpx.Response]) -> dict:
             return await _resolve_to_download_url(client, BASE_URL, PATH)
 
     return asyncio.run(run())
+
+
+def _resolve_error(handler: Callable[[httpx.Request], httpx.Response]) -> dict:
+    with pytest.raises(DownloadUrlError) as raised:
+        _resolve(handler)
+    assert json.loads(str(raised.value)) == raised.value.payload
+    assert raised.value.status_code == raised.value.payload["status_code"]
+    return raised.value.payload
 
 
 def test_resolve_returns_pre_signed_url_on_redirect():
@@ -51,7 +61,7 @@ def test_resolve_returns_synthetic_url_on_2xx_body():
 
 
 def test_resolve_returns_error_envelope_on_4xx():
-    result = _resolve(
+    result = _resolve_error(
         lambda _request: httpx.Response(
             404,
             headers={"Content-Type": "application/json"},
@@ -64,7 +74,7 @@ def test_resolve_returns_error_envelope_on_4xx():
 
 
 def test_resolve_ignores_location_on_error_status():
-    result = _resolve(
+    result = _resolve_error(
         lambda _request: httpx.Response(
             404,
             headers={"Location": "https://s3.example/leaked", "Content-Type": "application/json"},
@@ -75,7 +85,7 @@ def test_resolve_ignores_location_on_error_status():
 
 
 def test_resolve_handles_binary_error_body():
-    result = _resolve(
+    result = _resolve_error(
         lambda _request: httpx.Response(
             500,
             headers={"Content-Type": "application/octet-stream"},

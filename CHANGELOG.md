@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional PostHog MCP usage analytics: every tool call sends one
+  `$mcp_tool_call` event (tool name, duration, outcome and error category,
+  client, session, server build), linked to the calling Wavix account and
+  without the account's email. No tool's advertised schema
+  changes, and argument values, response bodies and error messages are
+  never captured. Disabled unless `POSTHOG_API_KEY` is set.
+
+### Changed
+
+- `call_recording_get_by_call`, `speech_analytics_file_get` and
+  `ten_dlc_brand_evidence_get` return an API failure as an error result. The
+  text is the same `{error, status_code, body}` JSON as before, which these
+  tools used to return as a successful result.
+
 ## [1.4.0] - 2026-11-17
 
 ### Added

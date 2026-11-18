@@ -27,6 +27,9 @@ ENV PATH="/opt/venv/bin:$PATH" \
 
 COPY --from=builder /opt/venv /opt/venv
 
+ARG GIT_SHA=""
+ENV WAVIX_MCP_BUILD_SHA=$GIT_SHA
+
 USER mcp
 
 EXPOSE 8000
