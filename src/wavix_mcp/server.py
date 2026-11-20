@@ -31,7 +31,7 @@ from .confirmation import (
 )
 from .docs import register_api_spec, register_docs
 from .scope_filter import ScopeFilterMiddleware
-from .secret_masking import SecretMaskingMiddleware
+from .secret_redaction import SecretRedactionMiddleware, secret_field_for_tool
 
 logger = logging.getLogger(__name__)
 
@@ -378,6 +378,46 @@ def _relax_response_nullability(spec: dict[str, Any]) -> dict[str, Any]:
                     root = mt.get("schema")
                     if isinstance(root, dict):
                         _widen_response_tree(root, set())
+    return spec
+
+
+def _remove_property(schema: dict[str, Any], field: str, seen: set[int]) -> None:
+    if id(schema) in seen:
+        return
+    seen.add(id(schema))
+    props = schema.get("properties")
+    if isinstance(props, dict):
+        props.pop(field, None)
+    required = schema.get("required")
+    if isinstance(required, list) and field in required:
+        schema["required"] = [name for name in required if name != field]
+    for sub in _iter_subschemas(schema):
+        _remove_property(sub, field, seen)
+
+
+def _strip_secret_fields(spec: dict[str, Any]) -> dict[str, Any]:
+    seen: set[int] = set()
+    for path_item in (spec.get("paths") or {}).values():
+        if not isinstance(path_item, dict):
+            continue
+        for method in _HTTP_METHODS:
+            op = path_item.get(method)
+            if not isinstance(op, dict):
+                continue
+            operation_id = op.get("operationId")
+            field = secret_field_for_tool(operation_id) if isinstance(operation_id, str) else None
+            if field is None:
+                continue
+            for response in (op.get("responses") or {}).values():
+                content = (response or {}).get("content")
+                if not isinstance(content, dict):
+                    continue
+                for ct, mt in content.items():
+                    if not _is_json_content_type(ct) or not isinstance(mt, dict):
+                        continue
+                    root = mt.get("schema")
+                    if isinstance(root, dict):
+                        _remove_property(root, field, seen)
     return spec
 
 
@@ -751,6 +791,7 @@ def build_server() -> FastMCP:
     spec = _ensure_request_body_type_object(spec)
     spec = _strip_non_json_response_content(spec)
     spec = _relax_response_nullability(spec)
+    spec = _strip_secret_fields(spec)
     spec = _normalize_tool_schemas(spec)
     base_url = os.getenv("WAVIX_API_BASE_URL", "").strip() or DEFAULT_API_BASE_URL
 
@@ -828,7 +869,7 @@ def build_server() -> FastMCP:
     mcp.add_middleware(
         ConfirmationMiddleware(preview_builders(_CONFIRMED_TOOLS, TOOL_DESCRIPTIONS), api_client)
     )
-    mcp.add_middleware(SecretMaskingMiddleware())
+    mcp.add_middleware(SecretRedactionMiddleware())
     analytics_client = analytics.instrument(mcp, base_url=base_url)
     return mcp
 

@@ -40,6 +40,8 @@ def test_api_key_management_is_never_available_over_oauth():
     # A delegated OAuth grant must not mint or manage the account's API keys.
     assert scopes.requirement_for("POST", "/v1/api-keys").kind == "never"
     assert scopes.requirement_for("DELETE", "/v1/api-keys/{id}").kind == "never"
+    assert scopes.requirement_for("GET", "/v1/api-keys").kind == "never"
+    assert scopes.requirement_for("PATCH", "/v1/api-keys/{id}").kind == "never"
 
 
 def test_support_portal_paths_are_exempt():
