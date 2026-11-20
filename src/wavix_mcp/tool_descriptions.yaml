@@ -544,7 +544,8 @@ api_keys_create: >-
   Creates an API key for the authenticated account, optionally restricting its
   access to specific IP addresses. Applies when the user wants to issue a new API key
   and has confirmed its label and any access restrictions. Creates a new API key
-  that can authenticate against the account immediately. Requires a `label`; when
+  that can authenticate against the account immediately. The reply shows only the
+  last 4 characters of the new key, as `redacted_value`. Requires a `label`; when
   `restricted` is `true`, `permitted_ips` must list the allowed IPv4 addresses,
   and setting `scopes_enabled` to `true` enforces the per-resource scope
   permissions.
@@ -982,12 +983,13 @@ ten_dlc_subscriptions_list: >-
 
 sub_accounts_create: >-
   Creates a new sub-organization under the authenticated master account and
-  returns it with a generated `api_key`. Applies when the user wants to add a
+  returns it with a redacted API key. Applies when the user wants to add a
   sub-organization. The first call creates nothing and returns a preview listing the
   `name` and any default webhook URLs with a `confirmation_token`; the
   sub-organization is created when the tool is called again with the same arguments
   and that token, a call meant to follow the user's approval of the preview in a later
-  message. Requires the `subaccounts:write` scope and a `name` of up to 75 characters; the optional
+  message. The reply shows only the last 4 characters of the new key, as
+  `redacted_api_key`. Requires the `subaccounts:write` scope and a `name` of up to 75 characters; the optional
   `default_destinations` object sets default webhook URLs for inbound messages and
   delivery reports.
 

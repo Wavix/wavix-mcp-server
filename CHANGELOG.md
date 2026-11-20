@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Replies and output schemas of the `sub_accounts_*` and `api_keys_*` tools no longer carry the full API key. They carry `redacted_api_key` and `redacted_value` instead: three dots followed by the last 4 characters of the key. This replaces the earlier masked `****` value.
+- The `sub_accounts_create` and `api_keys_create` descriptions say the reply shows only the last 4 characters of the new key.
 
 ## [1.4.1] - 2026-11-18
 

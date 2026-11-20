@@ -8,7 +8,7 @@ from fastmcp.server.middleware import MiddlewareContext
 from fastmcp.tools.tool import ToolResult
 
 from wavix_mcp.secret_redaction import SecretRedactionMiddleware, strip_field
-from wavix_mcp.server import _strip_secret_fields
+from wavix_mcp.server import TOOL_DESCRIPTIONS, _strip_secret_fields
 
 FULL_KEY = "abc123def456ghi789jkl012mno345pqr678stu901vwx234yz0123456789WXYZ"
 
@@ -146,3 +146,14 @@ def test_schema_of_api_keys_list_items_loses_value():
     items = _schema(spec)["properties"]["api_keys"]["items"]
     assert "value" not in items["properties"]
     assert items["required"] == ["id", "redacted_value"]
+
+
+@pytest.mark.parametrize(
+    ("tool", "field"),
+    [("sub_accounts_create", "redacted_api_key"), ("api_keys_create", "redacted_value")],
+)
+def test_create_descriptions_name_the_last_four_rule(tool, field):
+    text = TOOL_DESCRIPTIONS[tool]
+
+    assert "last 4 characters" in text
+    assert field in text
