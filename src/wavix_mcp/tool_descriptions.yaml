@@ -137,11 +137,11 @@ call_control_create: >-
   Places a real, billable outbound PSTN call from `from` to `to`, returning the
   call's `uuid` for tracking and control. Applies when the user asks to start an
   outbound phone call. The first call dials nothing and returns a preview naming the
-  caller ID, the destination and whether the call is recorded with a
-  `confirmation_token`; the call is placed when the tool is called again with the same
-  arguments and that token, a call meant to follow the user's approval of the preview in
-  a later message. Billable to the account balance; the call is placed on the
-  live PSTN network as soon as the confirmed request runs. What the called party
+  caller ID, the destination, whether the call is recorded and the `callback_url` that
+  will receive the call's status updates, with a `confirmation_token`; the call is placed
+  when the tool is called again with the same arguments and that token, a call meant to
+  follow the user's approval of the preview in a later message. Billable to the account
+  balance; the call is placed on the live PSTN network as soon as the confirmed request runs. What the called party
   hears depends on what the customer connects to the call: audio playback,
   synthesized prompts, or a media stream to an AI agent or to live agents. Whenever
   the call is automated or handled by AI, the customer must disclose this to the
