@@ -9,6 +9,8 @@ from fastmcp.tools.tool import Tool
 from mcp.shared.exceptions import McpError
 from mcp.types import INVALID_PARAMS, ErrorData
 
+from .instructions import build_instructions
+
 ToolToolset = dict[str, str]
 
 QUERY_PARAMETER = "toolsets"
@@ -48,7 +50,12 @@ class ToolsetFilterMiddleware(Middleware):
         return self._tool_toolsets.get(tool_name) in selection
 
     async def on_initialize(self, context: MiddlewareContext, call_next):
-        self._selection()
+        selection = self._selection()
+        if context.fastmcp_context is not None:
+            session = context.fastmcp_context.session
+            session._init_options = session._init_options.model_copy(
+                update={"instructions": build_instructions(selection)}
+            )
         return await call_next(context)
 
     async def on_list_tools(self, context: MiddlewareContext, call_next) -> Sequence[Tool]:
