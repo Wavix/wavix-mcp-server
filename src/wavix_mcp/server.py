@@ -32,6 +32,7 @@ from .confirmation import (
 from .docs import register_api_spec, register_docs
 from .scope_filter import ScopeFilterMiddleware
 from .secret_masking import SecretMaskingMiddleware
+from .toolsets import ToolsetFilterMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -410,6 +411,45 @@ def _spec_operation_ids(spec: dict[str, Any]) -> set[str]:
     return ids
 
 
+def _operation_toolset(spec: dict[str, Any], method: str, path: str) -> str | None:
+    path_item = (spec.get("paths") or {}).get(path)
+    op = path_item.get(method.lower()) if isinstance(path_item, dict) else None
+    xmcp = op.get("x-mcp") if isinstance(op, dict) else None
+    toolset = xmcp.get("toolset") if isinstance(xmcp, dict) else None
+    return toolset if isinstance(toolset, str) and toolset else None
+
+
+def _spec_toolsets(spec: dict[str, Any]) -> frozenset[str]:
+    """Every ``x-mcp.toolset`` value declared in the spec."""
+    found: set[str] = set()
+    for path, path_item in (spec.get("paths") or {}).items():
+        if not isinstance(path_item, dict):
+            continue
+        for method in _HTTP_METHODS:
+            toolset = _operation_toolset(spec, method, path)
+            if toolset:
+                found.add(toolset)
+    return frozenset(found)
+
+
+def _resolve_toolsets(spec: dict[str, Any]) -> dict[str, str]:
+    """Tool name -> toolset for generated tools and the hand-registered ones."""
+    tool_toolsets = dict(_TOOL_TOOLSETS)
+    for name, (method, path) in _HAND_TOOL_ROUTES.items():
+        toolset = _operation_toolset(spec, method, path)
+        if toolset:
+            tool_toolsets[name] = toolset
+    untagged = sorted(set(_TOOL_ROUTES) - set(tool_toolsets))
+    if untagged:
+        logger.warning(
+            "%d generated tool(s) carry no x-mcp.toolset and are hidden whenever a "
+            "connection selects toolsets: %s",
+            len(untagged),
+            ", ".join(untagged[:5]),
+        )
+    return tool_toolsets
+
+
 def _build_exclude_route_maps(
     targets: tuple[tuple[str, str], ...],
 ) -> list[RouteMap]:
@@ -464,6 +504,8 @@ _UNANNOTATED: list[str] = []
 # generation so the scope filter can map a tool back to the API route whose
 # permission gates it. Hand-registered tools are added separately in build_server.
 _TOOL_ROUTES: dict[str, tuple[str, str]] = {}
+
+_TOOL_TOOLSETS: dict[str, str] = {}
 
 _CONFIRMED_TOOLS: dict[str, ConfirmedTool] = {}
 
@@ -554,6 +596,9 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
     # not a safe method counts as destructive until the spec says otherwise;
     # over-warning is recoverable, under-warning is not.
     xmcp = _xmcp(route)
+    toolset = (xmcp or {}).get("toolset")
+    if isinstance(toolset, str) and toolset:
+        _TOOL_TOOLSETS[component.name] = toolset
     if xmcp is None:
         _UNANNOTATED.append(f"{(route.method or '').upper()} {route.path}")
         xmcp = {}
@@ -746,6 +791,7 @@ def build_server() -> FastMCP:
     else:
         load_dotenv()
     _TOOL_ROUTES.clear()
+    _TOOL_TOOLSETS.clear()
     _CONFIRMED_TOOLS.clear()
     spec = load_spec()
     spec = _ensure_request_body_type_object(spec)
@@ -822,6 +868,8 @@ def build_server() -> FastMCP:
     register_api_spec(mcp, docs_client)
 
     tool_routes = {**_TOOL_ROUTES, **_HAND_TOOL_ROUTES}
+    tool_toolsets = _resolve_toolsets(spec)
+    mcp.add_middleware(ToolsetFilterMiddleware(tool_toolsets, _spec_toolsets(spec)))
     _require_gated_tools(_CONFIRMED_TOOLS)
     _warn_on_never_gated_tools(tool_routes)
     mcp.add_middleware(ScopeFilterMiddleware(tool_routes))
