@@ -57,3 +57,50 @@ def test_outputs_state_no_tool_count_and_explain_what_determines_the_set():
         assert gen.SCOPE_SENTENCE in text
     assert "| # |" not in readme_block
     assert "| [CDRs](TOOLS.md#cdrs) | List, retrieve" in readme_block
+
+
+_README = Path(__file__).parent.parent / "README.md"
+_FIXTURE_SPEC = Path(__file__).parent / "fixtures" / "wavix-api.yaml"
+_TOOLSETS = {
+    "account",
+    "calls",
+    "messaging",
+    "numbers",
+    "verification",
+    "voice_config",
+    "voice_history",
+}
+
+
+def _toolset_sections(text, level):
+    parts = re.split(rf"^{level} `(\w+)`\n", text, flags=re.MULTILINE)
+    return {parts[i]: parts[i + 1] for i in range(1, len(parts), 2)}
+
+
+def test_lists_each_toolset_with_its_tools(monkeypatch):
+    from wavix_mcp import server
+
+    monkeypatch.setattr(server, "OPENAPI_URL", str(_FIXTURE_SPEC))
+    spec = gen.load_spec()
+    groups = gen._collect_groups(spec, gen._server_tool_names())
+    toolsets = gen._collect_toolsets(groups, gen._resolve_toolsets(spec))
+    ordered = gen._ordered_tags(groups)
+
+    tools_md = gen._build_tools_md(groups, ordered, toolsets)
+    readme_block = gen._build_readme_block(groups, ordered, toolsets)
+
+    assert set(toolsets) == _TOOLSETS
+    for text, level in ((tools_md, "###"), (readme_block, "####")):
+        sections = _toolset_sections(text, level)
+        assert set(sections) == _TOOLSETS
+        for name, ops in toolsets.items():
+            for opid, summary in ops:
+                assert gen._format_tool_line(opid, summary) in sections[name]
+    assert len(toolsets["calls"]) == 13
+
+
+def test_readme_shows_the_parameter():
+    readme = _README.read_text(encoding="utf-8")
+
+    assert "?toolsets=" in readme
+    assert "https://mcp.wavix.com/mcp?toolsets=numbers,messaging" in readme

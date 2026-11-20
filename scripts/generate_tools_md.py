@@ -27,7 +27,7 @@ from pathlib import Path
 # resolve $ref / allOf identically, and pick up any preprocessing tweaks.
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "src"))
-from wavix_mcp.server import build_server, load_spec  # noqa: E402
+from wavix_mcp.server import _resolve_toolsets, build_server, load_spec  # noqa: E402
 
 # Operations whose response is a pre-signed download URL rather than the JSON
 # body. Mirrors BINARY_STREAM_ENDPOINTS in src/wavix_mcp/server.py.
@@ -108,6 +108,16 @@ SUB_GROUPS: dict[str, list[tuple[str, Callable[[str], bool]]]] = {
     ],
 }
 
+TOOLSET_COVERAGE: dict[str, str] = {
+    "account": "Profile, API keys, sub-accounts, billing",
+    "calls": "Start, control and stream live calls; voice campaigns; speech analytics transcription",
+    "messaging": "SMS and MMS, WhatsApp, 10DLC, link shortener",
+    "numbers": "Search, buy and manage phone numbers; cart",
+    "verification": "2FA and number validation",
+    "voice_config": "SIP trunks, WebRTC, call webhooks",
+    "voice_history": "CDRs, call recordings, speech analytics, campaign results",
+}
+
 HTTP_METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
 
 SCOPE_SENTENCE = (
@@ -133,6 +143,11 @@ Generated from the [Wavix OpenAPI spec](https://github.com/Wavix/wavix-openapi).
 | --- | --- |
 {{rows}}\
 """
+
+TOOLSETS_INTRO = (
+    "Every tool belongs to one toolset. Add `?toolsets=<name>[,<name>]` to the connection URL "
+    "to offer only those toolsets; without the parameter every tool is offered."
+)
 
 
 def _slugify(name: str) -> str:
@@ -177,12 +192,56 @@ def _collect_groups(spec: dict, tool_names: set[str]) -> dict[str, list[tuple[st
     return groups
 
 
+def _collect_toolsets(
+    groups: dict[str, list[tuple[str, str]]], tool_toolsets: dict[str, str]
+) -> dict[str, list[tuple[str, str]]]:
+    toolsets: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    untagged: list[str] = []
+    for ops in groups.values():
+        for opid, summary in ops:
+            toolset = tool_toolsets.get(opid)
+            if toolset is None:
+                untagged.append(opid)
+                continue
+            toolsets[toolset].append((opid, summary))
+    if untagged:
+        raise SystemExit(f"tools with no x-mcp.toolset: {', '.join(sorted(untagged))}")
+    for ops in toolsets.values():
+        ops.sort()
+    return toolsets
+
+
+def _ordered_toolsets(toolsets: dict) -> list[str]:
+    return sorted(toolsets)
+
+
+def _build_toolsets_section(toolsets: dict[str, list[tuple[str, str]]], level: str) -> str:
+    out: list[str] = [
+        f"{TOOLSETS_INTRO}\n\n",
+        "| Toolset | Covers | Tools |\n",
+        "| --- | --- | --- |\n",
+    ]
+    names = _ordered_toolsets(toolsets)
+    for name in names:
+        covers = TOOLSET_COVERAGE.get(name, "")
+        out.append(f"| `{name}` | {covers} | {len(toolsets[name])} |\n")
+    out.append("\n")
+    for name in names:
+        out.append(f"{level} `{name}`\n\n")
+        out.extend(_format_tool_line(o, s) + "\n" for o, s in toolsets[name])
+        out.append("\n")
+    return "".join(out)
+
+
 def _ordered_tags(groups: dict) -> list[str]:
     return [t for t in TAG_ORDER if t in groups] + sorted(t for t in groups if t not in TAG_ORDER)
 
 
-def _build_tools_md(groups: dict, ordered: list[str]) -> str:
+def _build_tools_md(groups: dict, ordered: list[str], toolsets: dict | None = None) -> str:
     out: list[str] = [TOOLS_HEADER]
+    if toolsets:
+        out.append("## Toolsets\n\n")
+        out.append(_build_toolsets_section(toolsets, "###"))
     for tag in ordered:
         display = TAG_DISPLAY.get(tag, tag)
         out.append(f"## {display}\n\n")
@@ -207,7 +266,7 @@ def _build_tools_md(groups: dict, ordered: list[str]) -> str:
     return "".join(out)
 
 
-def _build_readme_block(groups: dict, ordered: list[str]) -> str:
+def _build_readme_block(groups: dict, ordered: list[str], toolsets: dict | None = None) -> str:
     rows: list[str] = []
     missing_coverage: list[str] = []
     for tag in ordered:
@@ -225,7 +284,10 @@ def _build_readme_block(groups: dict, ordered: list[str]) -> str:
             f"warning: missing COVERAGE entries for: {', '.join(missing_coverage)}",
             file=sys.stderr,
         )
-    return README_BLOCK_TEMPLATE.format(rows="\n".join(rows) + "\n")
+    block = README_BLOCK_TEMPLATE.format(rows="\n".join(rows) + "\n")
+    if toolsets:
+        block += "\n### Toolsets\n\n" + _build_toolsets_section(toolsets, "####")
+    return block
 
 
 def _patch_readme(path: Path, block: str) -> None:
@@ -249,11 +311,12 @@ def _patch_readme(path: Path, block: str) -> None:
 def main() -> None:
     spec = load_spec()
     groups = _collect_groups(spec, _server_tool_names())
+    toolsets = _collect_toolsets(groups, _resolve_toolsets(spec))
     ordered = _ordered_tags(groups)
     total = sum(len(ops) for ops in groups.values())
 
-    tools_md = _build_tools_md(groups, ordered)
-    readme_block = _build_readme_block(groups, ordered)
+    tools_md = _build_tools_md(groups, ordered, toolsets)
+    readme_block = _build_readme_block(groups, ordered, toolsets)
 
     (ROOT / "TOOLS.md").write_text(tools_md, encoding="utf-8")
     _patch_readme(ROOT / "README.md", readme_block)
