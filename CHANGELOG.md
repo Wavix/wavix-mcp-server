@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-11-23
+
 ### Changed
 
 - `number_validator_get`, `number_validator_create_bulk`, `ten_dlc_brand_appeals_create`, `ten_dlc_brand_vetting_appeals_create` and `link_shortener_create` charge the account balance, so they now run in two steps: the first call charges nothing and returns a preview with a `confirmation_token`, and the action runs when the tool is called again with the same arguments and that token. Their descriptions and previews say the call is charged to the balance, and the server instructions name number validation, 10DLC appeals and short links among the two-step tools and the billed items. For number validation the preview and description say a `format` check is usually free and is charged only when the account has a rate for it.
@@ -185,7 +187,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Invoice download and 10DLC evidence upload are excluded from the tool surface.
 - The OAuth issuer is advertised without an RFC 8414-breaking trailing slash.
 
-[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.4.2...HEAD
+[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.4.3...HEAD
+[1.4.3]: https://github.com/Wavix/wavix-mcp-server/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/Wavix/wavix-mcp-server/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/Wavix/wavix-mcp-server/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.3...v1.4.0
