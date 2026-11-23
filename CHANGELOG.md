@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The `call_control_create` description now says the preview shown before a call is placed names the `callback_url` that will receive the call's status updates.
+
 ## [1.4.1] - 2026-11-18
 
 ### Added
