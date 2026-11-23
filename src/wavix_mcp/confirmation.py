@@ -624,6 +624,9 @@ async def _create_whatsapp_template(arguments: Mapping[str, Any], api: httpx.Asy
 
 
 CHARGED = "charged to your balance"
+CHARGED_BY_TYPE = f"{CHARGED} at your rate for this validation type"
+MAX_SYNC_VALIDATIONS = 500
+MAX_ASYNC_VALIDATIONS = 1000
 
 
 def _charge(note: str) -> Details:
@@ -634,15 +637,25 @@ def _charge(note: str) -> Details:
 
 
 async def _validate_numbers_bulk(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
-    numbers = arguments.get("phone_numbers")
-    if not isinstance(numbers, list) or not numbers:
+    entries = arguments.get("phone_numbers")
+    if not isinstance(entries, list):
         raise _invalid("phone_numbers")
+    numbers = [entry for entry in entries if isinstance(entry, str) and entry]
+    if not numbers:
+        raise _invalid("phone_numbers")
+    is_async = arguments.get("async") is True
+    limit = MAX_ASYNC_VALIDATIONS if is_async else MAX_SYNC_VALIDATIONS
+    if len(numbers) > limit:
+        mode = "an asynchronous" if is_async else "a synchronous"
+        raise ConfirmationInputError(
+            f"The API accepts at most {limit} phone numbers in {mode} request, so nothing was done."
+        )
     lines = [f"type: {_text(arguments, 'type')}"]
     lines += [
         f"{key}: {_display(arguments[key])}" for key in ("async", "force") if key in arguments
     ]
-    lines += _capped([str(number) for number in numbers], len(numbers))
-    heading = f"This will validate {_plural(len(numbers), 'phone number')}, {CHARGED}"
+    lines += _capped(numbers, len(numbers))
+    heading = f"This will validate {_plural(len(numbers), 'phone number')}, {CHARGED_BY_TYPE}"
     return f"{heading}:\n{_bullets(lines)}"
 
 
@@ -661,7 +674,7 @@ CUSTOM_PREVIEWS: Mapping[str, PreviewBuilder] = {
 
 DETAILS: Mapping[str, Details] = {
     "link_shortener_create": _charge(f"{CHARGED} when a short link fee is set"),
-    "number_validator_get": _charge(CHARGED),
+    "number_validator_get": _charge(CHARGED_BY_TYPE),
     "ten_dlc_brand_appeals_create": _charge(CHARGED),
     "ten_dlc_brand_vetting_appeals_create": _charge(CHARGED),
     "api_keys_delete": _api_key_details,

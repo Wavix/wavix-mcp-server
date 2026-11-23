@@ -66,8 +66,8 @@ FRAGMENTS: dict[str, Fragment] = {
         billing=("one-time passwords", "number validations"),
         naming=(
             "Some bulk operations run asynchronously. For example, a confirmed "
-            "number_validator_create_bulk call with async set to true returns a request ID, "
-            "and number_validator_results_get returns the results for that ID.",
+            "number_validator_create_bulk call with async set to true returns a request_uuid, "
+            "and number_validator_results_get, given it as request_id, returns the results.",
         ),
         docs_examples=("wavix://docs/numbers/number-validator",),
         gated=("validate phone numbers",),

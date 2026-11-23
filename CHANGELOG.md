@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The `number_validator_create_bulk` and `number_validator_results_get` descriptions name `request_uuid`, the field an asynchronous bulk validation returns; they named it `request_id`.
+- The `number_validator_create_bulk` preview counts only the numbers the API validates and refuses a batch over the API's limit (500 numbers, or 1000 with `async` set to `true`) instead of returning a token for a call that would fail.
 
 ## [1.4.2] - 2026-11-23
 

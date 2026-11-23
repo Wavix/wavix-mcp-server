@@ -1366,23 +1366,48 @@ def test_paid_tool_descriptions_state_the_charge(real_tools):
         assert "no side effects" not in descriptions[name], name
 
 
+def _numbers(count: int) -> list[str]:
+    return [f"1555010{n:04d}" for n in range(count)]
+
+
 def test_bulk_validation_lists_at_most_the_cap():
-    numbers = [f"1555010{n:04d}" for n in range(1000)]
-    arguments = {"phone_numbers": numbers, "type": "validation"}
+    arguments = {"phone_numbers": _numbers(1000), "type": "validation", "async": True}
     lines = _preview("number_validator_create_bulk", arguments).splitlines()
-    assert lines[:3] == [
-        "This will validate 1000 phone numbers, charged to your balance:",
+    assert lines[:4] == [
+        "This will validate 1000 phone numbers, "
+        "charged to your balance at your rate for this validation type:",
         "• type: validation",
+        "• async: true",
         "• 15550100000",
     ]
     assert lines[-1] == f"• and {1000 - MAX_LISTED_NUMBERS} more"
-    assert len(lines) == MAX_LISTED_NUMBERS + 3
+    assert len(lines) == MAX_LISTED_NUMBERS + 4
+
+
+def test_bulk_validation_counts_only_the_numbers_the_api_validates():
+    arguments = {"phone_numbers": ["15550100", "", 123, "15550101"], "type": "format"}
+    lines = _preview("number_validator_create_bulk", arguments).splitlines()
+    assert lines[0].startswith("This will validate 2 phone numbers,")
+    assert lines[-2:] == ["• 15550100", "• 15550101"]
+
+
+@pytest.mark.parametrize(
+    ("arguments", "limit"),
+    [
+        ({"phone_numbers": _numbers(501), "type": "format"}, 500),
+        ({"phone_numbers": _numbers(1001), "type": "format", "async": True}, 1000),
+    ],
+)
+def test_bulk_validation_refuses_a_batch_over_the_api_limit(arguments, limit):
+    with pytest.raises(ConfirmationInputError, match=f"at most {limit} phone numbers"):
+        _preview("number_validator_create_bulk", arguments)
 
 
 @pytest.mark.parametrize(
     ("arguments", "field"),
     [
         ({"phone_numbers": [], "type": "validation"}, "phone_numbers"),
+        ({"phone_numbers": ["", 5], "type": "validation"}, "phone_numbers"),
         ({"phone_numbers": ["1"]}, "type"),
     ],
 )
@@ -1397,7 +1422,7 @@ def test_bulk_validation_needs_numbers_and_type(arguments, field):
         (
             "number_validator_get",
             {"phone_number": "15550100", "type": "validation"},
-            "charged to your balance",
+            "charged to your balance at your rate for this validation type",
         ),
         ("ten_dlc_brand_appeals_create", {"brand_id": "BXYZ123"}, "charged to your balance"),
         (
