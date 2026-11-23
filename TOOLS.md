@@ -169,7 +169,7 @@ Every tool belongs to one toolset. Add `?toolsets=<name>[,<name>]` to the connec
 - `cdrs_retranscribe` — Transcribe a call recording
 - `cdrs_search` — Search transcriptions
 - `cdrs_transcriptions` — Retrieve a transcription
-- `speech_analytics_get` — Retrieve a transcription
+- `speech_analytics_get` — Retrieve a speech analytics transcription
 - `speech_analytics_retranscribe` — Retranscribe a file
 - `voice_campaigns_get` — Retrieve a voice campaign
 

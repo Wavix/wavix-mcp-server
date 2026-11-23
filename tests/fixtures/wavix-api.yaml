@@ -10,7 +10,7 @@ info:
     name: Wavix
     url: https://wavix.com
     email: support@wavix.com
-  version: 2.0.0
+  version: 3.0.0
 servers:
   - url: https://api.wavix.com
     description: https://api.wavix.com
@@ -103,6 +103,7 @@ paths:
                     - id: 123
                       label: Production API Key
                       value: abc123def456ghi789jkl012mno345pqr678stu901vwx234yz
+                      redacted_value: ...wxyz
                       active: true
                       restricted: true
                       permitted_ips:
@@ -144,7 +145,7 @@ paths:
     post:
       operationId: api_keys_create
       summary: Create an API key
-      description: Creates an API key for the authenticated account. Restrict access by listing permitted IP addresses in `permitted_ips`.
+      description: Creates an API key for the authenticated account. Restrict access by listing permitted IP addresses in `permitted_ips`. Store the returned `value` securely. Later reads return `redacted_value`, and `value` on reads is deprecated.
       tags:
         - API Keys
       x-fern-sdk-group-name:
@@ -192,6 +193,7 @@ paths:
                     id: 123
                     label: Production API Key
                     value: abc123def456ghi789jkl012mno345pqr678stu901vwx234yz
+                    redacted_value: ...wxyz
                     active: true
                     restricted: true
                     permitted_ips:
@@ -1518,7 +1520,6 @@ paths:
                             doc_file_name: Copy of ID.png
                             doc_type: id
                             status: approved
-                            url: https://api.wavix.com/v1/numbers/24882/papers/1
                         domestic_cli: true
                         free_min: 123
                         unlimited: true
@@ -1626,7 +1627,7 @@ paths:
       x-mcp:
         readOnly: false
         destructive: true
-        openWorld: false
+        openWorld: true
         expose: true
         toolset: numbers
       requestBody:
@@ -1728,7 +1729,6 @@ paths:
                         doc_file_name: Copy of ID.png
                         doc_type: id
                         status: approved
-                        url: https://api.wavix.com/v1/numbers/24882/papers/1
                     domestic_cli: true
                     free_min: 123
                     unlimited: true
@@ -1771,7 +1771,7 @@ paths:
       x-mcp:
         readOnly: false
         destructive: true
-        openWorld: false
+        openWorld: true
         expose: true
         toolset: numbers
       parameters:
@@ -1880,7 +1880,6 @@ paths:
                       doc_file_name: user-id-card.png
                       doc_type: id
                       status: pending
-                      url: https://api.wavix.com/v1/numbers/1001/papers/101
                     - id: 102
                       allow_replace: true
                       did_number: '+14062355771'
@@ -1888,7 +1887,6 @@ paths:
                       doc_file_name: driver-license.pdf
                       doc_type: address
                       status: approved
-                      url: https://api.wavix.com/v1/numbers/1002/papers/102
         '400':
           $ref: '#/components/responses/BadRequestErrorResponse'
         '401':
@@ -2099,7 +2097,7 @@ paths:
                         parent_uuid: 99df5ffd-962a-410f-bcce-d08f1f7f328c
                         transcription:
                           uuid: 40d6f322-048d-490b-95c7-4fc5c76a74db
-                          url: https://api.wavix.com/v1/cdrs/40d6f322-048d-490b-95c7-4fc5c76a74db/transcription?appid=secret
+                          url: https://api.wavix.com/v1/cdrs/40d6f322-048d-490b-95c7-4fc5c76a74db/transcription
                     pagination:
                       current_page: 2
                       per_page: 25
@@ -2918,7 +2916,7 @@ paths:
     get:
       tags:
         - Speech Analytics
-      summary: Retrieve a transcription
+      summary: Retrieve a speech analytics transcription
       description: Returns the transcription for the request identified by `request_id`, including transcript, speaker turns, and insights when available.
       operationId: speech_analytics_get
       security:
@@ -3183,7 +3181,7 @@ paths:
       x-fern-sdk-method-name: create
       x-mcp:
         readOnly: false
-        destructive: false
+        destructive: true
         openWorld: true
         expose: true
         toolset: voice_config
@@ -3526,7 +3524,7 @@ paths:
       x-fern-sdk-method-name: update
       x-mcp:
         readOnly: false
-        destructive: false
+        destructive: true
         openWorld: false
         expose: true
         toolset: calls
@@ -3869,7 +3867,7 @@ paths:
       x-mcp:
         readOnly: false
         destructive: false
-        openWorld: false
+        openWorld: true
         expose: true
         toolset: calls
       parameters:
@@ -4097,7 +4095,7 @@ paths:
       x-fern-sdk-method-name: update
       x-mcp:
         readOnly: false
-        destructive: false
+        destructive: true
         openWorld: false
         expose: true
         toolset: voice_config
@@ -5371,7 +5369,7 @@ paths:
       x-fern-sdk-method-name: update
       x-mcp:
         readOnly: false
-        destructive: false
+        destructive: true
         openWorld: true
         expose: true
         toolset: messaging
@@ -7315,7 +7313,7 @@ paths:
       x-fern-sdk-method-name: update
       x-mcp:
         readOnly: false
-        destructive: false
+        destructive: true
         openWorld: false
         expose: true
         toolset: messaging
@@ -8033,7 +8031,7 @@ paths:
       x-mcp:
         readOnly: true
         destructive: false
-        openWorld: false
+        openWorld: true
         expose: true
         toolset: verification
       parameters:
@@ -8108,7 +8106,7 @@ paths:
       x-mcp:
         readOnly: false
         destructive: false
-        openWorld: false
+        openWorld: true
         expose: true
         toolset: verification
       parameters: []
@@ -9518,6 +9516,7 @@ paths:
                         created_at: '2023-06-15T10:30:00Z'
                         name: My sub-account
                         api_key: abc123def456
+                        redacted_api_key: ...f456
                         master_organization: 456
                         status: enabled
                         default_destinations:
@@ -9537,7 +9536,7 @@ paths:
       tags:
         - Sub-accounts
       summary: Create a sub-account
-      description: Creates a sub-account under the authenticated master account. Returns the sub-account with its generated `api_key`.
+      description: Creates a sub-account under the authenticated master account. Returns the sub-account with its generated `api_key`. Store the returned `api_key` securely. Later reads return `redacted_api_key`, and `api_key` on reads is deprecated.
       operationId: sub_accounts_create
       security:
         - bearerAuth:
@@ -9571,7 +9570,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubOrganizationResponse'
+                $ref: '#/components/schemas/SubOrganizationWithSecret'
               examples:
                 success:
                   summary: Successful response
@@ -9580,6 +9579,7 @@ paths:
                     created_at: '2023-06-15T10:30:00Z'
                     name: My sub-account
                     api_key: abc123def456
+                    redacted_api_key: ...f456
                     master_organization: 456
                     status: enabled
                     default_destinations:
@@ -9651,6 +9651,7 @@ paths:
                     created_at: '2023-06-15T10:30:00Z'
                     name: My sub-account
                     api_key: abc123def456
+                    redacted_api_key: ...f456
                     master_organization: 456
                     status: enabled
                     default_destinations:
@@ -9722,6 +9723,7 @@ paths:
                     created_at: '2023-06-15T10:30:00Z'
                     name: My sub-account
                     api_key: abc123def456
+                    redacted_api_key: ...f456
                     master_organization: 456
                     status: enabled
                     default_destinations:
@@ -12949,13 +12951,12 @@ components:
             - `read`: GET requests, `POST /v1/cdrs`
             - `write`: all methods (includes read)
           example: read
-    ApiKey:
+    ApiKeyBase:
       type: object
-      description: API key details including IP restrictions and scope permissions.
+      description: Shared API key fields without the secret value.
       required:
         - id
         - label
-        - value
         - active
         - restricted
         - permitted_ips
@@ -12984,10 +12985,6 @@ components:
           type: string
           description: API key label.
           example: Production API Key
-        value:
-          type: string
-          description: API key value.
-          example: abc123def456ghi789jkl012mno345pqr678stu901vwx234yz
         active:
           type: boolean
           description: Indicates whether the API key is active.
@@ -13092,6 +13089,26 @@ components:
           format: date-time
           description: Creation date and time in ISO 8601 format.
           example: '2024-01-15T10:30:00Z'
+    ApiKey:
+      description: API key details including IP restrictions and scope permissions. The `value` field is deprecated; use `redacted_value`.
+      allOf:
+        - $ref: '#/components/schemas/ApiKeyBase'
+      required:
+        - value
+        - redacted_value
+      properties:
+        value:
+          type: string
+          deprecated: true
+          description: Full API key value. Deprecated; use `redacted_value`, which shows only the last 4 characters.
+          example: abc123def456ghi789jkl012mno345pqr678stu901vwx234yz
+        redacted_value:
+          type:
+            - string
+            - 'null'
+          description: Redacted API key value, shown as `...` followed by the last 4 characters.
+          example: ...wxyz
+      type: object
     UnauthorizedErrorResponse:
       title: UnauthorizedErrorResponse
       type: object
@@ -13222,10 +13239,24 @@ components:
           type: object
     ApiKeyWithSecret:
       description: |-
-        API key details, including the secret `value`. Returned only at creation time —
-        store it securely, it cannot be retrieved again.
+        API key details, including the secret `value`. Store the `value` securely. Later reads return `redacted_value`,
+        and `value` on reads is deprecated.
       allOf:
-        - $ref: '#/components/schemas/ApiKey'
+        - $ref: '#/components/schemas/ApiKeyBase'
+      required:
+        - value
+        - redacted_value
+      properties:
+        value:
+          type: string
+          description: Full API key value.
+          example: abc123def456ghi789jkl012mno345pqr678stu901vwx234yz
+        redacted_value:
+          type:
+            - string
+            - 'null'
+          description: Redacted API key value, shown as `...` followed by the last 4 characters.
+          example: ...wxyz
       type: object
     ValidationErrorResponse:
       title: ValidationErrorResponse
@@ -14300,7 +14331,6 @@ components:
         - doc_file_name
         - doc_type
         - status
-        - url
       type: object
       additionalProperties: false
       properties:
@@ -14333,10 +14363,6 @@ components:
         status:
           type: string
           description: Status of the uploaded document. Can be either `approved`, `pending`, or `rejected`
-        url:
-          type: string
-          description: A link to the uploaded document
-          example: https://api.wavix.com/v1/numbers/24882/papers/1"
       description: A document uploaded for a phone number
       example:
         id: 423
@@ -14346,7 +14372,6 @@ components:
         doc_file_name: Copy of ID.png
         doc_type: id
         status: approved
-        url: https://api.wavix.com/v1/numbers/24882/papers/1
     Number:
       title: Number
       required:
@@ -14970,8 +14995,8 @@ components:
           example: 40d6f322-048d-490b-95c7-4fc5c76a74db
         url:
           type: string
-          description: URL for retrieving the full call transcription.
-          example: https://api.wavix.com/v1/cdrs/40d6f322-048d-490b-95c7-4fc5c76a74db/transcription?appid=secret
+          description: URL for retrieving the full call transcription. Call it with your usual `Authorization` header.
+          example: https://api.wavix.com/v1/cdrs/40d6f322-048d-490b-95c7-4fc5c76a74db/transcription
     CDRWithTranscription:
       title: CDRWithTranscription
       required:
@@ -20324,6 +20349,7 @@ components:
         - created_at
         - name
         - api_key
+        - redacted_api_key
         - master_organization
         - status
         - default_destinations
@@ -20347,8 +20373,15 @@ components:
           example: My sub-account
         api_key:
           type: string
-          description: Sub-account API key.
+          deprecated: true
+          description: Sub-account API key. Deprecated; use `redacted_api_key`, which shows only the last 4 characters.
           example: abc123def456
+        redacted_api_key:
+          type:
+            - string
+            - 'null'
+          description: Redacted sub-account API key, shown as `...` followed by the last 4 characters. Null when the sub-account has no active key.
+          example: ...f456
         master_organization:
           type: integer
           format: int32
@@ -20384,6 +20417,7 @@ components:
         created_at: '2023-06-15T10:30:00Z'
         name: My sub-account
         api_key: abc123def456
+        redacted_api_key: ...f456
         master_organization: 456
         status: enabled
         default_destinations:
@@ -20426,6 +20460,86 @@ components:
               format: uri
               description: Delivery report webhook URL.
               example: https://examples.com/dlr
+    SubOrganizationWithSecret:
+      title: SubOrganizationWithSecret
+      required:
+        - id
+        - created_at
+        - name
+        - api_key
+        - redacted_api_key
+        - master_organization
+        - status
+        - default_destinations
+      type: object
+      description: Sub-account details including the full API key. Returned only by the create operation.
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int32
+          description: Sub-account ID.
+          example: 123
+        created_at:
+          type: string
+          format: date-time
+          description: Date and time the sub-account was created in ISO 8601 format.
+          example: '2023-06-15T10:30:00Z'
+        name:
+          type: string
+          description: Sub-account name.
+          example: My sub-account
+        api_key:
+          type: string
+          description: Full sub-account API key.
+          example: abc123def456
+        redacted_api_key:
+          type:
+            - string
+            - 'null'
+          description: Redacted sub-account API key, shown as `...` followed by the last 4 characters. Null when the sub-account has no active key.
+          example: ...f456
+        master_organization:
+          type: integer
+          format: int32
+          description: Master account ID.
+          example: 456
+        status:
+          type: string
+          description: Status of the subaccount. One of `enabled` (the subaccount is active and can be used) or `disabled` (the subaccount is suspended).
+          enum:
+            - enabled
+            - disabled
+          example: enabled
+        default_destinations:
+          type: object
+          additionalProperties: false
+          description: Default webhook URLs for inbound messages and delivery reports.
+          required:
+            - sms_endpoint
+            - dlr_endpoint
+          properties:
+            sms_endpoint:
+              type: string
+              format: uri
+              description: Inbound messages webhook URL.
+              example: https://examples.com/sms
+            dlr_endpoint:
+              type: string
+              format: uri
+              description: Delivery report webhook URL.
+              example: https://examples.com/dlr
+      example:
+        id: 123
+        created_at: '2023-06-15T10:30:00Z'
+        name: My sub-account
+        api_key: abc123def456
+        redacted_api_key: ...f456
+        master_organization: 456
+        status: enabled
+        default_destinations:
+          sms_endpoint: https://examples.com/sms
+          dlr_endpoint: https://examples.com/dlr
     SubAccountsUpdateRequest:
       type: object
       additionalProperties: false
