@@ -14,31 +14,6 @@ LINE_RE = re.compile(r"^- \[(?P<title>.+?)\]\((?P<url>.+?)\): (?P<desc>.+)$")
 DESC_MAX = 200
 TTL = 3600
 
-DOCS_URI_PREFIX = "wavix://docs/"
-API_SPEC_URI = "wavix://api/openapi.yaml"
-EVERY_TOOLSET_URIS = frozenset({API_SPEC_URI, f"{DOCS_URI_PREFIX}mcp/tools"})
-
-DOC_TOOLSETS: tuple[tuple[str, str], ...] = (
-    ("voice/cdr", "voice_history"),
-    ("voice/call-transcription", "voice_history"),
-    ("voice/file-transcription", "voice_history"),
-    ("voice/", "calls"),
-    ("sip-trunking/", "voice_config"),
-    ("sdks/wavix-embeddable", "voice_config"),
-    ("messaging/2fa", "verification"),
-    ("messaging/", "messaging"),
-    ("numbers/number-validator", "verification"),
-    ("numbers/", "numbers"),
-)
-
-
-def doc_toolset(uri: str) -> str | None:
-    if not uri.startswith(DOCS_URI_PREFIX):
-        return None
-    path = uri[len(DOCS_URI_PREFIX) :]
-    return next((toolset for prefix, toolset in DOC_TOOLSETS if path.startswith(prefix)), None)
-
-
 _CACHE: dict[str, tuple[float, str, str | None]] = {}
 _LOCKS: dict[str, asyncio.Lock] = {}
 
@@ -107,7 +82,7 @@ def register_api_spec(mcp: FastMCP, client: httpx.AsyncClient) -> None:
     """Expose the Wavix OpenAPI YAML spec as an MCP Resource."""
 
     @mcp.resource(
-        uri=API_SPEC_URI,
+        uri="wavix://api/openapi.yaml",
         name="Wavix API OpenAPI Specification",
         description="Complete OpenAPI 3.0 spec — endpoints, request/response schemas, auth.",
         mime_type="application/x-yaml",

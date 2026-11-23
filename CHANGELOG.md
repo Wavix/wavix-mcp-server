@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Choose which toolsets a connection offers with `?toolsets=` in the connection URL, for example `https://mcp.wavix.com/mcp?toolsets=numbers,messaging`. The seven toolsets are `account`, `calls`, `messaging`, `numbers`, `verification`, `voice_config` and `voice_history`. An unknown name is refused with the list of valid names, the instructions describe only the selected toolsets, and a URL without the parameter offers every tool as before. Documentation resources follow the selection too, and the full OpenAPI specification and the tool catalog page are offered only when every toolset is. The README and `TOOLS.md` list the tools of each toolset.
+- Choose which toolsets a connection offers with `?toolsets=` in the connection URL, for example `https://mcp.wavix.com/mcp?toolsets=numbers,messaging`. The seven toolsets are `account`, `calls`, `messaging`, `numbers`, `verification`, `voice_config` and `voice_history`. An unknown name is refused with the list of valid names, the instructions describe only the selected toolsets, and a URL without the parameter offers every tool as before. The README and `TOOLS.md` list the tools of each toolset.
 
 ## [1.4.1] - 2026-11-18
 

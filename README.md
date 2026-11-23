@@ -477,7 +477,6 @@ https://mcp.wavix.com/mcp?toolsets=numbers,messaging
 - A name that is not a toolset is refused when the client connects, and the message lists the valid names: `Unknown toolset 'x'. Valid toolsets: account, calls, messaging, numbers, verification, voice_config, voice_history`.
 - Calling a tool outside the selected toolsets fails with `Tool '<name>' is not available on this connection's toolsets.`
 - The instructions the server sends to the client describe only the selected toolsets.
-- Documentation resources follow the selection: a page that belongs to a toolset left out is not listed and cannot be read, and pages that belong to no toolset stay. `wavix://api/openapi.yaml` and the tool catalog page `wavix://docs/mcp/tools` are offered only when the connection offers every toolset.
 
 The tools of each toolset are listed under [Toolsets](#toolsets) above.
 

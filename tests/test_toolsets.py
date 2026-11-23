@@ -10,7 +10,7 @@ from fastmcp.client.transports import StreamableHttpTransport
 from fastmcp.exceptions import ToolError
 from mcp.shared.exceptions import McpError
 
-from wavix_mcp import docs, scope_filter, server
+from wavix_mcp import scope_filter, server
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SPEC = FIXTURES / "wavix-api.yaml"
@@ -190,108 +190,3 @@ def test_a_tool_without_a_toolset(upstream):
 
     assert "stub_without_toolset" not in _listed("toolsets=numbers", upstream, add_stub)
     assert "stub_without_toolset" in _listed(None, upstream, add_stub)
-
-
-LLMS = """\
-- [Send SMS](https://docs.wavix.com/messaging/send-sms.md): Send a message
-- [2FA](https://docs.wavix.com/messaging/2fa.md): One-time passwords
-- [Numbers](https://docs.wavix.com/numbers/numbers.md): Manage numbers
-- [Number Validator](https://docs.wavix.com/numbers/number-validator.md): Validate numbers
-- [SIP trunks](https://docs.wavix.com/sip-trunking/sip-trunks.md): Configure trunks
-- [Embeddable](https://docs.wavix.com/sdks/wavix-embeddable.md): WebRTC widget
-- [CDRs](https://docs.wavix.com/voice/cdr.md): Call detail records
-- [Call transcription](https://docs.wavix.com/voice/call-transcription.md): Transcripts
-- [Call streaming](https://docs.wavix.com/voice/call-streaming.md): Stream a live call
-- [Voice AI](https://docs.wavix.com/voice/voice-ai.md): AI agents on calls
-- [Campaign builder](https://docs.wavix.com/voice/campaign-builder.md): Voice campaigns
-- [Sandbox](https://docs.wavix.com/getting-started/sandbox.md): Try Wavix
-- [Tool catalog](https://docs.wavix.com/mcp/tools.md): Every tool of the server
-"""
-SPEC_URI = "wavix://api/openapi.yaml"
-CATALOG_URI = "wavix://docs/mcp/tools"
-CALLS_DOCS = {
-    "wavix://docs/voice/call-streaming",
-    "wavix://docs/voice/voice-ai",
-    "wavix://docs/voice/campaign-builder",
-}
-
-
-@pytest.fixture
-def docs_index(monkeypatch):
-    def get(url, **_):
-        return httpx.Response(200, text=LLMS, request=httpx.Request("GET", url))
-
-    monkeypatch.setattr(docs.httpx, "get", get)
-
-
-def _resources(query):
-    async def run():
-        mcp = server.build_server()
-
-        async def uris(client):
-            return {str(r.uri) for r in await client.list_resources()}
-
-        return await _with_client(mcp, query, uris)
-
-    return asyncio.run(run())
-
-
-def test_without_toolsets_every_resource_is_listed(upstream, docs_index):
-    uris = _resources(None)
-
-    assert uris > CALLS_DOCS
-    assert SPEC_URI in uris
-    assert CATALOG_URI in uris
-    assert len(uris) == 14
-
-
-def test_resources_without_calls_leave_out_live_calling_docs_and_the_full_spec(
-    upstream, docs_index
-):
-    uris = _resources("toolsets=" + ",".join(v for v in VALID if v != "calls"))
-
-    assert uris == _resources(None) - CALLS_DOCS - {SPEC_URI, CATALOG_URI}
-
-
-def test_a_doc_follows_its_toolset_and_general_docs_stay(upstream, docs_index):
-    assert _resources("toolsets=verification") == {
-        "wavix://docs/messaging/2fa",
-        "wavix://docs/numbers/number-validator",
-        "wavix://docs/getting-started/sandbox",
-    }
-
-
-def test_selecting_every_toolset_keeps_the_full_spec(upstream, docs_index):
-    assert _resources("toolsets=" + ",".join(VALID)) == _resources(None)
-
-
-@pytest.mark.parametrize("uri", ["wavix://docs/voice/call-streaming", SPEC_URI, CATALOG_URI])
-def test_a_resource_outside_the_selection_is_refused_without_a_fetch(
-    upstream, docs_index, monkeypatch, uri
-):
-    fetched = []
-
-    async def cached_get(client, url):
-        fetched.append(url)
-        return "body"
-
-    monkeypatch.setattr(docs, "_cached_get", cached_get)
-
-    async def run(query):
-        mcp = server.build_server()
-
-        async def read(client):
-            return await client.read_resource(uri)
-
-        return await _with_client(mcp, query, read)
-
-    with pytest.raises(McpError, match="not available on this connection's toolsets"):
-        asyncio.run(run("toolsets=numbers"))
-    assert fetched == []
-
-    assert asyncio.run(run(None))[0].text == "body"
-    assert len(fetched) == 1
-
-
-def test_every_doc_toolset_is_a_spec_toolset():
-    assert {toolset for _, toolset in docs.DOC_TOOLSETS} <= set(VALID)
