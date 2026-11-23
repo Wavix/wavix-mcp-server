@@ -1368,11 +1368,11 @@ def test_paid_tool_descriptions_state_the_charge(real_tools):
 
 def test_bulk_validation_lists_at_most_the_cap():
     numbers = [f"1555010{n:04d}" for n in range(1000)]
-    text = _preview("number_validator_create_bulk", {"phone_numbers": numbers, "type": "basic"})
-    lines = text.splitlines()
+    arguments = {"phone_numbers": numbers, "type": "validation"}
+    lines = _preview("number_validator_create_bulk", arguments).splitlines()
     assert lines[:3] == [
         "This will validate 1000 phone numbers:",
-        "• type: basic",
+        "• type: validation",
         "• 15550100000",
     ]
     assert lines[-1] == f"• and {1000 - MAX_LISTED_NUMBERS} more"
@@ -1381,7 +1381,10 @@ def test_bulk_validation_lists_at_most_the_cap():
 
 @pytest.mark.parametrize(
     ("arguments", "field"),
-    [({"phone_numbers": [], "type": "basic"}, "phone_numbers"), ({"phone_numbers": ["1"]}, "type")],
+    [
+        ({"phone_numbers": [], "type": "validation"}, "phone_numbers"),
+        ({"phone_numbers": ["1"]}, "type"),
+    ],
 )
 def test_bulk_validation_needs_numbers_and_type(arguments, field):
     with pytest.raises(ConfirmationInputError, match=field):

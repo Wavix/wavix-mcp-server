@@ -296,8 +296,10 @@ number_validator_create_bulk: >-
   user's approval of the preview in a later message. Each validation is charged to
   the connected Wavix account's balance; when `async` is `true` the confirmed call
   returns a `request_id` for `number_validator_results_get` instead of the validation
-  details. Requires the `validator:write` scope, the `phone_numbers` to validate, and
-  the validation `type`.
+  details. Requires the `validator:write` scope, the `phone_numbers` to validate (at
+  most 1000 per request), and the validation `type`; `async` and `force` default to
+  `false`, and `force` set to `true` requests a fresh validation instead of a cached
+  result.
 
 number_validator_get: >-
   Validates a single phone number and returns its line type, carrier, portability,
@@ -323,14 +325,15 @@ number_validator_results_get: >-
 
 link_shortener_create: >-
   Creates a short link that redirects to a target URL and tracks click metrics. Applies
-  when the user wants a trackable shortened URL, typically for a campaign message.
-  The first call creates nothing and returns a preview listing the `link` and the
-  other arguments with a `confirmation_token`; the short link is created when the tool
-  is called again with the same arguments and that token, a call meant to follow the
-  user's approval of the preview in a later message. Creates a new, publicly reachable
-  short link pointing at the given target URL; when a short link price is set for the
-  account, each created link is charged to the connected Wavix account's balance.
-  Requires the `campaigns:write` scope and the destination URL (`link`); an
+  when the user wants a trackable shortened URL, typically for a campaign message. Not
+  for click metrics of existing short links; `link_shortener_metrics_list` returns
+  those. The first call creates nothing and returns a preview listing the `link` and
+  the other arguments with a `confirmation_token`; the short link is created when the
+  tool is called again with the same arguments and that token, a call meant to follow
+  the user's approval of the preview in a later message. Creates a new, publicly
+  reachable short link pointing at the given target URL; each created link is charged
+  to the connected Wavix account's balance when a short link fee is set for the
+  account. Requires the `campaigns:write` scope and the destination URL (`link`); an
   optional `phone`, `fallback_url`, `expiration_time`, and `utm_campaign` refine
   it.
 
@@ -761,9 +764,8 @@ ten_dlc_brand_appeals_create: >-
   with a `confirmation_token`; the appeal is submitted for review when the tool is
   called again with the same arguments and that token, a call meant to follow the
   user's approval of the preview in a later message. The appeal is charged to the
-  connected Wavix account's balance. Requires the
-  `campaigns:write` scope, the Brand's `brand_id`, one or more `appeal_categories`, and
-  `evidence` supporting the appeal.
+  connected Wavix account's balance. Requires the `campaigns:write` scope, the Brand's
+  `brand_id`, one or more `appeal_categories`, and `evidence` supporting the appeal.
 
 ten_dlc_brand_appeals_list: >-
   Lists the identity verification appeals submitted for the 10DLC Brand identified by
@@ -800,14 +802,16 @@ ten_dlc_brand_vetting_appeals_create: >-
   `appeal_categories` (`VERIFY_TAX_ID`, `VERIFY_NON_PROFIT`, `VERIFY_GOVERNMENT`, or
   `LOW_SCORE`) and a list of supporting `evidence` IDs. Applies when the user wants to
   contest an external vetting result for a Brand. Not for contesting the Brand's
-  identity verification; `ten_dlc_brand_appeals_create` covers that. The first call
+  identity verification; `ten_dlc_brand_appeals_create` covers that. Not for requesting
+  a new external vetting; `ten_dlc_brand_vettings_create` covers that. The first call
   submits nothing and returns a preview listing the `brand_id`, the `appeal_categories`
   and the `evidence` IDs with a `confirmation_token`; the vetting appeal is submitted
   for review when the tool is called again with the same arguments and that token, a
   call meant to follow the user's approval of the preview in a later message. The
   appeal is charged to the connected Wavix account's balance. Requires the
-  `campaigns:write` scope, the Brand's `brand_id`, the `appeal_categories`, and the `evidence` IDs; a `VETTED_VERIFIED` Brand cannot request
-  the `VERIFY_TAX_ID` category.
+  `campaigns:write` scope, the Brand's `brand_id`, the `appeal_categories`, and the
+  `evidence` IDs; a `VETTED_VERIFIED` Brand cannot request the `VERIFY_TAX_ID`
+  category.
 
 ten_dlc_brand_vetting_appeals_list: >-
   Lists the external vetting appeals for the 10DLC Brand identified by `brand_id`.
