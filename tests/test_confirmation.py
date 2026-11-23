@@ -1373,22 +1373,36 @@ def _numbers(count: int) -> list[str]:
 def test_bulk_validation_lists_at_most_the_cap():
     arguments = {"phone_numbers": _numbers(1000), "type": "validation", "async": True}
     lines = _preview("number_validator_create_bulk", arguments).splitlines()
-    assert lines[:4] == [
-        "This will validate 1000 phone numbers, "
-        "charged to your balance at your rate for this validation type:",
+    assert lines[:5] == [
+        "This will validate 1000 phone numbers:",
         "• type: validation",
         "• async: true",
+        "• cost: charged to your balance at your rate for this validation type",
         "• 15550100000",
     ]
     assert lines[-1] == f"• and {1000 - MAX_LISTED_NUMBERS} more"
-    assert len(lines) == MAX_LISTED_NUMBERS + 4
+    assert len(lines) == MAX_LISTED_NUMBERS + 5
 
 
 def test_bulk_validation_counts_only_the_numbers_the_api_validates():
     arguments = {"phone_numbers": ["15550100", "", 123, "15550101"], "type": "format"}
     lines = _preview("number_validator_create_bulk", arguments).splitlines()
-    assert lines[0].startswith("This will validate 2 phone numbers,")
+    assert lines[0] == "This will validate 2 phone numbers:"
     assert lines[-2:] == ["• 15550100", "• 15550101"]
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        ("number_validator_get", {"phone_number": "15550100", "type": "format"}),
+        ("number_validator_create_bulk", {"phone_numbers": ["15550100"], "type": "format"}),
+    ],
+)
+def test_format_check_preview_says_it_is_usually_free(tool, arguments):
+    lines = _preview(tool, arguments).splitlines()
+    assert (
+        "• cost: usually free; charged to your balance if your account has a rate for format checks"
+    ) in lines
 
 
 @pytest.mark.parametrize(
@@ -1422,7 +1436,7 @@ def test_bulk_validation_needs_numbers_and_type(arguments, field):
         (
             "number_validator_get",
             {"phone_number": "15550100", "type": "validation"},
-            "charged to your balance at your rate for this validation type",
+            "cost: charged to your balance at your rate for this validation type",
         ),
         ("ten_dlc_brand_appeals_create", {"brand_id": "BXYZ123"}, "charged to your balance"),
         (

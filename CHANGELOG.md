@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `number_validator_get`, `number_validator_create_bulk`, `ten_dlc_brand_appeals_create`, `ten_dlc_brand_vetting_appeals_create` and `link_shortener_create` charge the account balance, so they now run in two steps: the first call charges nothing and returns a preview with a `confirmation_token`, and the action runs when the tool is called again with the same arguments and that token. Their descriptions and previews say the call is charged to the balance, and the server instructions name number validation, 10DLC appeals and short links among the two-step tools and the billed items.
+- `number_validator_get`, `number_validator_create_bulk`, `ten_dlc_brand_appeals_create`, `ten_dlc_brand_vetting_appeals_create` and `link_shortener_create` charge the account balance, so they now run in two steps: the first call charges nothing and returns a preview with a `confirmation_token`, and the action runs when the tool is called again with the same arguments and that token. Their descriptions and previews say the call is charged to the balance, and the server instructions name number validation, 10DLC appeals and short links among the two-step tools and the billed items. For number validation the preview and description say a `format` check is usually free and is charged only when the account has a rate for it.
 - The billing list in the server instructions also names media streams of calls, Sender ID registrations, 10DLC Brand and Campaign fees, and transcriptions of calls and audio files.
 
 ### Fixed

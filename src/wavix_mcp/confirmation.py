@@ -625,6 +625,7 @@ async def _create_whatsapp_template(arguments: Mapping[str, Any], api: httpx.Asy
 
 CHARGED = "charged to your balance"
 CHARGED_BY_TYPE = f"{CHARGED} at your rate for this validation type"
+FORMAT_CHECK_COST = f"usually free; {CHARGED} if your account has a rate for format checks"
 MAX_SYNC_VALIDATIONS = 500
 MAX_ASYNC_VALIDATIONS = 1000
 
@@ -634,6 +635,17 @@ def _charge(note: str) -> Details:
         return [note]
 
     return details
+
+
+def _validation_cost(arguments: Mapping[str, Any]) -> str:
+    cost = FORMAT_CHECK_COST if arguments.get("type") == "format" else CHARGED_BY_TYPE
+    return f"cost: {cost}"
+
+
+async def _validation_cost_details(
+    arguments: Mapping[str, Any], api: httpx.AsyncClient
+) -> list[str]:
+    return [_validation_cost(arguments)]
 
 
 async def _validate_numbers_bulk(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
@@ -654,9 +666,9 @@ async def _validate_numbers_bulk(arguments: Mapping[str, Any], api: httpx.AsyncC
     lines += [
         f"{key}: {_display(arguments[key])}" for key in ("async", "force") if key in arguments
     ]
+    lines.append(_validation_cost(arguments))
     lines += _capped(numbers, len(numbers))
-    heading = f"This will validate {_plural(len(numbers), 'phone number')}, {CHARGED_BY_TYPE}"
-    return f"{heading}:\n{_bullets(lines)}"
+    return f"This will validate {_plural(len(numbers), 'phone number')}:\n{_bullets(lines)}"
 
 
 CUSTOM_PREVIEWS: Mapping[str, PreviewBuilder] = {
@@ -674,7 +686,7 @@ CUSTOM_PREVIEWS: Mapping[str, PreviewBuilder] = {
 
 DETAILS: Mapping[str, Details] = {
     "link_shortener_create": _charge(f"{CHARGED} when a short link fee is set"),
-    "number_validator_get": _charge(CHARGED_BY_TYPE),
+    "number_validator_get": _validation_cost_details,
     "ten_dlc_brand_appeals_create": _charge(CHARGED),
     "ten_dlc_brand_vetting_appeals_create": _charge(CHARGED),
     "api_keys_delete": _api_key_details,
