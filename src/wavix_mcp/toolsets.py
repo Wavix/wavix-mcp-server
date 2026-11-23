@@ -2,13 +2,15 @@
 
 from collections.abc import Sequence
 
-from fastmcp.exceptions import ToolError
+from fastmcp.exceptions import ResourceError, ToolError
+from fastmcp.resources import Resource
 from fastmcp.server.dependencies import get_http_request
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 from fastmcp.tools.tool import Tool
 from mcp.shared.exceptions import McpError
 from mcp.types import INVALID_PARAMS, ErrorData
 
+from .docs import EVERY_TOOLSET_URIS, doc_toolset
 from .instructions import build_instructions
 
 ToolToolset = dict[str, str]
@@ -48,6 +50,26 @@ class ToolsetFilterMiddleware(Middleware):
 
     def _selected(self, tool_name: str, selection: frozenset[str]) -> bool:
         return self._tool_toolsets.get(tool_name) in selection
+
+    def _resource_selected(self, uri: str, selection: frozenset[str]) -> bool:
+        if uri in EVERY_TOOLSET_URIS:
+            return selection >= self._valid
+        toolset = doc_toolset(uri)
+        return toolset is None or toolset in selection
+
+    async def on_list_resources(self, context: MiddlewareContext, call_next) -> Sequence[Resource]:
+        resources = await call_next(context)
+        selection = self._selection()
+        if selection is None:
+            return resources
+        return [r for r in resources if self._resource_selected(str(r.uri), selection)]
+
+    async def on_read_resource(self, context: MiddlewareContext, call_next):
+        selection = self._selection()
+        uri = str(context.message.uri)
+        if selection is not None and not self._resource_selected(uri, selection):
+            raise ResourceError(f"Resource '{uri}' is not available on this connection's toolsets.")
+        return await call_next(context)
 
     async def on_initialize(self, context: MiddlewareContext, call_next):
         selection = self._selection()

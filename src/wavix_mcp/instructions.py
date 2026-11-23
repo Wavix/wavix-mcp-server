@@ -4,13 +4,15 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from .confirmation import TOKEN_TTL_S
+from .docs import API_SPEC_URI
+
+SPEC_LINE = f"\n- The full Wavix OpenAPI specification is available as the resource {API_SPEC_URI}."
 
 CORE = f"""\
 The Wavix MCP server exposes the Wavix telecom platform: {{products}}.
 
 Documentation resources:
-- Wavix product documentation is available as MCP resources under wavix://docs/*, one resource per topic{{examples}}. It covers Wavix-specific feature behavior, parameter meanings, billing, and limits, which can differ from other telecom APIs.
-- The full Wavix OpenAPI specification is available as the resource wavix://api/openapi.yaml.
+- Wavix product documentation is available as MCP resources under wavix://docs/*, one resource per topic{{examples}}. It covers Wavix-specific feature behavior, parameter meanings, billing, and limits, which can differ from other telecom APIs.{{spec}}
 
 Tool naming conventions:
 - *_list tools return a collection with basic filters. Paginated collections accept per_page (1 to 100, default 25) and page (starting at 1); each tool's input schema shows whether it is paginated.
@@ -129,6 +131,7 @@ def build_instructions(selection: frozenset[str] | None) -> str:
     return CORE.format(
         products=_join((f.phrase for f in chosen), "and"),
         examples=f" (for example, {_join(examples, 'and')})" if examples else "",
+        spec=SPEC_LINE if selection is None or selection >= FRAGMENTS.keys() else "",
         gated=", as do the tools that " + _join(gated, "or") if gated else "",
         naming="".join(f"\n- {n}" for f in chosen for n in f.naming),
         sections="".join(sections),

@@ -149,6 +149,12 @@ def test_instructions_without_calls_omit_live_calling():
     assert imperative_violations(text) == []
 
 
+def test_only_a_connection_offering_every_toolset_is_told_about_the_full_spec():
+    assert "wavix://api/openapi.yaml" in build_instructions(None)
+    assert "wavix://api/openapi.yaml" in build_instructions(frozenset(test_toolsets.VALID))
+    assert "openapi" not in build_instructions(NON_CALLS)
+
+
 def test_selection_names_its_products_only():
     text = build_instructions(frozenset({"numbers"}))
 
