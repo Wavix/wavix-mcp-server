@@ -800,8 +800,8 @@ ten_dlc_brand_vetting_appeals_create: >-
   and the `evidence` IDs with a `confirmation_token`; the vetting appeal is submitted
   for review when the tool is called again with the same arguments and that token, a
   call meant to follow the user's approval of the preview in a later message. The
-  appeal is charged to the connected Wavix account's balance. Requires the `campaigns:write` scope, the Brand's `brand_id`, the
-  `appeal_categories`, and the `evidence` IDs; a `VETTED_VERIFIED` Brand cannot request
+  appeal is charged to the connected Wavix account's balance. Requires the
+  `campaigns:write` scope, the Brand's `brand_id`, the `appeal_categories`, and the `evidence` IDs; a `VETTED_VERIFIED` Brand cannot request
   the `VERIFY_TAX_ID` category.
 
 ten_dlc_brand_vetting_appeals_list: >-
