@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `number_validator_get`, `number_validator_create_bulk`, `ten_dlc_brand_appeals_create`, `ten_dlc_brand_vetting_appeals_create` and `link_shortener_create` charge the account balance, so they now run in two steps: the first call charges nothing and returns a preview with a `confirmation_token`, and the action runs when the tool is called again with the same arguments and that token. Their descriptions and previews say the call is charged to the balance, and the server instructions name number validation, 10DLC appeals and short links among the two-step tools and the billed items. For number validation the preview and description say a `format` check is usually free and is charged only when the account has a rate for it.
+- The billing list in the server instructions also names media streams of calls, Sender ID registrations, 10DLC Brand and Campaign fees, and transcriptions of calls and audio files.
+
+### Fixed
+
+- The `number_validator_create_bulk` and `number_validator_results_get` descriptions name `request_uuid`, the field an asynchronous bulk validation returns; they named it `request_id`.
+- The `number_validator_create_bulk` preview counts only the numbers the API validates and refuses a batch over the API's limit (500 numbers, or 100000 with `async` set to `true`) instead of returning a token for a call that would fail.
+- The `ten_dlc_brand_vetting_appeals_create` description names `evp_id` and `vetting_id`, which the API requires to appeal a vetting.
+
 ## [1.4.2] - 2026-11-23
 
 ### Added

@@ -623,6 +623,56 @@ async def _create_whatsapp_template(arguments: Mapping[str, Any], api: httpx.Asy
     return f"{heading}:\n{_bullets(lines)}"
 
 
+CHARGED = "charged to your balance"
+CHARGED_BY_TYPE = f"{CHARGED} at your rate for this validation type"
+FORMAT_CHECK_COST = f"usually free; {CHARGED} if your account has a rate for format checks"
+MAX_SYNC_VALIDATIONS = 500
+MAX_ASYNC_VALIDATIONS = 100_000
+
+
+def _charge(note: str) -> Details:
+    async def details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
+        return [f"cost: {note}"]
+
+    return details
+
+
+def _validation_cost(arguments: Mapping[str, Any]) -> str:
+    cost = FORMAT_CHECK_COST if arguments.get("type") == "format" else CHARGED_BY_TYPE
+    return f"cost: {cost}"
+
+
+async def _validation_cost_details(
+    arguments: Mapping[str, Any], api: httpx.AsyncClient
+) -> list[str]:
+    return [_validation_cost(arguments)]
+
+
+async def _validate_numbers_bulk(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
+    entries = arguments.get("phone_numbers")
+    if not isinstance(entries, list):
+        raise _invalid("phone_numbers")
+    numbers = [entry for entry in entries if isinstance(entry, str) and entry]
+    if not numbers:
+        raise _invalid("phone_numbers")
+    is_async = arguments.get("async", False)
+    if not isinstance(is_async, bool):
+        raise _invalid("async")
+    limit = MAX_ASYNC_VALIDATIONS if is_async else MAX_SYNC_VALIDATIONS
+    if len(numbers) > limit:
+        mode = "an asynchronous" if is_async else "a synchronous"
+        raise ConfirmationInputError(
+            f"The API accepts at most {limit} phone numbers in {mode} request, so nothing was done."
+        )
+    lines = [f"type: {_text(arguments, 'type')}"]
+    lines += [
+        f"{key}: {_display(arguments[key])}" for key in ("async", "force") if key in arguments
+    ]
+    lines.append(_validation_cost(arguments))
+    lines += _capped(numbers, len(numbers))
+    return f"This will validate {_plural(len(numbers), 'phone number')}:\n{_bullets(lines)}"
+
+
 CUSTOM_PREVIEWS: Mapping[str, PreviewBuilder] = {
     "my_numbers_delete": _release_numbers,
     "sip_trunks_update": _update_trunk,
@@ -633,9 +683,14 @@ CUSTOM_PREVIEWS: Mapping[str, PreviewBuilder] = {
     "cart_checkout": _checkout,
     "whatsapp_webhooks_update": _update_whatsapp_webhook,
     "whatsapp_templates_create": _create_whatsapp_template,
+    "number_validator_create_bulk": _validate_numbers_bulk,
 }
 
 DETAILS: Mapping[str, Details] = {
+    "link_shortener_create": _charge(f"{CHARGED} when a short link fee is set"),
+    "number_validator_get": _validation_cost_details,
+    "ten_dlc_brand_appeals_create": _charge(CHARGED),
+    "ten_dlc_brand_vetting_appeals_create": _charge(CHARGED),
     "api_keys_delete": _api_key_details,
     "call_control_answer": _call_details,
     "call_control_audio_play": _call_details,
@@ -663,8 +718,12 @@ _DISCLOSURE_SENTENCE = re.compile(r"[^.]*\bTerms of Service\.")
 ALWAYS_CONFIRMED = frozenset(
     {
         "call_webhooks_create",
+        "link_shortener_create",
+        "number_validator_get",
         "sip_trunks_update",
         "sub_accounts_update",
+        "ten_dlc_brand_appeals_create",
+        "ten_dlc_brand_vetting_appeals_create",
         "whatsapp_webhooks_create",
         *CUSTOM_PREVIEWS,
     }

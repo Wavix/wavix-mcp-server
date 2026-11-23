@@ -217,6 +217,27 @@ _SPEC = {
                 },
             }
         },
+        "/v1/validation": {
+            "get": {
+                "operationId": "number_validator_get",
+                "summary": "Validate a number",
+                "parameters": [
+                    {
+                        "name": "phone_number",
+                        "in": "query",
+                        "required": True,
+                        "schema": {"type": "string"},
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "content": {"application/json": {"schema": _UUID_RESPONSE}},
+                    }
+                },
+                "x-mcp": {"readOnly": True, "destructive": False},
+            }
+        },
     },
 }
 
@@ -1321,6 +1342,140 @@ def test_webhook_registration_tools_stay_confirmed(real_tools):
 def test_irreversible_submission_tools_stay_confirmed(real_tools):
     _tools, gated = real_tools
     assert "whatsapp_templates_create" in gated
+
+
+PAID_TOOLS = (
+    "link_shortener_create",
+    "number_validator_get",
+    "number_validator_create_bulk",
+    "ten_dlc_brand_appeals_create",
+    "ten_dlc_brand_vetting_appeals_create",
+)
+
+
+def test_paid_tools_stay_confirmed(real_tools):
+    _tools, gated = real_tools
+    assert set(gated) >= set(PAID_TOOLS)
+
+
+def test_paid_tool_descriptions_state_the_charge(real_tools):
+    tools, _gated = real_tools
+    descriptions = {t.name: " ".join((t.description or "").split()) for t in tools}
+    for name in PAID_TOOLS:
+        assert "charged to the connected Wavix account's balance" in descriptions[name], name
+        assert "no side effects" not in descriptions[name], name
+
+
+def _numbers(count: int) -> list[str]:
+    return [f"1555010{n:04d}" for n in range(count)]
+
+
+def test_bulk_validation_lists_at_most_the_cap():
+    arguments = {"phone_numbers": _numbers(1000), "type": "validation", "async": True}
+    lines = _preview("number_validator_create_bulk", arguments).splitlines()
+    assert lines[:5] == [
+        "This will validate 1000 phone numbers:",
+        "• type: validation",
+        "• async: true",
+        "• cost: charged to your balance at your rate for this validation type",
+        "• 15550100000",
+    ]
+    assert lines[-1] == f"• and {1000 - MAX_LISTED_NUMBERS} more"
+    assert len(lines) == MAX_LISTED_NUMBERS + 5
+
+
+def test_bulk_validation_counts_only_the_numbers_the_api_validates():
+    arguments = {"phone_numbers": ["15550100", "", 123, "15550101"], "type": "format"}
+    lines = _preview("number_validator_create_bulk", arguments).splitlines()
+    assert lines[0] == "This will validate 2 phone numbers:"
+    assert lines[-2:] == ["• 15550100", "• 15550101"]
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        ("number_validator_get", {"phone_number": "15550100", "type": "format"}),
+        ("number_validator_create_bulk", {"phone_numbers": ["15550100"], "type": "format"}),
+    ],
+)
+def test_format_check_preview_says_it_is_usually_free(tool, arguments):
+    lines = _preview(tool, arguments).splitlines()
+    assert (
+        "• cost: usually free; charged to your balance if your account has a rate for format checks"
+    ) in lines
+
+
+@pytest.mark.parametrize(
+    ("arguments", "limit"),
+    [
+        ({"phone_numbers": _numbers(501), "type": "format"}, 500),
+        ({"phone_numbers": _numbers(100_001), "type": "format", "async": True}, 100_000),
+    ],
+)
+def test_bulk_validation_refuses_a_batch_over_the_api_limit(arguments, limit):
+    with pytest.raises(ConfirmationInputError, match=f"at most {limit} phone numbers"):
+        _preview("number_validator_create_bulk", arguments)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "field"),
+    [
+        ({"phone_numbers": [], "type": "validation"}, "phone_numbers"),
+        ({"phone_numbers": ["", 5], "type": "validation"}, "phone_numbers"),
+        ({"phone_numbers": ["1"]}, "type"),
+        ({"phone_numbers": ["1"], "type": "format", "async": "true"}, "async"),
+    ],
+)
+def test_bulk_validation_needs_numbers_and_type(arguments, field):
+    with pytest.raises(ConfirmationInputError, match=field):
+        _preview("number_validator_create_bulk", arguments)
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments", "charge"),
+    [
+        (
+            "number_validator_get",
+            {"phone_number": "15550100", "type": "validation"},
+            "cost: charged to your balance at your rate for this validation type",
+        ),
+        (
+            "ten_dlc_brand_appeals_create",
+            {"brand_id": "BXYZ123"},
+            "cost: charged to your balance",
+        ),
+        (
+            "ten_dlc_brand_vetting_appeals_create",
+            {"brand_id": "BXYZ123"},
+            "cost: charged to your balance",
+        ),
+        (
+            "link_shortener_create",
+            {"link": "https://example.com"},
+            "cost: charged to your balance when a short link fee is set",
+        ),
+    ],
+)
+def test_paid_tool_preview_names_the_charge(tool, arguments, charge):
+    assert _preview(tool, arguments).splitlines()[-1] == f"• {charge}"
+
+
+def test_paid_lookup_charges_nothing_until_confirmed(isolated_routes, anonymous):
+    api = _Api(lookups={"/v1/validation?phone_number=15550100": {"uuid": "v1"}})
+    arguments = {"phone_number": "15550100"}
+
+    async def run():
+        async with Client(_server(api)) as client:
+            preview = await client.call_tool("number_validator_get", arguments)
+            requests_before_confirm = list(api.requests)
+            confirmed = {**arguments, TOKEN_PARAMETER: _token(preview)}
+            done = await client.call_tool("number_validator_get", confirmed)
+            return requests_before_confirm, done
+
+    requests_before_confirm, done = asyncio.run(run())
+    assert requests_before_confirm == []
+    assert not done.is_error
+    assert [r.url.path for r in api.requests] == ["/v1/validation"]
 
 
 def test_tool_descriptions_carry_no_assistant_imperatives(real_tools):

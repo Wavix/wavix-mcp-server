@@ -41,7 +41,7 @@ FRAGMENTS: dict[str, Fragment] = {
     ),
     "calls": Fragment(
         phrase="voice calls",
-        billing=("calls",),
+        billing=("calls", "media streams of calls"),
         rules=(
             (
                 "Calls",
@@ -52,19 +52,31 @@ FRAGMENTS: dict[str, Fragment] = {
     ),
     "messaging": Fragment(
         phrase="SMS and MMS, WhatsApp, 10DLC registration",
-        billing=("messages",),
+        billing=(
+            "messages",
+            "Sender ID registrations",
+            "10DLC Brand fees (registration, update, vetting, and appeal)",
+            "10DLC Campaign fees",
+            "short links that carry a fee",
+        ),
         docs_examples=("wavix://docs/messaging/send-sms",),
-        gated=("register or change WhatsApp webhooks", "submit WhatsApp templates"),
+        gated=(
+            "register or change WhatsApp webhooks",
+            "submit WhatsApp templates",
+            "appeal 10DLC Brand identity verification or external vetting",
+            "create short links",
+        ),
     ),
     "verification": Fragment(
         phrase="2FA",
-        billing=("one-time passwords",),
+        billing=("one-time passwords", "number validations (format checks are usually free)"),
         naming=(
-            "Some bulk operations run asynchronously. For example, number_validator_create_bulk "
-            "with async set to true returns a request ID, and number_validator_results_get "
-            "returns the results for that ID.",
+            "Some bulk operations run asynchronously. For example, a confirmed "
+            "number_validator_create_bulk call with async set to true returns a request_uuid, "
+            "and number_validator_results_get, given it as request_id, returns the results.",
         ),
         docs_examples=("wavix://docs/numbers/number-validator",),
+        gated=("validate phone numbers",),
     ),
     "voice_config": Fragment(
         phrase="SIP trunks",
@@ -73,6 +85,7 @@ FRAGMENTS: dict[str, Fragment] = {
     ),
     "voice_history": Fragment(
         phrase="call detail records, recordings and speech analytics",
+        billing=("transcriptions of calls and audio files",),
     ),
     "account": Fragment(
         phrase="account, billing and API key management",
