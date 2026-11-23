@@ -5,11 +5,18 @@ Anthropic Directory Review: tool descriptions and server metadata "describe what
 exists and when it applies" and must not contain imperatives aimed at the assistant.
 """
 
+import asyncio
 import re
 
 import pytest
 
+from wavix_mcp import instructions, server
+from wavix_mcp.instructions import build_instructions
 from wavix_mcp.server import INSTRUCTIONS
+
+from . import test_toolsets
+
+upstream = test_toolsets.upstream
 
 CLAUSE_START = (
     r"(?:(?:^[ \t]*(?:[-*]|\d+[.)])?[ \t]*|[.;:!?][ \t]+)(?:(?:first|then|please|only|optionally)\s+)?"
@@ -97,3 +104,91 @@ def test_guard_catches_planted_imperative(planted):
 )
 def test_guard_passes_descriptive_text(descriptive):
     assert imperative_violations(descriptive) == []
+
+
+NON_CALLS = frozenset(test_toolsets.VALID) - {"calls"}
+PRODUCT_TEXT = (
+    "WhatsApp",
+    "SMS",
+    "2FA",
+    "number-validator",
+    "send-sms",
+    "SIP trunks",
+    "sub-accounts",
+    "number_validator_create_bulk",
+)
+
+
+def test_no_selection_keeps_the_existing_text():
+    text = build_instructions(None)
+
+    assert text == INSTRUCTIONS
+    assert "register call webhooks, register or change WhatsApp webhooks" in text
+    assert "submit WhatsApp templates" in text
+    assert "or change SIP trunks or sub-accounts" in text
+    assert "it does not see the conversation" in text
+    assert "voice calls" in text
+    assert "Calls:\n- Whenever a call is automated or handled by AI" in text
+    assert "Number purchases, calls, messages, and one-time passwords are charged" in text
+    assert "number_validator_create_bulk" in text
+    assert imperative_violations(text) == []
+
+
+def test_instructions_without_calls_omit_live_calling():
+    text = build_instructions(NON_CALLS)
+
+    for absent in (
+        "voice calls",
+        "live call",
+        "Calls:",
+        "Terms of Service require the customer to disclose",
+    ):
+        assert absent not in text
+    for present in ("SMS and MMS", "SIP trunks", "call detail records"):
+        assert present in text
+    assert imperative_violations(text) == []
+
+
+def test_selection_names_its_products_only():
+    text = build_instructions(frozenset({"numbers"}))
+
+    assert "phone numbers" in text
+    for absent in PRODUCT_TEXT:
+        assert absent not in text
+    assert imperative_violations(text) == []
+
+
+def test_the_core_holds_no_product_text():
+    for absent in (*PRODUCT_TEXT, "voice calls", "Calls:", "call detail records"):
+        assert absent not in instructions.CORE
+
+
+def test_every_spec_toolset_has_a_fragment():
+    assert set(instructions.FRAGMENTS) == set(test_toolsets.VALID)
+    assert len(instructions.FRAGMENTS) == 7
+
+
+def test_a_spec_toolset_without_a_fragment_fails_the_build(upstream, monkeypatch):
+    monkeypatch.delitem(instructions.FRAGMENTS, "numbers")
+
+    with pytest.raises(RuntimeError, match="numbers"):
+        server.build_server()
+
+
+def _initialize_instructions(query):
+    async def run():
+        mcp = server.build_server()
+
+        async def read(client):
+            return client.initialize_result.instructions
+
+        return await test_toolsets._with_client(mcp, query, read)
+
+    return asyncio.run(run())
+
+
+def test_initialize_applies_the_text_per_connection(upstream):
+    assert _initialize_instructions("toolsets=numbers") == build_instructions(
+        frozenset({"numbers"})
+    )
+    assert _initialize_instructions(None) == build_instructions(None)

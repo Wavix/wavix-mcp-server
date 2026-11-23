@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Choose which toolsets a connection offers with `?toolsets=` in the connection URL, for example `https://mcp.wavix.com/mcp?toolsets=numbers,messaging`. The seven toolsets are `account`, `calls`, `messaging`, `numbers`, `verification`, `voice_config` and `voice_history`. An unknown name is refused with the list of valid names, the instructions describe only the selected toolsets, and a URL without the parameter offers every tool as before. The README and `TOOLS.md` list the tools of each toolset.
+
 ### Changed
 
 - `call_control_update`, `webrtc_tokens_update`, `ten_dlc_brands_update` and `ten_dlc_brand_campaigns_update` are now marked destructive, so they run in two steps: the first call returns a preview with a `confirmation_token`, and the change is applied when the tool is called again with the same arguments and that token.

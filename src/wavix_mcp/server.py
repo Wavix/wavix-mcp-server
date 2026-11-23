@@ -24,14 +24,15 @@ from .auth import build_auth_provider, mcp_path
 from .confirmation import (
     ALWAYS_CONFIRMED,
     TOKEN_PARAMETER,
-    TOKEN_TTL_S,
     ConfirmationMiddleware,
     ConfirmedTool,
     preview_builders,
 )
 from .docs import register_api_spec, register_docs
+from .instructions import build_instructions, require_fragments
 from .scope_filter import ScopeFilterMiddleware
 from .secret_redaction import SecretRedactionMiddleware, secret_field_for_tool
+from .toolsets import ToolsetFilterMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -63,29 +64,7 @@ EXCLUDED_ENDPOINTS: tuple[tuple[str, str], ...] = (
     ("/v1/billing/invoices/{id}", "get"),
 )
 
-INSTRUCTIONS = f"""\
-The Wavix MCP server exposes the Wavix telecom platform: SMS and MMS, WhatsApp, voice calls, 2FA, SIP trunking, phone numbers, 10DLC registration, call detail records, and speech analytics.
-
-Documentation resources:
-- Wavix product documentation is available as MCP resources under wavix://docs/*, one resource per topic (for example, wavix://docs/numbers/number-validator and wavix://docs/messaging/send-sms). It covers Wavix-specific feature behavior, parameter meanings, billing, and limits, which can differ from other telecom APIs.
-- The full Wavix OpenAPI specification is available as the resource wavix://api/openapi.yaml.
-
-Tool naming conventions:
-- *_list tools return a collection with basic filters. Paginated collections accept per_page (1 to 100, default 25) and page (starting at 1); each tool's input schema shows whether it is paginated.
-- *_get tools return a single entity, identified by the key named in the tool's input schema (usually an ID).
-- *_create, *_update, and *_delete tools change account state. Each tool carries MCP annotations (readOnlyHint, destructiveHint, openWorldHint), and its description states any cost and whether the change can be reversed.
-- Every tool annotated with destructiveHint runs in two steps, as do the tools that register call webhooks, register or change WhatsApp webhooks, submit WhatsApp templates, or change SIP trunks or sub-accounts. The first call does nothing and returns a preview of the action with a confirmation_token; the action runs when the same tool is called again with the same arguments and that token. The preview is meant for the user to read and approve; the confirmed call is meant to follow an approval the user gives in a message sent after the preview, and an approval given in advance is not an approval of that preview. The server checks only that the token matches the arguments and has not expired; it does not see the conversation. A token expires after {TOKEN_TTL_S / 60:g} minutes; repeating the confirmed call with the same arguments and token within that time returns the stored result and does not act a second time.
-- Some bulk operations run asynchronously. For example, number_validator_create_bulk with async set to true returns a request ID, and number_validator_results_get returns the results for that ID.
-
-Billing:
-- Number purchases, calls, messages, and one-time passwords are charged to the account's prepaid Wavix balance.
-
-Calls:
-- Whenever a call is automated or handled by AI, the Wavix Terms of Service require the customer to disclose this at the start of the call.
-
-Authentication:
-- Tools authenticate with the credential the MCP client supplies: an OAuth access token from Wavix account sign-in, or a Wavix API key sent as a Bearer token. With account sign-in, the available tools are limited to the scopes granted at consent.
-"""
+INSTRUCTIONS = build_instructions(None)
 
 
 def _parse_tool_descriptions(raw: str, source: str) -> dict[str, str]:
@@ -450,6 +429,45 @@ def _spec_operation_ids(spec: dict[str, Any]) -> set[str]:
     return ids
 
 
+def _operation_toolset(spec: dict[str, Any], method: str, path: str) -> str | None:
+    path_item = (spec.get("paths") or {}).get(path)
+    op = path_item.get(method.lower()) if isinstance(path_item, dict) else None
+    xmcp = op.get("x-mcp") if isinstance(op, dict) else None
+    toolset = xmcp.get("toolset") if isinstance(xmcp, dict) else None
+    return toolset if isinstance(toolset, str) and toolset else None
+
+
+def _spec_toolsets(spec: dict[str, Any]) -> frozenset[str]:
+    """Every ``x-mcp.toolset`` value declared in the spec."""
+    found: set[str] = set()
+    for path, path_item in (spec.get("paths") or {}).items():
+        if not isinstance(path_item, dict):
+            continue
+        for method in _HTTP_METHODS:
+            toolset = _operation_toolset(spec, method, path)
+            if toolset:
+                found.add(toolset)
+    return frozenset(found)
+
+
+def _resolve_toolsets(spec: dict[str, Any]) -> dict[str, str]:
+    """Tool name -> toolset for generated tools and the hand-registered ones."""
+    tool_toolsets = dict(_TOOL_TOOLSETS)
+    for name, (method, path) in _HAND_TOOL_ROUTES.items():
+        toolset = _operation_toolset(spec, method, path)
+        if toolset:
+            tool_toolsets[name] = toolset
+    untagged = sorted(set(_TOOL_ROUTES) - set(tool_toolsets))
+    if untagged:
+        logger.warning(
+            "%d generated tool(s) carry no x-mcp.toolset and are hidden whenever a "
+            "connection selects toolsets: %s",
+            len(untagged),
+            ", ".join(untagged[:5]),
+        )
+    return tool_toolsets
+
+
 def _build_exclude_route_maps(
     targets: tuple[tuple[str, str], ...],
 ) -> list[RouteMap]:
@@ -504,6 +522,8 @@ _UNANNOTATED: list[str] = []
 # generation so the scope filter can map a tool back to the API route whose
 # permission gates it. Hand-registered tools are added separately in build_server.
 _TOOL_ROUTES: dict[str, tuple[str, str]] = {}
+
+_TOOL_TOOLSETS: dict[str, str] = {}
 
 _CONFIRMED_TOOLS: dict[str, ConfirmedTool] = {}
 
@@ -594,6 +614,9 @@ def _xmcp_component_fn(route: HTTPRoute, component: object) -> None:
     # not a safe method counts as destructive until the spec says otherwise;
     # over-warning is recoverable, under-warning is not.
     xmcp = _xmcp(route)
+    toolset = (xmcp or {}).get("toolset")
+    if isinstance(toolset, str) and toolset:
+        _TOOL_TOOLSETS[component.name] = toolset
     if xmcp is None:
         _UNANNOTATED.append(f"{(route.method or '').upper()} {route.path}")
         xmcp = {}
@@ -786,6 +809,7 @@ def build_server() -> FastMCP:
     else:
         load_dotenv()
     _TOOL_ROUTES.clear()
+    _TOOL_TOOLSETS.clear()
     _CONFIRMED_TOOLS.clear()
     spec = load_spec()
     spec = _ensure_request_body_type_object(spec)
@@ -793,6 +817,7 @@ def build_server() -> FastMCP:
     spec = _relax_response_nullability(spec)
     spec = _strip_secret_fields(spec)
     spec = _normalize_tool_schemas(spec)
+    require_fragments(_spec_toolsets(spec))
     base_url = os.getenv("WAVIX_API_BASE_URL", "").strip() or DEFAULT_API_BASE_URL
 
     info = spec.get("info", {})
@@ -840,7 +865,7 @@ def build_server() -> FastMCP:
         openapi_spec=spec,
         client=api_client,
         name=name,
-        instructions=INSTRUCTIONS,
+        instructions=build_instructions(None),
         lifespan=lifespan,
         auth=build_auth_provider(),
         route_maps=_build_exclude_route_maps(excluded),
@@ -863,6 +888,8 @@ def build_server() -> FastMCP:
     register_api_spec(mcp, docs_client)
 
     tool_routes = {**_TOOL_ROUTES, **_HAND_TOOL_ROUTES}
+    tool_toolsets = _resolve_toolsets(spec)
+    mcp.add_middleware(ToolsetFilterMiddleware(tool_toolsets, _spec_toolsets(spec)))
     _require_gated_tools(_CONFIRMED_TOOLS)
     _warn_on_never_gated_tools(tool_routes)
     mcp.add_middleware(ScopeFilterMiddleware(tool_routes))
