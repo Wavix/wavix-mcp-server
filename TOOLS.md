@@ -78,7 +78,7 @@ For the high-level grouping and an overview table, see the [README](README.md#to
 
 ## Speech Analytics
 
-- `speech_analytics_get` — Retrieve a transcription
+- `speech_analytics_get` — Retrieve a speech analytics transcription
 - `speech_analytics_retranscribe` — Retranscribe a file
 - `speech_analytics_file_get` — Retrieve the original file (returns a pre-signed download URL)
 
