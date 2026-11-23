@@ -69,7 +69,7 @@ FRAGMENTS: dict[str, Fragment] = {
     ),
     "verification": Fragment(
         phrase="2FA",
-        billing=("one-time passwords", "number validations"),
+        billing=("one-time passwords", "number validations (format checks are usually free)"),
         naming=(
             "Some bulk operations run asynchronously. For example, a confirmed "
             "number_validator_create_bulk call with async set to true returns a request_uuid, "

@@ -632,7 +632,7 @@ MAX_ASYNC_VALIDATIONS = 1000
 
 def _charge(note: str) -> Details:
     async def details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
-        return [note]
+        return [f"cost: {note}"]
 
     return details
 
@@ -655,7 +655,9 @@ async def _validate_numbers_bulk(arguments: Mapping[str, Any], api: httpx.AsyncC
     numbers = [entry for entry in entries if isinstance(entry, str) and entry]
     if not numbers:
         raise _invalid("phone_numbers")
-    is_async = arguments.get("async") is True
+    is_async = arguments.get("async", False)
+    if not isinstance(is_async, bool):
+        raise _invalid("async")
     limit = MAX_ASYNC_VALIDATIONS if is_async else MAX_SYNC_VALIDATIONS
     if len(numbers) > limit:
         mode = "an asynchronous" if is_async else "a synchronous"

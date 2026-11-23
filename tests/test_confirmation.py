@@ -1423,6 +1423,7 @@ def test_bulk_validation_refuses_a_batch_over_the_api_limit(arguments, limit):
         ({"phone_numbers": [], "type": "validation"}, "phone_numbers"),
         ({"phone_numbers": ["", 5], "type": "validation"}, "phone_numbers"),
         ({"phone_numbers": ["1"]}, "type"),
+        ({"phone_numbers": ["1"], "type": "format", "async": "true"}, "async"),
     ],
 )
 def test_bulk_validation_needs_numbers_and_type(arguments, field):
@@ -1438,16 +1439,20 @@ def test_bulk_validation_needs_numbers_and_type(arguments, field):
             {"phone_number": "15550100", "type": "validation"},
             "cost: charged to your balance at your rate for this validation type",
         ),
-        ("ten_dlc_brand_appeals_create", {"brand_id": "BXYZ123"}, "charged to your balance"),
+        (
+            "ten_dlc_brand_appeals_create",
+            {"brand_id": "BXYZ123"},
+            "cost: charged to your balance",
+        ),
         (
             "ten_dlc_brand_vetting_appeals_create",
             {"brand_id": "BXYZ123"},
-            "charged to your balance",
+            "cost: charged to your balance",
         ),
         (
             "link_shortener_create",
             {"link": "https://example.com"},
-            "charged to your balance when a short link fee is set",
+            "cost: charged to your balance when a short link fee is set",
         ),
     ],
 )

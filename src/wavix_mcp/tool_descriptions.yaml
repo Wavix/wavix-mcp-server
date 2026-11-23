@@ -289,7 +289,8 @@ my_numbers_update: >-
 number_validator_create_bulk: >-
   Validates a batch of phone numbers in a single request. Applies when the user needs
   validation details for many numbers at once rather than checking them one at a
-  time. Not for one number; `number_validator_get` covers that. The first call
+  time, or one number that needs `async` or `force`. Not for one number otherwise;
+  `number_validator_get` covers that. The first call
   validates nothing and returns a preview listing the `phone_numbers` and the
   validation `type` with a `confirmation_token`; the batch is submitted when the tool
   is called again with the same arguments and that token, a call meant to follow the
