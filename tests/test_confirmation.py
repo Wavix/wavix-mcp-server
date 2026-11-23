@@ -20,7 +20,6 @@ from mcp.types import CallToolRequestParams
 from wavix_mcp import confirmation, scope_filter, server
 from wavix_mcp.confirmation import (
     ALWAYS_CONFIRMED,
-    CHARGE_LINE,
     CUSTOM_PREVIEWS,
     DETAILS,
     MAX_LISTED_NUMBERS,
@@ -1366,9 +1365,26 @@ def test_paid_tool_descriptions_state_the_charge(real_tools):
         assert "no side effects" not in descriptions[name], name
 
 
-@pytest.mark.parametrize("tool", PAID_TOOLS)
-def test_paid_tool_preview_names_the_charge(tool):
-    assert _preview(tool, {"brand_id": "B1"}).splitlines()[-1] == f"• {CHARGE_LINE}"
+def test_bulk_validation_lists_at_most_the_cap():
+    numbers = [f"1555010{n:04d}" for n in range(1000)]
+    text = _preview("number_validator_create_bulk", {"phone_numbers": numbers, "type": "basic"})
+    lines = text.splitlines()
+    assert lines[:3] == [
+        "This will validate 1000 phone numbers:",
+        "• type: basic",
+        "• 15550100000",
+    ]
+    assert lines[-1] == f"• and {1000 - MAX_LISTED_NUMBERS} more"
+    assert len(lines) == MAX_LISTED_NUMBERS + 3
+
+
+@pytest.mark.parametrize(
+    ("arguments", "field"),
+    [({"phone_numbers": [], "type": "basic"}, "phone_numbers"), ({"phone_numbers": ["1"]}, "type")],
+)
+def test_bulk_validation_needs_numbers_and_type(arguments, field):
+    with pytest.raises(ConfirmationInputError, match=field):
+        _preview("number_validator_create_bulk", arguments)
 
 
 def test_paid_lookup_charges_nothing_until_confirmed(isolated_routes, anonymous):
