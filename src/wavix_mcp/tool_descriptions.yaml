@@ -289,10 +289,15 @@ my_numbers_update: >-
 number_validator_create_bulk: >-
   Validates a batch of phone numbers in a single request. Applies when the user needs
   validation details for many numbers at once rather than checking them one at a
-  time. Submits the batch for validation; when `async` is `true` it returns a
-  `request_id` to poll for the results instead of returning the validation details
-  directly. Requires the `validator:write` scope, the `phone_numbers` to validate,
-  and the validation `type`.
+  time. Not for one number; `number_validator_get` covers that. The first call
+  validates nothing and returns a preview listing the `phone_numbers` and the
+  validation `type` with a `confirmation_token`; the batch is submitted when the tool
+  is called again with the same arguments and that token, a call meant to follow the
+  user's approval of the preview in a later message. Each validation is charged to
+  the connected Wavix account's balance; when `async` is `true` the confirmed call
+  returns a `request_id` for `number_validator_results_get` instead of the validation
+  details. Requires the `validator:write` scope, the `phone_numbers` to validate, and
+  the validation `type`.
 
 number_validator_get: >-
   Validates a single phone number and returns its line type, carrier, portability,
@@ -300,7 +305,12 @@ number_validator_get: >-
   outcome (`000` success, `013` internal error, `021` invalid format, `041` remote
   timeout, `042` remote query failed, `091` insufficient funds), distinct from the
   HTTP status. Applies to looking up or verifying one number before calling or messaging
-  it. Read-only; no side effects. Requires the `validator:read` scope, a `phone_number`
+  it. Not for many numbers at once; `number_validator_create_bulk` covers those. The
+  first call validates nothing and returns a preview naming the `phone_number` and the
+  validation `type` with a `confirmation_token`; the number is validated when the tool
+  is called again with the same arguments and that token, a call meant to follow the
+  user's approval of the preview in a later message. Each validation is charged to the
+  connected Wavix account's balance. Requires the `validator:read` scope, a `phone_number`
   in E.164 format (with or without the leading `+`), and a `type` giving the depth
   of validation to perform.
 
@@ -740,7 +750,13 @@ ten_dlc_brand_appeals_create: >-
   `appeal_categories` (`VERIFY_TAX_ID`, `VERIFY_NON_PROFIT`, or `VERIFY_GOVERNMENT`)
   plus supporting `evidence`. Applies when a Brand is UNVERIFIED (or verified but
   missing tax-exempt or government-entity status) and the user wants to contest the
-  identity result. Creates and submits an appeal for review. Requires the
+  identity result. Not for contesting an external vetting result;
+  `ten_dlc_brand_vetting_appeals_create` covers that. The first call submits nothing and
+  returns a preview listing the `brand_id`, the `appeal_categories` and the `evidence`
+  with a `confirmation_token`; the appeal is submitted for review when the tool is
+  called again with the same arguments and that token, a call meant to follow the
+  user's approval of the preview in a later message. The appeal is charged to the
+  connected Wavix account's balance. Requires the
   `campaigns:write` scope, the Brand's `brand_id`, one or more `appeal_categories`, and
   `evidence` supporting the appeal.
 
@@ -778,8 +794,13 @@ ten_dlc_brand_vetting_appeals_create: >-
   Submits an appeal of a 10DLC Brand's external vetting, with one or more
   `appeal_categories` (`VERIFY_TAX_ID`, `VERIFY_NON_PROFIT`, `VERIFY_GOVERNMENT`, or
   `LOW_SCORE`) and a list of supporting `evidence` IDs. Applies when the user wants to
-  contest an external vetting result for a Brand. Creates and submits a vetting appeal
-  for review. Requires the `campaigns:write` scope, the Brand's `brand_id`, the
+  contest an external vetting result for a Brand. Not for contesting the Brand's
+  identity verification; `ten_dlc_brand_appeals_create` covers that. The first call
+  submits nothing and returns a preview listing the `brand_id`, the `appeal_categories`
+  and the `evidence` IDs with a `confirmation_token`; the vetting appeal is submitted
+  for review when the tool is called again with the same arguments and that token, a
+  call meant to follow the user's approval of the preview in a later message. The
+  appeal is charged to the connected Wavix account's balance. Requires the `campaigns:write` scope, the Brand's `brand_id`, the
   `appeal_categories`, and the `evidence` IDs; a `VETTED_VERIFIED` Brand cannot request
   the `VERIFY_TAX_ID` category.
 

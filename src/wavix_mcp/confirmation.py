@@ -635,7 +635,23 @@ CUSTOM_PREVIEWS: Mapping[str, PreviewBuilder] = {
     "whatsapp_templates_create": _create_whatsapp_template,
 }
 
+CHARGE_LINE = "cost: charged to the account balance"
+PAID_TOOLS = frozenset(
+    {
+        "number_validator_create_bulk",
+        "number_validator_get",
+        "ten_dlc_brand_appeals_create",
+        "ten_dlc_brand_vetting_appeals_create",
+    }
+)
+
+
+async def _charge_details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
+    return [CHARGE_LINE]
+
+
 DETAILS: Mapping[str, Details] = {
+    **dict.fromkeys(PAID_TOOLS, _charge_details),
     "api_keys_delete": _api_key_details,
     "call_control_answer": _call_details,
     "call_control_audio_play": _call_details,
@@ -667,6 +683,7 @@ ALWAYS_CONFIRMED = frozenset(
         "sub_accounts_update",
         "whatsapp_webhooks_create",
         *CUSTOM_PREVIEWS,
+        *PAID_TOOLS,
     }
 )
 

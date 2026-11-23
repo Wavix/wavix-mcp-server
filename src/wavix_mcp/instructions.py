@@ -54,7 +54,11 @@ FRAGMENTS: dict[str, Fragment] = {
         phrase="SMS and MMS, WhatsApp, 10DLC registration",
         billing=("messages",),
         docs_examples=("wavix://docs/messaging/send-sms",),
-        gated=("register or change WhatsApp webhooks", "submit WhatsApp templates"),
+        gated=(
+            "register or change WhatsApp webhooks",
+            "submit WhatsApp templates",
+            "appeal 10DLC Brand identity verification or external vetting",
+        ),
     ),
     "verification": Fragment(
         phrase="2FA",
@@ -65,6 +69,7 @@ FRAGMENTS: dict[str, Fragment] = {
             "returns the results for that ID.",
         ),
         docs_examples=("wavix://docs/numbers/number-validator",),
+        gated=("validate phone numbers",),
     ),
     "voice_config": Fragment(
         phrase="SIP trunks",

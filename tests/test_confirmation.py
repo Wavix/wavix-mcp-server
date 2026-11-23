@@ -20,6 +20,7 @@ from mcp.types import CallToolRequestParams
 from wavix_mcp import confirmation, scope_filter, server
 from wavix_mcp.confirmation import (
     ALWAYS_CONFIRMED,
+    CHARGE_LINE,
     CUSTOM_PREVIEWS,
     DETAILS,
     MAX_LISTED_NUMBERS,
@@ -215,6 +216,27 @@ _SPEC = {
                         "content": {"application/json": {"schema": _UUID_RESPONSE}},
                     }
                 },
+            }
+        },
+        "/v1/validation": {
+            "get": {
+                "operationId": "number_validator_get",
+                "summary": "Validate a number",
+                "parameters": [
+                    {
+                        "name": "phone_number",
+                        "in": "query",
+                        "required": True,
+                        "schema": {"type": "string"},
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "content": {"application/json": {"schema": _UUID_RESPONSE}},
+                    }
+                },
+                "x-mcp": {"readOnly": True, "destructive": False},
             }
         },
     },
@@ -1321,6 +1343,50 @@ def test_webhook_registration_tools_stay_confirmed(real_tools):
 def test_irreversible_submission_tools_stay_confirmed(real_tools):
     _tools, gated = real_tools
     assert "whatsapp_templates_create" in gated
+
+
+PAID_TOOLS = (
+    "number_validator_get",
+    "number_validator_create_bulk",
+    "ten_dlc_brand_appeals_create",
+    "ten_dlc_brand_vetting_appeals_create",
+)
+
+
+def test_paid_tools_stay_confirmed(real_tools):
+    _tools, gated = real_tools
+    assert set(gated) >= set(PAID_TOOLS)
+
+
+def test_paid_tool_descriptions_state_the_charge(real_tools):
+    tools, _gated = real_tools
+    descriptions = {t.name: " ".join((t.description or "").split()) for t in tools}
+    for name in PAID_TOOLS:
+        assert "charged to the connected Wavix account's balance" in descriptions[name], name
+        assert "no side effects" not in descriptions[name], name
+
+
+@pytest.mark.parametrize("tool", PAID_TOOLS)
+def test_paid_tool_preview_names_the_charge(tool):
+    assert _preview(tool, {"brand_id": "B1"}).splitlines()[-1] == f"• {CHARGE_LINE}"
+
+
+def test_paid_lookup_charges_nothing_until_confirmed(isolated_routes, anonymous):
+    api = _Api(lookups={"/v1/validation?phone_number=15550100": {"uuid": "v1"}})
+    arguments = {"phone_number": "15550100"}
+
+    async def run():
+        async with Client(_server(api)) as client:
+            preview = await client.call_tool("number_validator_get", arguments)
+            requests_before_confirm = list(api.requests)
+            confirmed = {**arguments, TOKEN_PARAMETER: _token(preview)}
+            done = await client.call_tool("number_validator_get", confirmed)
+            return requests_before_confirm, done
+
+    requests_before_confirm, done = asyncio.run(run())
+    assert requests_before_confirm == []
+    assert not done.is_error
+    assert [r.url.path for r in api.requests] == ["/v1/validation"]
 
 
 def test_tool_descriptions_carry_no_assistant_imperatives(real_tools):
