@@ -627,7 +627,7 @@ CHARGED = "charged to your balance"
 CHARGED_BY_TYPE = f"{CHARGED} at your rate for this validation type"
 FORMAT_CHECK_COST = f"usually free; {CHARGED} if your account has a rate for format checks"
 MAX_SYNC_VALIDATIONS = 500
-MAX_ASYNC_VALIDATIONS = 1000
+MAX_ASYNC_VALIDATIONS = 100_000
 
 
 def _charge(note: str) -> Details:

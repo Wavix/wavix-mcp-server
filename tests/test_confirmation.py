@@ -1409,7 +1409,7 @@ def test_format_check_preview_says_it_is_usually_free(tool, arguments):
     ("arguments", "limit"),
     [
         ({"phone_numbers": _numbers(501), "type": "format"}, 500),
-        ({"phone_numbers": _numbers(1001), "type": "format", "async": True}, 1000),
+        ({"phone_numbers": _numbers(100_001), "type": "format", "async": True}, 100_000),
     ],
 )
 def test_bulk_validation_refuses_a_batch_over_the_api_limit(arguments, limit):

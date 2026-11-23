@@ -299,7 +299,7 @@ number_validator_create_bulk: >-
   `type`; `format` checks are usually free. When `async` is `true` the confirmed call
   returns a `request_uuid` for `number_validator_results_get` instead of the
   validation details. Requires the `validator:write` scope, the `phone_numbers` to
-  validate (at most 500 per request, or 1000 with `async` set to `true`), and the
+  validate (at most 500 per request, or 100000 with `async` set to `true`), and the
   validation `type`; `async` and `force` default to `false`, and `force` set to `true`
   requests a fresh validation instead of a cached result.
 
@@ -807,14 +807,15 @@ ten_dlc_brand_vetting_appeals_create: >-
   contest an external vetting result for a Brand. Not for contesting the Brand's
   identity verification; `ten_dlc_brand_appeals_create` covers that. Not for requesting
   a new external vetting; `ten_dlc_brand_vettings_create` covers that. The first call
-  submits nothing and returns a preview listing the `brand_id`, the `appeal_categories`
-  and the `evidence` IDs with a `confirmation_token`; the vetting appeal is submitted
-  for review when the tool is called again with the same arguments and that token, a
-  call meant to follow the user's approval of the preview in a later message. The
-  appeal is charged to the connected Wavix account's balance. Requires the
-  `campaigns:write` scope, the Brand's `brand_id`, the `appeal_categories`, and the
-  `evidence` IDs; a `VETTED_VERIFIED` Brand cannot request the `VERIFY_TAX_ID`
-  category.
+  submits nothing and returns a preview listing the `brand_id`, the vetting, the
+  `appeal_categories` and the `evidence` IDs with a `confirmation_token`; the vetting
+  appeal is submitted for review when the tool is called again with the same arguments
+  and that token, a call meant to follow the user's approval of the preview in a later
+  message. The appeal is charged to the connected Wavix account's balance. Requires
+  the `campaigns:write` scope, the Brand's `brand_id`, the `evp_id` and `vetting_id` of
+  the appealed vetting (as `ten_dlc_brand_vettings_list` returns them), the
+  `appeal_categories`, and the `evidence` IDs; a `VETTED_VERIFIED` Brand cannot request
+  the `VERIFY_TAX_ID` category.
 
 ten_dlc_brand_vetting_appeals_list: >-
   Lists the external vetting appeals for the 10DLC Brand identified by `brand_id`.
