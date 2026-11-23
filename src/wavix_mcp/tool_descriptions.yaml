@@ -324,7 +324,12 @@ number_validator_results_get: >-
 link_shortener_create: >-
   Creates a short link that redirects to a target URL and tracks click metrics. Applies
   when the user wants a trackable shortened URL, typically for a campaign message.
-  Creates a new, publicly reachable short link pointing at the given target URL.
+  The first call creates nothing and returns a preview listing the `link` and the
+  other arguments with a `confirmation_token`; the short link is created when the tool
+  is called again with the same arguments and that token, a call meant to follow the
+  user's approval of the preview in a later message. Creates a new, publicly reachable
+  short link pointing at the given target URL; when a short link price is set for the
+  account, each created link is charged to the connected Wavix account's balance.
   Requires the `campaigns:write` scope and the destination URL (`link`); an
   optional `phone`, `fallback_url`, `expiration_time`, and `utm_campaign` refine
   it.

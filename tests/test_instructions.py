@@ -53,6 +53,7 @@ def test_instructions_name_the_paid_tools_among_the_two_step_tools():
     gated = INSTRUCTIONS.split("runs in two steps", 1)[1].split(". ", 1)[0]
     assert "validate phone numbers" in gated
     assert "appeal 10DLC Brand identity verification or external vetting" in gated
+    assert "create short links" in gated
 
 
 def test_instructions_state_that_the_server_does_not_see_the_conversation():

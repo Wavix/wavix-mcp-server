@@ -676,6 +676,7 @@ _DISCLOSURE_SENTENCE = re.compile(r"[^.]*\bTerms of Service\.")
 ALWAYS_CONFIRMED = frozenset(
     {
         "call_webhooks_create",
+        "link_shortener_create",
         "number_validator_get",
         "sip_trunks_update",
         "sub_accounts_update",

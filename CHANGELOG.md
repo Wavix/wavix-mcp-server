@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `number_validator_get`, `number_validator_create_bulk`, `ten_dlc_brand_appeals_create` and `ten_dlc_brand_vetting_appeals_create` charge the account balance, so they now run in two steps: the first call charges nothing and returns a preview with a `confirmation_token`, and the action runs when the tool is called again with the same arguments and that token. Their descriptions say the call is charged, and the server instructions name number validation and 10DLC appeals among the two-step tools.
+- `number_validator_get`, `number_validator_create_bulk`, `ten_dlc_brand_appeals_create`, `ten_dlc_brand_vetting_appeals_create` and `link_shortener_create` charge the account balance, so they now run in two steps: the first call charges nothing and returns a preview with a `confirmation_token`, and the action runs when the tool is called again with the same arguments and that token. Their descriptions say the call is charged, and the server instructions name number validation, 10DLC appeals and short links among the two-step tools.
 
 ## [1.4.2] - 2026-11-23
 

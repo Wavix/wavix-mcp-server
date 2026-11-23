@@ -1345,6 +1345,7 @@ def test_irreversible_submission_tools_stay_confirmed(real_tools):
 
 
 PAID_TOOLS = (
+    "link_shortener_create",
     "number_validator_get",
     "number_validator_create_bulk",
     "ten_dlc_brand_appeals_create",

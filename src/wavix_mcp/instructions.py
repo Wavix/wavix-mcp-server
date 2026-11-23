@@ -58,6 +58,7 @@ FRAGMENTS: dict[str, Fragment] = {
             "register or change WhatsApp webhooks",
             "submit WhatsApp templates",
             "appeal 10DLC Brand identity verification or external vetting",
+            "create short links",
         ),
     ),
     "verification": Fragment(
