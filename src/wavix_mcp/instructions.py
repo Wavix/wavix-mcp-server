@@ -41,7 +41,7 @@ FRAGMENTS: dict[str, Fragment] = {
     ),
     "calls": Fragment(
         phrase="voice calls",
-        billing=("calls",),
+        billing=("calls", "media streams of calls"),
         rules=(
             (
                 "Calls",
@@ -52,7 +52,13 @@ FRAGMENTS: dict[str, Fragment] = {
     ),
     "messaging": Fragment(
         phrase="SMS and MMS, WhatsApp, 10DLC registration",
-        billing=("messages", "10DLC Brand appeals", "short links that carry a fee"),
+        billing=(
+            "messages",
+            "Sender ID registrations",
+            "10DLC Brand fees (registration, update, vetting, and appeal)",
+            "10DLC Campaign fees",
+            "short links that carry a fee",
+        ),
         docs_examples=("wavix://docs/messaging/send-sms",),
         gated=(
             "register or change WhatsApp webhooks",
@@ -79,6 +85,7 @@ FRAGMENTS: dict[str, Fragment] = {
     ),
     "voice_history": Fragment(
         phrase="call detail records, recordings and speech analytics",
+        billing=("transcriptions of calls and audio files",),
     ),
     "account": Fragment(
         phrase="account, billing and API key management",
