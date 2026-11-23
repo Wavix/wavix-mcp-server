@@ -137,11 +137,11 @@ call_control_create: >-
   Places a real, billable outbound PSTN call from `from` to `to`, returning the
   call's `uuid` for tracking and control. Applies when the user asks to start an
   outbound phone call. The first call dials nothing and returns a preview naming the
-  caller ID, the destination and whether the call is recorded with a
-  `confirmation_token`; the call is placed when the tool is called again with the same
-  arguments and that token, a call meant to follow the user's approval of the preview in
-  a later message. Billable to the account balance; the call is placed on the
-  live PSTN network as soon as the confirmed request runs. What the called party
+  caller ID, the destination, whether the call is recorded and the `callback_url` that
+  will receive the call's status updates, with a `confirmation_token`; the call is placed
+  when the tool is called again with the same arguments and that token, a call meant to
+  follow the user's approval of the preview in a later message. Billable to the account
+  balance; the call is placed on the live PSTN network as soon as the confirmed request runs. What the called party
   hears depends on what the customer connects to the call: audio playback,
   synthesized prompts, or a media stream to an AI agent or to live agents. Whenever
   the call is automated or handled by AI, the customer must disclose this to the
@@ -199,9 +199,11 @@ call_control_streams_delete: >-
 call_control_update: >-
   Updates the active call identified by `id`; only the `tag` label can be changed.
   Applies to attaching or changing a user-defined tracking label on a call in progress.
-  Changes the call's `tag` metadata only; no effect on the call's audio or
-  connection. Requires the `calls:write` scope, the call's `id` (`uuid`), and a
-  `tag` value.
+  The first call changes nothing and returns a preview with a `confirmation_token`; the
+  `tag` is changed when the tool is called again with the same arguments and that token,
+  a call meant to follow the user's approval of the preview in a later message.
+  Replaces the call's existing `tag`; no effect on the call's audio or connection.
+  Requires the `calls:write` scope, the call's `id` (`uuid`), and a `tag` value.
 
 call_webhooks_create: >-
   Registers a callback URL for the `on-call` or `post-call` event so Wavix sends a
@@ -544,7 +546,8 @@ api_keys_create: >-
   Creates an API key for the authenticated account, optionally restricting its
   access to specific IP addresses. Applies when the user wants to issue a new API key
   and has confirmed its label and any access restrictions. Creates a new API key
-  that can authenticate against the account immediately. Requires a `label`; when
+  that can authenticate against the account immediately. The reply shows only the
+  last 4 characters of the new key, as `redacted_value`. Requires a `label`; when
   `restricted` is `true`, `permitted_ips` must list the allowed IPv4 addresses,
   and setting `scopes_enabled` to `true` enforces the per-resource scope
   permissions.
@@ -701,7 +704,10 @@ webrtc_tokens_list: >-
 webrtc_tokens_update: >-
   Updates the `payload` carried by the Wavix Embeddable widget token identified
   by `id`, replacing the existing payload. Applies when the user wants to change the
-  client-defined data associated with a token. Overwrites the token's existing
+  client-defined data associated with a token. The first call changes nothing and
+  returns a preview with a `confirmation_token`; the payload is replaced when the tool
+  is called again with the same arguments and that token, a call meant to follow the
+  user's approval of the preview in a later message. Overwrites the token's existing
   payload; the token itself and its authentication remain valid. Requires the
   `embeddable:write` scope, the token's `id` (a UUID), and the replacement
   `payload`.
@@ -845,11 +851,14 @@ ten_dlc_brands_list: >-
   at 1.
 
 ten_dlc_brands_update: >-
-  Updates the 10DLC Brand identified by `brand_id`. Applies to correcting or changing a
-  Brand's details before it is verified. Changing identity fields (`ein_taxid`,
+  Updates the 10DLC Brand identified by `brand_id`. Applies to correcting or changing an
+  existing Brand's details. The first call changes nothing and returns a
+  preview with a `confirmation_token`; the Brand is updated when the tool is called
+  again with the same arguments and that token, a call meant to follow the user's
+  approval of the preview in a later message. Changing identity fields (`ein_taxid`,
   `ein_taxid_country`, or `entity_type`) resets the Brand status to `UNVERIFIED` and
-  triggers automatic re-submission to TCR. Requires the `campaigns:write` scope and the
-  Brand's `brand_id`; a Brand in `VETTED_VERIFIED` status or with active 10DLC Campaigns
+  triggers automatic re-submission to TCR. Requires the `campaigns:write` scope, the
+  10DLC feature enabled for the connected Wavix account, and the Brand's `brand_id`; a Brand in `VETTED_VERIFIED` status or with active 10DLC Campaigns
   cannot be updated.
 
 # --- 10DLC — campaigns, campaign numbers, subscriptions ---
@@ -898,7 +907,10 @@ ten_dlc_brand_campaigns_update: >-
   Updates the 10DLC Campaign identified by `campaign_id` under the 10DLC Brand
   `brand_id`; only the fields you supply are changed. Applies when the user wants to
   modify an existing Campaign's details, such as its name, samples, or
-  opt-in/opt-out settings. Changes the stored Campaign; only the provided fields
+  opt-in/opt-out settings. The first call changes nothing and returns a preview with a
+  `confirmation_token`; the Campaign is updated when the tool is called again with the
+  same arguments and that token, a call meant to follow the user's approval of the
+  preview in a later message. Changes the stored Campaign; only the provided fields
   are overwritten. Requires the `campaigns:write` scope, the 10DLC feature enabled
   for the account, and the `brand_id` and `campaign_id`; if set, `usecase` must be
   one of `CUSTOMER_CARE`, `MARKETING`, `ACCOUNT_NOTIFICATION`, `FRAUD_ALERT`,
@@ -982,12 +994,13 @@ ten_dlc_subscriptions_list: >-
 
 sub_accounts_create: >-
   Creates a new sub-organization under the authenticated master account and
-  returns it with a generated `api_key`. Applies when the user wants to add a
+  returns it with a redacted API key. Applies when the user wants to add a
   sub-organization. The first call creates nothing and returns a preview listing the
   `name` and any default webhook URLs with a `confirmation_token`; the
   sub-organization is created when the tool is called again with the same arguments
   and that token, a call meant to follow the user's approval of the preview in a later
-  message. Requires the `subaccounts:write` scope and a `name` of up to 75 characters; the optional
+  message. The reply shows only the last 4 characters of the new key, as
+  `redacted_api_key`. Requires the `subaccounts:write` scope and a `name` of up to 75 characters; the optional
   `default_destinations` object sets default webhook URLs for inbound messages and
   delivery reports.
 

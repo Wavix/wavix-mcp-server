@@ -245,7 +245,7 @@ Every tool belongs to one toolset. Add `?toolsets=<name>[,<name>]` to the connec
 
 ## Speech Analytics
 
-- `speech_analytics_get` — Retrieve a transcription
+- `speech_analytics_get` — Retrieve a speech analytics transcription
 - `speech_analytics_retranscribe` — Retranscribe a file
 - `speech_analytics_file_get` — Retrieve the original file (returns a pre-signed download URL)
 

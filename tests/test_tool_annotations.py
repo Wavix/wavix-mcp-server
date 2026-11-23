@@ -11,7 +11,13 @@ import os
 
 import pytest
 
-from wavix_mcp.server import _hint, build_server
+from wavix_mcp.server import (
+    BINARY_STREAM_ENDPOINTS,
+    EXCLUDED_ENDPOINTS,
+    _hint,
+    build_server,
+    load_spec,
+)
 
 
 @pytest.fixture(scope="module")
@@ -62,3 +68,30 @@ def test_an_explicit_spec_value_wins_over_the_derived_one():
 def test_the_derived_value_is_used_when_the_spec_is_silent():
     assert _hint(None, True) is True
     assert _hint(None, False) is False
+
+
+def test_no_two_tools_share_a_title(tools):
+    titles = [t.title for t in tools]
+    assert sorted({title for title in titles if titles.count(title) > 1}) == []
+
+
+def test_the_spec_declares_every_hint_of_every_exposed_operation():
+    excluded = set(BINARY_STREAM_ENDPOINTS + EXCLUDED_ENDPOINTS)
+    undeclared = []
+    for path, item in load_spec()["paths"].items():
+        for method, operation in item.items():
+            if not isinstance(operation, dict) or (path, method) in excluded:
+                continue
+            xmcp = operation.get("x-mcp")
+            if not isinstance(xmcp, dict):
+                xmcp = {}
+            if xmcp.get("expose") is False:
+                continue
+            missing = [
+                key
+                for key in ("readOnly", "destructive", "openWorld")
+                if not isinstance(xmcp.get(key), bool)
+            ]
+            if missing:
+                undeclared.append(f"{operation.get('operationId')}: {', '.join(missing)}")
+    assert undeclared == []
