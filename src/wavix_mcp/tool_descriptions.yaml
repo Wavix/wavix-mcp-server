@@ -295,7 +295,7 @@ number_validator_create_bulk: >-
   is called again with the same arguments and that token, a call meant to follow the
   user's approval of the preview in a later message. Each validation is charged to
   the connected Wavix account's balance; when `async` is `true` the confirmed call
-  returns a `request_id` for `number_validator_results_get` instead of the validation
+  returns a `request_uuid` for `number_validator_results_get` instead of the validation
   details. Requires the `validator:write` scope, the `phone_numbers` to validate (at
   most 1000 per request), and the validation `type`; `async` and `force` default to
   `false`, and `force` set to `true` requests a fresh validation instead of a cached
@@ -319,9 +319,9 @@ number_validator_get: >-
 number_validator_results_get: >-
   Retrieves the results of an asynchronous batch validation identified by
   `request_id`. Applies to fetching the outcome of a bulk validation submitted with
-  `async` set to `true`, once its `request_id` is available. Read-only; no side
-  effects. Requires the `validator:read` scope and the `request_id` returned by the
-  asynchronous bulk validation request.
+  `async` set to `true`, once its `request_uuid` is available. Read-only; no side
+  effects. Requires the `validator:read` scope and, as `request_id`, the
+  `request_uuid` returned by the asynchronous bulk validation request.
 
 link_shortener_create: >-
   Creates a short link that redirects to a target URL and tracks click metrics. Applies

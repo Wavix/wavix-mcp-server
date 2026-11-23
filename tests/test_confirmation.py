@@ -1371,7 +1371,7 @@ def test_bulk_validation_lists_at_most_the_cap():
     arguments = {"phone_numbers": numbers, "type": "validation"}
     lines = _preview("number_validator_create_bulk", arguments).splitlines()
     assert lines[:3] == [
-        "This will validate 1000 phone numbers:",
+        "This will validate 1000 phone numbers, charged to your balance:",
         "• type: validation",
         "• 15550100000",
     ]
@@ -1389,6 +1389,31 @@ def test_bulk_validation_lists_at_most_the_cap():
 def test_bulk_validation_needs_numbers_and_type(arguments, field):
     with pytest.raises(ConfirmationInputError, match=field):
         _preview("number_validator_create_bulk", arguments)
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments", "charge"),
+    [
+        (
+            "number_validator_get",
+            {"phone_number": "15550100", "type": "validation"},
+            "charged to your balance",
+        ),
+        ("ten_dlc_brand_appeals_create", {"brand_id": "BXYZ123"}, "charged to your balance"),
+        (
+            "ten_dlc_brand_vetting_appeals_create",
+            {"brand_id": "BXYZ123"},
+            "charged to your balance",
+        ),
+        (
+            "link_shortener_create",
+            {"link": "https://example.com"},
+            "charged to your balance when a short link fee is set",
+        ),
+    ],
+)
+def test_paid_tool_preview_names_the_charge(tool, arguments, charge):
+    assert _preview(tool, arguments).splitlines()[-1] == f"• {charge}"
 
 
 def test_paid_lookup_charges_nothing_until_confirmed(isolated_routes, anonymous):

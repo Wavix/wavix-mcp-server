@@ -623,6 +623,16 @@ async def _create_whatsapp_template(arguments: Mapping[str, Any], api: httpx.Asy
     return f"{heading}:\n{_bullets(lines)}"
 
 
+CHARGED = "charged to your balance"
+
+
+def _charge(note: str) -> Details:
+    async def details(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> list[str]:
+        return [note]
+
+    return details
+
+
 async def _validate_numbers_bulk(arguments: Mapping[str, Any], api: httpx.AsyncClient) -> str:
     numbers = arguments.get("phone_numbers")
     if not isinstance(numbers, list) or not numbers:
@@ -632,7 +642,8 @@ async def _validate_numbers_bulk(arguments: Mapping[str, Any], api: httpx.AsyncC
         f"{key}: {_display(arguments[key])}" for key in ("async", "force") if key in arguments
     ]
     lines += _capped([str(number) for number in numbers], len(numbers))
-    return f"This will validate {_plural(len(numbers), 'phone number')}:\n{_bullets(lines)}"
+    heading = f"This will validate {_plural(len(numbers), 'phone number')}, {CHARGED}"
+    return f"{heading}:\n{_bullets(lines)}"
 
 
 CUSTOM_PREVIEWS: Mapping[str, PreviewBuilder] = {
@@ -649,6 +660,10 @@ CUSTOM_PREVIEWS: Mapping[str, PreviewBuilder] = {
 }
 
 DETAILS: Mapping[str, Details] = {
+    "link_shortener_create": _charge(f"{CHARGED} when a short link fee is set"),
+    "number_validator_get": _charge(CHARGED),
+    "ten_dlc_brand_appeals_create": _charge(CHARGED),
+    "ten_dlc_brand_vetting_appeals_create": _charge(CHARGED),
     "api_keys_delete": _api_key_details,
     "call_control_answer": _call_details,
     "call_control_audio_play": _call_details,

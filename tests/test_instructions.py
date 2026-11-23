@@ -56,6 +56,12 @@ def test_instructions_name_the_paid_tools_among_the_two_step_tools():
     assert "create short links" in gated
 
 
+def test_instructions_bill_the_paid_tools():
+    billing = INSTRUCTIONS.split("Billing:", 1)[1].split("\n\n", 1)[0]
+    for item in ("number validations", "10DLC Brand appeals", "short links that carry a fee"):
+        assert item in billing
+
+
 def test_instructions_state_that_the_server_does_not_see_the_conversation():
     assert "it does not see the conversation" in INSTRUCTIONS
 
@@ -136,7 +142,8 @@ def test_no_selection_keeps_the_existing_text():
     assert "it does not see the conversation" in text
     assert "voice calls" in text
     assert "Calls:\n- Whenever a call is automated or handled by AI" in text
-    assert "Number purchases, calls, messages, and one-time passwords are charged" in text
+    assert "Number purchases, calls, messages, 10DLC Brand appeals" in text
+    assert "one-time passwords, and number validations are charged" in text
     assert "number_validator_create_bulk" in text
     assert imperative_violations(text) == []
 
