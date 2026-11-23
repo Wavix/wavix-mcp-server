@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-11-23
+
 ### Added
 
 - Choose which toolsets a connection offers with `?toolsets=` in the connection URL, for example `https://mcp.wavix.com/mcp?toolsets=numbers,messaging`. The seven toolsets are `account`, `calls`, `messaging`, `numbers`, `verification`, `voice_config` and `voice_history`. An unknown name is refused with the list of valid names, the instructions describe only the selected toolsets, and a URL without the parameter offers every tool as before. The README and `TOOLS.md` list the tools of each toolset.
@@ -172,7 +174,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Invoice download and 10DLC evidence upload are excluded from the tool surface.
 - The OAuth issuer is advertised without an RFC 8414-breaking trailing slash.
 
-[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/Wavix/wavix-mcp-server/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/Wavix/wavix-mcp-server/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/Wavix/wavix-mcp-server/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.3...v1.4.0
 [1.3.3]: https://github.com/Wavix/wavix-mcp-server/compare/v1.3.2...v1.3.3
